@@ -1,0 +1,51 @@
+# Event to Email Template Mappings
+# Configure which Valkey stream events trigger which email templates
+
+notifications:
+  event-mappings:
+
+    # Purchase Order Created Event
+    - stream: "events-stream"
+      event-type: events:new_purchase_order       # Evento
+      template-code: "CREAZIONE_PO"               # Template messaggio
+      consumer-group: "notifier-group"  
+      auto-ack: true
+
+    # Attachment Sharing Event
+    - stream: "events-stream"
+      event-type: attachment:share                # Evento
+      template-code: "CONDIVISIONE_FILE"          # Template messaggio
+      consumer-group: "notifier-group"  
+      auto-ack: true      
+      single-mail: true                           # Utilizza il template ma non la lista distribuzione (invio email singolo)
+
+
+
+
+
+  #  # Purchase Order Approved Event
+  #  - stream: "events-stream"
+  #    event-type: "PURCHASE_ORDER_APPROVED"
+  #    template-code: "PO_APPROVED"
+  #    consumer-group: "notifier-group"
+  #    event-type-field: "event_type"
+  #    auto-ack: true
+  #
+  #  # Purchase Order Rejected Event
+  #  - stream: "purchase-orders"
+  #    event-type: "PURCHASE_ORDER_REJECTED"
+  #    template-code: "PO_REJECTED"
+  #    consumer-group: "notifier-group"
+  #    event-type-field: "event_type"
+  #    auto-ack: true
+  #
+  #  # Container Arrival Event
+  #  - stream: "containers"
+  #    event-type: "CONTAINER_ARRIVED"
+  #    template-code: "CONTAINER_ARRIVAL"
+  #    consumer-group: "notifier-group"
+  #    event-type-field: "event_type"
+  #    auto-ack: true
+  #
+  #  # Add more mappings as needed
+  #  # Each mapping connects a specific event type on a stream

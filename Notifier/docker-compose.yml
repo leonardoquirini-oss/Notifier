@@ -1,0 +1,78 @@
+version: '3.8'
+
+services:
+  # Email Notifier Service
+  notifier:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: email-notifier
+    environment:
+      # Database Configuration
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/container_mgmt
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+
+      # Valkey Configuration
+      VALKEY_HOST: valkey
+      VALKEY_PORT: 6379
+
+      # Mail Configuration (Update with your SMTP settings)
+      SPRING_MAIL_HOST: smtp.gmail.com
+      SPRING_MAIL_PORT: 587
+      SPRING_MAIL_USERNAME: your-email@gmail.com
+      SPRING_MAIL_PASSWORD: your-app-password
+
+      # Logging
+      LOGGING_LEVEL_COM_CONTAINERMGMT_NOTIFIER: DEBUG
+
+    depends_on:
+      - postgres
+      - valkey
+    networks:
+      - notifier-network
+    restart: unless-stopped
+
+  # PostgreSQL Database (for testing)
+  postgres:
+    image: postgres:15-alpine
+    container_name: notifier-postgres
+    environment:
+      POSTGRES_DB: container_mgmt
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - notifier-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Valkey (Redis-compatible) for streams
+  valkey:
+    image: valkey/valkey:latest
+    container_name: notifier-valkey
+    ports:
+      - "6379:6379"
+    volumes:
+      - valkey-data:/data
+    networks:
+      - notifier-network
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+networks:
+  notifier-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  valkey-data:

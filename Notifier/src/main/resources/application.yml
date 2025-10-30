@@ -1,0 +1,84 @@
+spring:
+  application:
+    name: notifier-service
+
+  # Import additional configuration files
+  config:
+    import: optional:classpath:notifications.yml
+
+  # PostgreSQL Database Configuration
+  datasource:
+    url: jdbc:postgresql://postgres-service:5432/berlinkdb
+    username: berlink
+    password: berlink
+    driver-class-name: org.postgresql.Driver
+
+  # Mail Configuration (SMTP with SSL on port 465)
+  mail:
+    host: mail.gruppobernardini.it
+    port: 465
+    username: noreply@gruppobernardini.it
+    password: "!bernardini2019!"
+    protocol: smtps
+    properties:
+      mail:
+        smtps:
+          auth: true
+          ssl:
+            enable: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+        smtp:
+          ssl:
+            enable: true
+          socketFactory:
+            port: 465
+            class: javax.net.ssl.SSLSocketFactory
+            fallback: false
+
+# Email Sender Configuration
+email:
+  from:
+    address: noreply@gruppobernardini.it
+    name: "BERLink"
+  footer: |
+
+    Messaggio generato automaticamente dal sistema. Si prega di non rispondere a questa email, la casella di posta non è monitorata.
+    Per assistenza contattare: support@gruppobernardini.it
+
+# Backend API Configuration
+backend:
+  api:
+    url: http://backend:8080
+    api-key: 0e5cfec5-ad39-45c6-b3af-92e9c77dfcf8
+    attachments:
+      download-endpoint: /api/attachments/{id}/download
+
+# Valkey (Redis) Configuration
+valkey:
+  host: valkey-service
+  port: 6379
+  database: 0
+  password: # Leave empty if no password
+
+# Actuator Configuration (Health Checks)
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+# Logging Configuration
+logging:
+  level:
+    root: INFO
+    com.containermgmt.notifier: DEBUG
+    org.javalite.activejdbc: INFO
+    org.springframework.data.redis: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
