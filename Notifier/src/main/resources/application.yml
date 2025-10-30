@@ -50,8 +50,8 @@ email:
 # Backend API Configuration
 backend:
   api:
-    url: http://backend:8080
-    api-key: 0e5cfec5-ad39-45c6-b3af-92e9c77dfcf8
+    url: http://backend:8080                        # URL di BERLink BE
+    api-key: 0e5cfec5-ad39-45c6-b3af-92e9c77dfcf8   # API Key per automazione
     attachments:
       download-endpoint: /api/attachments/{id}/download
 

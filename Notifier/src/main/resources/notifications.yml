@@ -4,10 +4,17 @@
 notifications:
   event-mappings:
 
-    # Purchase Order Created Event
-    - stream: "events-stream"
+    # Purchase Order Created Event APERTO
+    - stream: "purchase-orders-stream"
       event-type: events:new_purchase_order       # Evento
       template-code: "CREAZIONE_PO"               # Template messaggio
+      consumer-group: "notifier-group"  
+      auto-ack: true
+
+    # Purchase Order Created Event DA APPROVARE
+    - stream: "purchase-orders-stream"
+      event-type: events:new_purchase_order_tba   # Evento
+      template-code: "CREAZIONE_PO_DA_APPROVARE"  # Template messaggio
       consumer-group: "notifier-group"  
       auto-ack: true
 
