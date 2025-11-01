@@ -12,6 +12,14 @@
             "hostName": "localhost",
             "port": 5005 // La porta che hai esposto nel container
             //"preLaunchTask": "docker-compose build" // Opzionale: il task che costruisce l'immagine
+        },
+        {
+            "type": "java",
+            "name": "Docker BERLink Backend",
+            "request": "attach",
+            "hostName": "localhost",
+            "port": 5010 // La porta che hai esposto nel container
+            //"preLaunchTask": "docker-compose build" // Opzionale: il task che costruisce l'immagine
         }
     ]
 }

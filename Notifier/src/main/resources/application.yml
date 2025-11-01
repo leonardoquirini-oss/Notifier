@@ -15,10 +15,10 @@ spring:
 
   # Mail Configuration (SMTP with SSL on port 465)
   mail:
-    host: mail.gruppobernardini.it
-    port: 465
-    username: noreply@gruppobernardini.it
-    password: "!bernardini2019!"
+    host: -
+    port: -
+    username: -
+    password: -
     protocol: smtps
     properties:
       mail:
