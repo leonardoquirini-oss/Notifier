@@ -15,10 +15,10 @@ spring:
 
   # Mail Configuration (SMTP with SSL on port 465)
   mail:
-    host: -
-    port: -
-    username: -
-    password: -
+    host: smtp.mail.it
+    port: 1234
+    username: a
+    password: a
     protocol: smtps
     properties:
       mail:
