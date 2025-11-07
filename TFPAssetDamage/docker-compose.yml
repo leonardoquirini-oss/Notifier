@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  # TFP Asset Damage Collector Service
+  tfp-collector:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tfp-asset-damage-collector
+    restart: unless-stopped
+    environment:
+      # Scheduling
+      - CRON_SCHEDULE=${CRON_SCHEDULE:-0 18 * * *}
+      - TZ=${TZ:-Europe/Rome}
+
+      # Redis
+      - REDIS_HOST=valkey-service
+      - REDIS_PORT=6379
+      - REDIS_STREAM_KEY=${REDIS_STREAM_KEY:-daily-job-results}
+
+      # TFP API
+      - TPF_API_URL=${TPF_API_URL}
+      - TPF_API_TIMEOUT=${TPF_API_TIMEOUT:-30000}
+      - TPF_API_RETRY_ATTEMPTS=${TPF_API_RETRY_ATTEMPTS:-3}
+      - TPF_API_USERNAME=${TPF_API_USERNAME}
+      - TPF_API_PASSWORD=${TPF_API_PASSWORD}
+
+      # Logging
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    depends_on:
+      - valkey
+    networks:
+      - tfp-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  valkey:
+    hostname: valkey-service
+    container_name: valkey-service
+    image: valkey/valkey:9.0.0-alpine
+    restart: always
+    ports:
+      - 6399:6379    
+    networks:
+      - tfp-network
+  
+networks:
+  tfp-network:
+    driver: bridge

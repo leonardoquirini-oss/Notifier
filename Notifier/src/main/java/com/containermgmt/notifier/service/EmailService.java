@@ -220,7 +220,7 @@ public class EmailService {
             log.markAsSent(messageId);
 
             logger.info("Email inviata con successo: template={}, destinatari={}, messageId={}, attachment={}",
-                template.getString("template_code"), toAddresses.size(), messageId,
+                template.getString("template_code"), toAddresses, messageId,
                 attachment != null ? attachment.getFilename() : "none");
 
         } catch (Exception e) {

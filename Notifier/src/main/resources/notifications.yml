@@ -18,6 +18,14 @@ notifications:
       consumer-group: "notifier-group"  
       auto-ack: true
 
+    # Purchase Order Approved
+    - stream: "purchase-orders-stream"
+      event-type: events:purchase_order_approved      # Evento
+      template-code: "PO_APPROVATO_NOTIFICA_CREATORE" # Template messaggio
+      consumer-group: "notifier-group"  
+      auto-ack: true
+      single-mail: true                           # Utilizza il template ma non la lista distribuzione (invio email singolo)
+
     # Attachment Sharing Event
     - stream: "events-stream"
       event-type: attachment:share                # Evento
