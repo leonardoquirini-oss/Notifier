@@ -334,68 +334,471 @@ SELECT * FROM email_send_log ORDER BY sent_at DESC LIMIT 10;
 
 ## Template Email
 
-### Sintassi Variabili
+Il servizio utilizza **Handlebars** come template engine, permettendo la creazione di email dinamiche con variabili, iterazioni su array, condizionali e formattazione date.
 
-Usa `{{variableName}}` nei campi `subject` e `body` del template:
+### Indice Template
+- [Variabili Semplici](#variabili-semplici)
+- [Oggetti Nested](#oggetti-nested)
+- [Iterazione su Array (foreach)](#iterazione-su-array-foreach)
+- [Tag Data/Ora](#tag-dataora-now)
+- [Condizionali](#condizionali)
+- [Esempi Completi](#esempi-completi)
 
-```
-Subject: Order {{id_purchase_order}} - Status {{status}}
-Body: Dear {{supplier_name}}, your order {{id_purchase_order}} is {{status}}.
-```
+---
 
-### Variabili Disponibili
+### Variabili Semplici
 
-Tutte le coppie chiave-valore nell'evento Valkey sono disponibili come variabili:
+Usa `{{variableName}}` per stampare variabili dai dati dell'evento:
 
-**Evento:**
+**Evento Valkey:**
 ```json
 {
-  "event_type": "PURCHASE_ORDER_CREATED",
-  "id_purchase_order": 1021,
-  "description": "Office supplies",
-  "supplier_name": "ACME Corp",
-  "total_amount": "1500.00"
+  "eventType": "PURCHASE_ORDER_CREATED",
+  "data": {
+    "id_purchase_order": 1021,
+    "description": "Office supplies",
+    "supplier_name": "ACME Corp",
+    "total_amount": "1500.00"
+  }
 }
 ```
 
-**Variabili:**
-- `{{id_purchase_order}}` → "1021"
-- `{{description}}` → "Office supplies"
-- `{{supplier_name}}` → "ACME Corp"
-- `{{total_amount}}` → "1500.00"
+**Template:**
+```handlebars
+Subject: Order {{data.id_purchase_order}} - {{data.supplier_name}}
 
-### Nested Objects
+Body:
+New Purchase Order Created
+--------------------------
+ID: {{data.id_purchase_order}}
+Description: {{data.description}}
+Supplier: {{data.supplier_name}}
+Total: €{{data.total_amount}}
+```
 
-Il servizio supporta nested JSON con dot notation:
+**Output:**
+```
+Subject: Order 1021 - ACME Corp
+
+Body:
+New Purchase Order Created
+--------------------------
+ID: 1021
+Description: Office supplies
+Supplier: ACME Corp
+Total: €1500.00
+```
+
+---
+
+### Oggetti Nested
+
+Accedi a proprietà nested usando la **dot notation** (`.`):
 
 **Evento:**
 ```json
 {
-  "order": {
-    "id": 1021,
+  "eventType": "ORDER_SHIPPED",
+  "data": {
+    "order": {
+      "id": 1021,
+      "date": "2025-11-08"
+    },
     "supplier": {
       "name": "ACME Corp",
-      "email": "contact@acme.com"
+      "contact": {
+        "email": "contact@acme.com",
+        "phone": "+39 123456789"
+      }
     }
   }
 }
 ```
 
-**Variabili:**
-- `{{order.id}}` → "1021"
-- `{{order.supplier.name}}` → "ACME Corp"
-- `{{order.supplier.email}}` → "contact@acme.com"
-
-### HTML Templates
-
-Per template HTML, imposta `is_html = true`:
-
-```sql
-UPDATE email_templates
-SET is_html = true,
-    body = '<html><body><h1>Order {{id}}</h1><p>{{description}}</p></body></html>'
-WHERE template_code = 'PO_CREATED';
+**Template:**
+```handlebars
+Order ID: {{data.order.id}}
+Order Date: {{data.order.date}}
+Supplier: {{data.supplier.name}}
+Email: {{data.supplier.contact.email}}
+Phone: {{data.supplier.contact.phone}}
 ```
+
+---
+
+### Iterazione su Array (foreach)
+
+Usa `{{#each arrayName}}...{{/each}}` per iterare su liste/array:
+
+**Evento:**
+```json
+{
+  "eventType": "DAMAGE_REPORT",
+  "data": {
+    "report_date": "2025-11-08",
+    "report_data": [
+      {
+        "plate": "AG06243",
+        "report_notes": "Ammaccatura porta posteriore"
+      },
+      {
+        "plate": "AG11111",
+        "report_notes": "Graffio parafango anteriore"
+      },
+      {
+        "plate": "BH22222",
+        "report_notes": "Specchietto rotto"
+      }
+    ]
+  }
+}
+```
+
+**Template:**
+```handlebars
+Subject: Report Danni - {{data.report_date}}
+
+Body:
+Report Danni del {{data.report_date}}
+=====================================
+
+{{#each data.report_data}}
+Targa: {{plate}}
+Problema: {{report_notes}}
+---
+{{/each}}
+
+Totale veicoli danneggiati: {{data.report_data.length}}
+```
+
+**Output:**
+```
+Subject: Report Danni - 2025-11-08
+
+Body:
+Report Danni del 2025-11-08
+=====================================
+
+Targa: AG06243
+Problema: Ammaccatura porta posteriore
+---
+Targa: AG11111
+Problema: Graffio parafango anteriore
+---
+Targa: BH22222
+Problema: Specchietto rotto
+---
+
+Totale veicoli danneggiati: 3
+```
+
+**Iterazione con oggetti nested:**
+
+```handlebars
+{{#each data.orders}}
+Order {{id}}:
+  Supplier: {{supplier.name}}
+  Items:
+  {{#each items}}
+    - {{name}}: €{{price}}
+  {{/each}}
+{{/each}}
+```
+
+---
+
+### Tag Data/Ora (`now`)
+
+Usa `{{now "formato"}}` per stampare la data/ora corrente:
+
+**Formati supportati:**
+
+| Sintassi | Esempio Output | Descrizione |
+|----------|----------------|-------------|
+| `{{now "DD/MM/YYYY"}}` | 08/11/2025 | Solo data |
+| `{{now "YYYY-MM-DD"}}` | 2025-11-08 | Data ISO |
+| `{{now "DD/MM/YYYY HH:mm"}}` | 08/11/2025 18:30 | Data e ora (24h) |
+| `{{now "DD/MM/YYYY HH:mm:ss"}}` | 08/11/2025 18:30:45 | Data, ora e secondi |
+| `{{now "HH:mm"}}` | 18:30 | Solo ora |
+| `{{now "DD-MM-YY"}}` | 08-11-25 | Data breve |
+
+**Esempi:**
+
+```handlebars
+Email generata il {{now "DD/MM/YYYY"}} alle ore {{now "HH:mm"}}
+
+Report del {{now "DD/MM/YYYY"}}
+```
+
+**Output:**
+```
+Email generata il 08/11/2025 alle ore 18:30
+
+Report del 08/11/2025
+```
+
+**Note:**
+- Il timezone utilizzato è quello del server
+- Puoi combinare data e ora nello stesso formato
+- I caratteri separatori (`/`, `-`, `:`, spazi) sono preservati
+
+**Pattern supportati:**
+- `DD` → giorno (01-31)
+- `MM` → mese (01-12)
+- `YYYY` → anno 4 cifre (2025)
+- `YY` → anno 2 cifre (25)
+- `HH` → ora 24h (00-23)
+- `mm` → minuti (00-59)
+- `ss` → secondi (00-59)
+
+---
+
+### Condizionali
+
+Usa `{{#if}}...{{else}}...{{/if}}` per logica condizionale:
+
+**Esempio 1: Controllo valore esistente**
+
+```handlebars
+{{#if data.invoice_number}}
+  Fattura N.: {{data.invoice_number}}
+{{else}}
+  Fattura: Non ancora emessa
+{{/if}}
+```
+
+**Esempio 2: Combinato con array**
+
+```handlebars
+{{#if data.damaged_vehicles}}
+  Veicoli danneggiati:
+  {{#each data.damaged_vehicles}}
+    - {{plate}}: {{damage}}
+  {{/each}}
+{{else}}
+  Nessun veicolo danneggiato oggi.
+{{/if}}
+```
+
+**Esempio 3: Controllo stato**
+
+```handlebars
+Stato ordine: {{data.status}}
+
+{{#if data.status}}
+  {{#if data.approved}}
+    ✓ L'ordine è stato APPROVATO
+  {{else}}
+    ⚠ L'ordine è in attesa di approvazione
+  {{/if}}
+{{/if}}
+```
+
+---
+
+### Esempi Completi
+
+#### Esempio 1: Email Creazione Ordine
+
+**Template SQL:**
+```sql
+INSERT INTO email_templates (
+    template_code, template_name, subject, body, is_html, is_active
+) VALUES (
+    'PO_CREATED',
+    'Purchase Order Created',
+    'Nuovo Ordine {{data.po_number}} - {{data.supplier_name}}',
+    'Nuovo Ordine di Acquisto
+=====================
+
+Data: {{now "DD/MM/YYYY HH:mm"}}
+Numero Ordine: {{data.po_number}}
+Fornitore: {{data.supplier_name}}
+Stato: {{data.status_description}}
+Importo: €{{data.total_price}}
+
+{{#if data.description}}
+Descrizione: {{data.description}}
+{{/if}}
+
+{{#if data.user_creation}}
+Creato da: {{data.user_creation}}
+{{/if}}
+
+---
+Questa email è stata generata automaticamente.
+',
+    false,
+    true
+);
+```
+
+#### Esempio 2: Report Danni con Iterazione
+
+**Template SQL:**
+```sql
+INSERT INTO email_templates (
+    template_code, template_name, subject, body, is_html, is_active
+) VALUES (
+    'DAMAGE_REPORT',
+    'Daily Damage Report',
+    'Report Danni - {{now "DD/MM/YYYY"}}',
+    'Report Danni Giornaliero
+========================
+
+Data Report: {{now "DD/MM/YYYY"}}
+Ora Generazione: {{now "HH:mm"}}
+
+{{#if data.report_data}}
+VEICOLI DANNEGGIATI
+-------------------
+
+{{#each data.report_data}}
+Targa: {{plate}}
+Problema: {{report_notes}}
+{{#if date_reported}}Data Segnalazione: {{date_reported}}{{/if}}
+{{#if location}}Località: {{location}}{{/if}}
+
+{{/each}}
+
+Totale: {{data.report_data.length}} veicoli
+
+{{else}}
+Nessun danno segnalato oggi.
+{{/if}}
+
+---
+Per ulteriori dettagli, accedi al sistema di gestione.
+',
+    false,
+    true
+);
+```
+
+#### Esempio 3: Email HTML Avanzata
+
+**Template SQL:**
+```sql
+INSERT INTO email_templates (
+    template_code, template_name, subject, body, is_html, is_active
+) VALUES (
+    'PO_APPROVED_HTML',
+    'Purchase Order Approved (HTML)',
+    'Ordine {{data.po_number}} APPROVATO',
+    '<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        .header { background-color: #4CAF50; color: white; padding: 20px; }
+        .content { padding: 20px; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #4CAF50; color: white; }
+        .footer { color: #666; font-size: 12px; margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Ordine Approvato ✓</h1>
+    </div>
+
+    <div class="content">
+        <p><strong>Data Approvazione:</strong> {{now "DD/MM/YYYY HH:mm"}}</p>
+        <p><strong>Numero Ordine:</strong> {{data.po_number}}</p>
+        <p><strong>Fornitore:</strong> {{data.supplier_name}}</p>
+
+        {{#if data.items}}
+        <h2>Articoli Ordinati</h2>
+        <table>
+            <tr>
+                <th>Codice</th>
+                <th>Descrizione</th>
+                <th>Quantità</th>
+                <th>Prezzo</th>
+            </tr>
+            {{#each data.items}}
+            <tr>
+                <td>{{code}}</td>
+                <td>{{description}}</td>
+                <td>{{quantity}}</td>
+                <td>€{{price}}</td>
+            </tr>
+            {{/each}}
+        </table>
+        {{/if}}
+
+        <p><strong>Totale:</strong> €{{data.total_price}}</p>
+
+        {{#if data.user_approval}}
+        <p>Approvato da: <strong>{{data.user_approval}}</strong></p>
+        {{/if}}
+    </div>
+
+    <div class="footer">
+        <p>Questa email è stata generata automaticamente dal sistema di gestione ordini.</p>
+        <p>Data invio: {{now "DD/MM/YYYY HH:mm:ss"}}</p>
+    </div>
+</body>
+</html>',
+    true,
+    true
+);
+```
+
+---
+
+### Struttura Dati Eventi
+
+Gli eventi ricevuti da Valkey hanno tipicamente questa struttura:
+
+```json
+{
+  "eventType": "tipo_evento",
+  "timestamp": "2025-11-08T18:30:00Z",
+  "status": "success",
+  "data": {
+    // I tuoi dati specifici qui
+  }
+}
+```
+
+**Campi disponibili per tutti gli eventi:**
+- `{{eventType}}` - Tipo di evento
+- `{{timestamp}}` - Timestamp evento
+- `{{status}}` - Stato elaborazione
+- `{{data.*}}` - Dati specifici dell'evento
+
+**Accesso ai dati:**
+- Per dati al primo livello: `{{data.campo}}`
+- Per oggetti nested: `{{data.oggetto.campo}}`
+- Per array: `{{#each data.array}}{{campo}}{{/each}}`
+
+---
+
+### Best Practices Template
+
+1. **Usa nomi variabili descrittivi** nei dati evento
+2. **Verifica sempre l'esistenza** con `{{#if}}` per campi opzionali
+3. **Testa i template** prima di attivarli in produzione
+4. **HTML Email**: Usa sempre `is_html = true` e CSS inline
+5. **Iterazioni**: Controlla che l'array esista prima di iterare
+6. **Date**: Usa `{{now}}` per timestamp di generazione email
+7. **Leggibilità**: Formatta il template per facile manutenzione
+
+### Debugging Template
+
+Per debuggare template problematici, controlla i log dell'applicazione:
+
+```bash
+docker-compose logs -f notifier | grep "###DEBUG###"
+```
+
+I log mostreranno:
+- Variabili disponibili e i loro tipi
+- Struttura dati completa
+- Output del rendering
+- Errori di sintassi Handlebars
 
 ## Testing
 
