@@ -47,8 +47,6 @@ async function processData(apiData) {
       continue;
     }
     
-    logger.debug('###DEBUG### plate : ' , plate);
-    
     if ( plate.toLowerCase().startsWith("gbtu") ) {
       // No Container, trailers only
       continue;
@@ -107,6 +105,7 @@ async function executeJob(dataSource = null) {
   const result = {
     jobId,
     timestamp: new Date().toISOString(),
+    eventType: 'trailer:damage_report',
     status: 'success',
     data: null,
     error: null,

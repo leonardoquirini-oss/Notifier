@@ -74,6 +74,13 @@
             <artifactId>jackson-databind</artifactId>
         </dependency>
 
+        <!-- Handlebars Template Engine per rendering email con foreach -->
+        <dependency>
+            <groupId>com.github.jknack</groupId>
+            <artifactId>handlebars</artifactId>
+            <version>4.3.1</version>
+        </dependency>
+
         <!-- Lombok (opzionale, per ridurre boilerplate) -->
         <dependency>
             <groupId>org.projectlombok</groupId>

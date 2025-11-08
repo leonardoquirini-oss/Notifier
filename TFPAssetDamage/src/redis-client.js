@@ -92,6 +92,7 @@ class RedisClient {
       // Convert result object to flat key-value pairs for Redis Stream
       const streamData = [
         'jobId', result.jobId,
+        'eventType', result.eventType,
         'timestamp', result.timestamp,
         'status', result.status,
         'executionTime', result.executionTime.toString(),

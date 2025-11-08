@@ -5,6 +5,8 @@ import com.containermgmt.notifier.model.EmailSendLog;
 import com.containermgmt.notifier.model.EmailTemplate;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.jknack.handlebars.Handlebars;
+import com.github.jknack.handlebars.Template;
 import jakarta.mail.internet.MimeMessage;
 import lombok.extern.slf4j.Slf4j;
 
@@ -20,8 +22,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 import java.io.IOException;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -45,6 +45,9 @@ public class EmailService {
     @Autowired
     private RestTemplate restTemplate;
 
+    @Autowired
+    private Handlebars handlebars;
+
     @Value("${email.from.address}")
     private String fromAddress;
 
@@ -62,12 +65,6 @@ public class EmailService {
 
     @Value("${backend.api.attachments.download-endpoint}")
     private String attachmentDownloadEndpoint;
-
-    // Pattern per trovare variabili nei template: {{variableName}}
-    private static final Pattern VARIABLE_PATTERN = Pattern.compile("\\{\\{([a-zA-Z0-9_\\.]+)\\}\\}");
-
-    // Pattern per trovare tag data/ora corrente: {{now:DD/MM/YYYY}}
-    private static final Pattern NOW_TAG_PATTERN = Pattern.compile("\\{\\{now:([^}]+)\\}\\}");
 
     /**
      * Classe interna per rappresentare un allegato email
@@ -92,14 +89,14 @@ public class EmailService {
      * Invia email da template usando un HashMap di variabili
      *
      * @param templateId ID del template
-     * @param variables Mappa variabili (es: {"orderNumber": "123", "vehiclePlate": "AB123CD"})
+     * @param variables Mappa variabili (supporta array per foreach e oggetti nested)
      * @param sentBy Username utente che invia
      * @return ID del log creato
      * @throws Exception se errore durante invio
      */
     public Integer sendFromTemplate(
             Integer templateId,
-            Map<String, String> variables,
+            Map<String, Object> variables,
             String sentBy) throws Exception {
 
         return sendFromTemplate(templateId, variables, null, null, sentBy);
@@ -107,7 +104,7 @@ public class EmailService {
 
     public Integer sendFromTemplate(
             Integer templateId,
-            Map<String, String> variables,
+            Map<String, Object> variables,
             String entityType,
             Integer entityId,
             String sentBy) throws Exception {
@@ -119,7 +116,7 @@ public class EmailService {
      * Invia email da template con collegamento a entità
      *
      * @param templateId ID del template
-     * @param variables Mappa variabili per sostituzione
+     * @param variables Mappa variabili per sostituzione (supporta array per foreach e oggetti nested)
      * @param entityType Tipo entità (opzionale, es: "operation")
      * @param entityId ID entità (opzionale)
      * @param sentBy Username utente che invia
@@ -129,7 +126,7 @@ public class EmailService {
     public Integer sendFromTemplate(
             Integer templateId,
             Boolean singleMail,
-            Map<String, String> variables,
+            Map<String, Object> variables,
             String entityType,
             Integer entityId,
             String sentBy) throws Exception {
@@ -158,7 +155,7 @@ public class EmailService {
         Set<String> bccAddresses = new LinkedHashSet<>();
 
         if ( singleMail ) {
-            String email = variables.getOrDefault("parameters.email", "");
+            String email = (String) variables.getOrDefault("parameters.email", "");
             log.info("Sending mail to {}", email);
             toAddresses.add(email);
         } else {
@@ -196,7 +193,7 @@ public class EmailService {
 
             // Gestione allegato se presente
             EmailAttachment attachment = null;
-            String attachmentId = variables.get("parameters.attachment_id");
+            String attachmentId = (String) variables.get("parameters.attachment_id");
 
             if (attachmentId != null && !attachmentId.trim().isEmpty()) {
                 try {
@@ -310,47 +307,123 @@ public class EmailService {
     }
 
     /**
-     * Rendering di un template sostituendo i tag {{now:formato}} e le variabili {{variableName}}
+     * Rendering di un template usando Handlebars template engine
      *
-     * Processamento in due fasi:
-     * 1. Prima sostituisce tutti i tag {{now:formato}} con la data/ora corrente
-     * 2. Poi sostituisce tutte le variabili {{variableName}} con i valori forniti
+     * Supporta:
+     * - Variabili semplici: {{variableName}}
+     * - Oggetti nested: {{object.property}}
+     * - Foreach su array: {{#each arrayName}} {{property}} {{/each}}
+     * - Tag data/ora: {{now "DD/MM/YYYY"}}
+     * - Condizionali: {{#if condition}} ... {{/if}}
      *
-     * @param template Testo template con placeholder {{variableName}} e {{now:formato}}
-     * @param variables Mappa variabili (chiave = nome variabile, valore = valore da sostituire)
+     * @param template Testo template Handlebars
+     * @param variables Mappa variabili (supporta Object, Map, List per foreach)
      * @return Testo renderizzato
      */
-    public String renderTemplate(String template, Map<String, String> variables) {
+    public String renderTemplate(String template, Map<String, Object> variables) {
         if (template == null) return "";
 
-        log.info("###DEBUG### template: [{}]",template);
-        log.info("###DEBUG### variables: {}",variables);
+        log.info("###DEBUG### ===== RENDER TEMPLATE START =====");
+        log.info("###DEBUG### template: [{}]", template);
+        log.info("###DEBUG### variables keys: {}", variables != null ? variables.keySet() : "null");
 
-        // FASE 1: Processa tag {{now:formato}}
-        String result = processNowTags(template);
+        // Stampa struttura variabili in dettaglio
+        if (variables != null) {
+            for (Map.Entry<String, Object> entry : variables.entrySet()) {
+                Object value = entry.getValue();
+                log.info("###DEBUG### Variable [{}]:", entry.getKey());
+                log.info("###DEBUG###   Type: {}", value != null ? value.getClass().getName() : "null");
+                log.info("###DEBUG###   Value: {}", value);
 
-        // FASE 2: Processa variabili {{variableName}}
-        if (variables != null && !variables.isEmpty()) {
-            Matcher matcher = VARIABLE_PATTERN.matcher(result);
+                // Se è una Map, stampa le chiavi e i valori
+                if (value instanceof Map) {
+                    Map<?, ?> map = (Map<?, ?>) value;
+                    log.info("###DEBUG###   Map keys: {}", map.keySet());
+                    for (Map.Entry<?, ?> mapEntry : map.entrySet()) {
+                        Object mapValue = mapEntry.getValue();
+                        log.info("###DEBUG###     [{}] = {} (type: {})",
+                            mapEntry.getKey(),
+                            mapValue,
+                            mapValue != null ? mapValue.getClass().getName() : "null");
 
-            // Trova tutte le variabili {{variableName}} e sostituiscile
-            while (matcher.find()) {
-                String variableName = matcher.group(1);
-                String variableValue = variables.getOrDefault(variableName, "");
-
-                log.info("###DEBUG###   -- variable name : {} - value : {}",variableName, variableValue);
-
-                // Sostituisci placeholder con valore
-                String placeholder = "\\{\\{" + variableName + "\\}\\}";
-                result = result.replaceAll(placeholder, Matcher.quoteReplacement(variableValue));
+                        // Se il valore della map è una List, mostra dettagli
+                        if (mapValue instanceof List) {
+                            List<?> innerList = (List<?>) mapValue;
+                            log.info("###DEBUG###       List size: {}", innerList.size());
+                            if (!innerList.isEmpty()) {
+                                log.info("###DEBUG###       First element: {}", innerList.get(0));
+                            }
+                        }
+                    }
+                }
+                // Se è una List, stampa dimensione e primo elemento
+                if (value instanceof List) {
+                    List<?> list = (List<?>) value;
+                    log.info("###DEBUG###   List size: {}", list.size());
+                    if (!list.isEmpty()) {
+                        log.info("###DEBUG###   First element type: {}", list.get(0).getClass().getName());
+                        log.info("###DEBUG###   First element: {}", list.get(0));
+                    }
+                }
             }
         }
 
-        return result;
+        try {
+            // Pre-processa il template per convertire sintassi custom {{now:formato}} in {{now "formato"}}
+            String preprocessedTemplate = preprocessNowTags(template);
+            log.info("###DEBUG### Preprocessed template: [{}]", preprocessedTemplate);
+
+            // Compila il template Handlebars
+            Template compiledTemplate = handlebars.compileInline(preprocessedTemplate);
+
+            // Applica le variabili al template
+            String result = compiledTemplate.apply(variables != null ? variables : new HashMap<>());
+
+            log.info("###DEBUG### Render result: [{}]", result);
+            log.info("###DEBUG### ===== RENDER TEMPLATE END =====");
+            log.debug("Template renderizzato con successo");
+            return result;
+
+        } catch (IOException e) {
+            logger.error("###DEBUG### Errore durante il rendering del template: {}", e.getMessage(), e);
+            log.info("###DEBUG### ===== RENDER TEMPLATE END (ERROR) =====");
+            // In caso di errore, ritorna il template originale
+            return template;
+        }
     }
 
     /**
-     * Estrae tutte le variabili presenti in un template
+     * Pre-processa i tag {{now:formato}} convertendoli in sintassi Handlebars {{now "formato"}}
+     *
+     * Converte:
+     * - {{now:DD/MM/YYYY}} → {{now "DD/MM/YYYY"}}
+     * - {{now:YYYY-MM-DD HH:mm:ss}} → {{now "YYYY-MM-DD HH:mm:ss"}}
+     *
+     * @param template Template con sintassi custom {{now:formato}}
+     * @return Template con sintassi Handlebars standard
+     */
+    private String preprocessNowTags(String template) {
+        if (template == null) return "";
+
+        // Pattern per trovare {{now:formato}}
+        Pattern nowPattern = Pattern.compile("\\{\\{now:([^}]+)\\}\\}");
+        Matcher matcher = nowPattern.matcher(template);
+        StringBuffer result = new StringBuffer();
+
+        while (matcher.find()) {
+            String format = matcher.group(1);
+            // Converti in sintassi Handlebars: {{now "formato"}}
+            String replacement = "{{now \"" + format + "\"}}";
+            matcher.appendReplacement(result, Matcher.quoteReplacement(replacement));
+        }
+
+        matcher.appendTail(result);
+        return result.toString();
+    }
+
+    /**
+     * Estrae tutte le variabili presenti in un template Handlebars
+     * Nota: Con Handlebars questo metodo è meno utile, ma mantenuto per backward compatibility
      *
      * @param template Testo template
      * @return Set di nomi variabili (senza {{}})
@@ -359,7 +432,10 @@ public class EmailService {
         Set<String> variables = new LinkedHashSet<>();
         if (template == null) return variables;
 
-        Matcher matcher = VARIABLE_PATTERN.matcher(template);
+        // Pattern per variabili semplici: {{variableName}} o {{object.property}}
+        Pattern pattern = Pattern.compile("\\{\\{([a-zA-Z0-9_\\.]+)\\}\\}");
+        Matcher matcher = pattern.matcher(template);
+
         while (matcher.find()) {
             variables.add(matcher.group(1));
         }
@@ -368,86 +444,13 @@ public class EmailService {
     }
 
     /**
-     * Converte formato data da maiuscolo a pattern Java DateTimeFormatter
-     *
-     * Conversioni supportate:
-     * - YYYY → yyyy (anno 4 cifre)
-     * - YY → yy (anno 2 cifre)
-     * - DD → dd (giorno del mese)
-     * - MM → MM (mese - rimane invariato)
-     * - HH → HH (ora 24h - rimane invariato)
-     * - mm → mm (minuti - rimane invariato)
-     * - ss → ss (secondi - rimane invariato)
-     *
-     * @param customFormat Formato con lettere maiuscole (es: "DD/MM/YYYY HH:mm:ss")
-     * @return Pattern Java per DateTimeFormatter (es: "dd/MM/yyyy HH:mm:ss")
-     */
-    private String convertToJavaPattern(String customFormat) {
-        if (customFormat == null) return "";
-
-        String result = customFormat;
-
-        // IMPORTANTE: Sostituire YYYY prima di YY per evitare sostituzioni parziali
-        result = result.replace("YYYY", "yyyy");  // Anno 4 cifre
-        result = result.replace("YY", "yy");      // Anno 2 cifre
-        result = result.replace("DD", "dd");      // Giorno del mese
-
-        // MM, HH, mm, ss rimangono invariati (già nel formato Java corretto)
-
-        return result;
-    }
-
-    /**
-     * Processa i tag {{now:formato}} sostituendoli con la data/ora corrente formattata
-     *
-     * Esempi:
-     * - {{now:DD/MM/YYYY}} → "08/11/2025"
-     * - {{now:YYYY-MM-DD HH:mm:ss}} → "2025-11-08 14:35:22"
-     * - {{now:DD/MM/YYYY HH:mm}} → "08/11/2025 14:35"
-     *
-     * @param template Template contenente tag {{now:formato}}
-     * @return Template con tag sostituiti dalla data/ora corrente
-     */
-    private String processNowTags(String template) {
-        if (template == null) return "";
-
-        Matcher matcher = NOW_TAG_PATTERN.matcher(template);
-        StringBuffer result = new StringBuffer();
-
-        while (matcher.find()) {
-            String customFormat = matcher.group(1);  // Estrae il formato (es: "DD/MM/YYYY")
-            String javaPattern = convertToJavaPattern(customFormat);  // Converte a pattern Java
-
-            try {
-                // Formatta la data/ora corrente usando il pattern Java
-                DateTimeFormatter formatter = DateTimeFormatter.ofPattern(javaPattern);
-                String formattedDate = LocalDateTime.now().format(formatter);
-
-                // Sostituisci il tag con la data formattata
-                matcher.appendReplacement(result, Matcher.quoteReplacement(formattedDate));
-
-                log.debug("Tag {{now:{}}} sostituito con: {}", customFormat, formattedDate);
-
-            } catch (Exception e) {
-                // Se il pattern non è valido, lascia il tag originale
-                logger.warn("Errore formattazione tag {{now:{}}}: {}. Tag lasciato invariato.",
-                    customFormat, e.getMessage());
-                matcher.appendReplacement(result, Matcher.quoteReplacement(matcher.group(0)));
-            }
-        }
-
-        matcher.appendTail(result);
-        return result.toString();
-    }
-
-    /**
      * Anteprima rendering template con dati di esempio
      *
      * @param templateId ID template
-     * @param sampleVariables Variabili di esempio per preview
+     * @param sampleVariables Variabili di esempio per preview (supporta array e oggetti nested)
      * @return Map con subject e body renderizzati
      */
-    public Map<String, String> previewTemplate(Integer templateId, Map<String, String> sampleVariables) {
+    public Map<String, String> previewTemplate(Integer templateId, Map<String, Object> sampleVariables) {
         EmailTemplate template = EmailTemplate.findById(templateId);
         if (template == null) {
             throw new IllegalArgumentException("Template non trovato: " + templateId);
@@ -535,7 +538,7 @@ public class EmailService {
             Set<String> bcc,
             String subject,
             String body,
-            Map<String, String> variables,
+            Map<String, Object> variables,
             String entityType,
             Integer entityId,
             String sentBy) {

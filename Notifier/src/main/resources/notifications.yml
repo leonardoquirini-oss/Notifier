@@ -26,6 +26,13 @@ notifications:
       auto-ack: true
       single-mail: true                           # Utilizza il template ma non la lista distribuzione (invio email singolo)
 
+    # Danni Semirimorchi
+    - stream: "trailer-damage-stream"
+      event-type: trailer:damage_report      # Evento
+      template-code: "DANNI_TFP_TRAILER"           # Template messaggio
+      consumer-group: "notifier-group"  
+      auto-ack: true
+
     # Attachment Sharing Event
     - stream: "events-stream"
       event-type: attachment:share                # Evento

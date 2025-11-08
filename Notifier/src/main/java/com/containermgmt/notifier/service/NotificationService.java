@@ -64,7 +64,8 @@ public class NotificationService {
             }
 
             // Converte i dati dell'evento in variabili per il template
-            Map<String, String> variables = templateRenderer.eventToVariables(event.getPayload());
+            // Usa eventToContext() che preserva la struttura di array e oggetti nested
+            Map<String, Object> variables = templateRenderer.eventToContext(event.getPayload());
 
             logger.debug("Extracted {} variables from event", variables.size());
             log.info("###DEBUG###  variables : {}",variables);
