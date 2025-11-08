@@ -20,6 +20,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 import java.io.IOException;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -63,6 +65,9 @@ public class EmailService {
 
     // Pattern per trovare variabili nei template: {{variableName}}
     private static final Pattern VARIABLE_PATTERN = Pattern.compile("\\{\\{([a-zA-Z0-9_\\.]+)\\}\\}");
+
+    // Pattern per trovare tag data/ora corrente: {{now:DD/MM/YYYY}}
+    private static final Pattern NOW_TAG_PATTERN = Pattern.compile("\\{\\{now:([^}]+)\\}\\}");
 
     /**
      * Classe interna per rappresentare un allegato email
@@ -305,32 +310,40 @@ public class EmailService {
     }
 
     /**
-     * Rendering di un template sostituendo le variabili {{variableName}}
+     * Rendering di un template sostituendo i tag {{now:formato}} e le variabili {{variableName}}
      *
-     * @param template Testo template con placeholder {{variableName}}
+     * Processamento in due fasi:
+     * 1. Prima sostituisce tutti i tag {{now:formato}} con la data/ora corrente
+     * 2. Poi sostituisce tutte le variabili {{variableName}} con i valori forniti
+     *
+     * @param template Testo template con placeholder {{variableName}} e {{now:formato}}
      * @param variables Mappa variabili (chiave = nome variabile, valore = valore da sostituire)
      * @return Testo renderizzato
      */
     public String renderTemplate(String template, Map<String, String> variables) {
         if (template == null) return "";
-        if (variables == null || variables.isEmpty()) return template;
 
         log.info("###DEBUG### template: [{}]",template);
         log.info("###DEBUG### variables: {}",variables);
 
-        String result = template;
-        Matcher matcher = VARIABLE_PATTERN.matcher(template);
+        // FASE 1: Processa tag {{now:formato}}
+        String result = processNowTags(template);
 
-        // Trova tutte le variabili {{variableName}} e sostituiscile
-        while (matcher.find()) {
-            String variableName = matcher.group(1);
-            String variableValue = variables.getOrDefault(variableName, "");
+        // FASE 2: Processa variabili {{variableName}}
+        if (variables != null && !variables.isEmpty()) {
+            Matcher matcher = VARIABLE_PATTERN.matcher(result);
 
-            log.info("###DEBUG###   -- variable name : {} - value : {}",variableName, variableValue);
+            // Trova tutte le variabili {{variableName}} e sostituiscile
+            while (matcher.find()) {
+                String variableName = matcher.group(1);
+                String variableValue = variables.getOrDefault(variableName, "");
 
-            // Sostituisci placeholder con valore
-            String placeholder = "\\{\\{" + variableName + "\\}\\}";
-            result = result.replaceAll(placeholder, Matcher.quoteReplacement(variableValue));
+                log.info("###DEBUG###   -- variable name : {} - value : {}",variableName, variableValue);
+
+                // Sostituisci placeholder con valore
+                String placeholder = "\\{\\{" + variableName + "\\}\\}";
+                result = result.replaceAll(placeholder, Matcher.quoteReplacement(variableValue));
+            }
         }
 
         return result;
@@ -352,6 +365,79 @@ public class EmailService {
         }
 
         return variables;
+    }
+
+    /**
+     * Converte formato data da maiuscolo a pattern Java DateTimeFormatter
+     *
+     * Conversioni supportate:
+     * - YYYY → yyyy (anno 4 cifre)
+     * - YY → yy (anno 2 cifre)
+     * - DD → dd (giorno del mese)
+     * - MM → MM (mese - rimane invariato)
+     * - HH → HH (ora 24h - rimane invariato)
+     * - mm → mm (minuti - rimane invariato)
+     * - ss → ss (secondi - rimane invariato)
+     *
+     * @param customFormat Formato con lettere maiuscole (es: "DD/MM/YYYY HH:mm:ss")
+     * @return Pattern Java per DateTimeFormatter (es: "dd/MM/yyyy HH:mm:ss")
+     */
+    private String convertToJavaPattern(String customFormat) {
+        if (customFormat == null) return "";
+
+        String result = customFormat;
+
+        // IMPORTANTE: Sostituire YYYY prima di YY per evitare sostituzioni parziali
+        result = result.replace("YYYY", "yyyy");  // Anno 4 cifre
+        result = result.replace("YY", "yy");      // Anno 2 cifre
+        result = result.replace("DD", "dd");      // Giorno del mese
+
+        // MM, HH, mm, ss rimangono invariati (già nel formato Java corretto)
+
+        return result;
+    }
+
+    /**
+     * Processa i tag {{now:formato}} sostituendoli con la data/ora corrente formattata
+     *
+     * Esempi:
+     * - {{now:DD/MM/YYYY}} → "08/11/2025"
+     * - {{now:YYYY-MM-DD HH:mm:ss}} → "2025-11-08 14:35:22"
+     * - {{now:DD/MM/YYYY HH:mm}} → "08/11/2025 14:35"
+     *
+     * @param template Template contenente tag {{now:formato}}
+     * @return Template con tag sostituiti dalla data/ora corrente
+     */
+    private String processNowTags(String template) {
+        if (template == null) return "";
+
+        Matcher matcher = NOW_TAG_PATTERN.matcher(template);
+        StringBuffer result = new StringBuffer();
+
+        while (matcher.find()) {
+            String customFormat = matcher.group(1);  // Estrae il formato (es: "DD/MM/YYYY")
+            String javaPattern = convertToJavaPattern(customFormat);  // Converte a pattern Java
+
+            try {
+                // Formatta la data/ora corrente usando il pattern Java
+                DateTimeFormatter formatter = DateTimeFormatter.ofPattern(javaPattern);
+                String formattedDate = LocalDateTime.now().format(formatter);
+
+                // Sostituisci il tag con la data formattata
+                matcher.appendReplacement(result, Matcher.quoteReplacement(formattedDate));
+
+                log.debug("Tag {{now:{}}} sostituito con: {}", customFormat, formattedDate);
+
+            } catch (Exception e) {
+                // Se il pattern non è valido, lascia il tag originale
+                logger.warn("Errore formattazione tag {{now:{}}}: {}. Tag lasciato invariato.",
+                    customFormat, e.getMessage());
+                matcher.appendReplacement(result, Matcher.quoteReplacement(matcher.group(0)));
+            }
+        }
+
+        matcher.appendTail(result);
+        return result.toString();
     }
 
     /**
