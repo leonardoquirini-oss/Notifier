@@ -2,12 +2,14 @@ version: '3.8'
 
 services:
   # TFP Asset Damage Collector Service
-  tfp-collector:
+  coll:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: tfp-asset-damage-collector
     restart: unless-stopped
+    ports:
+      - 9229:9229  
     environment:
       # Scheduling
       - CRON_SCHEDULE=${CRON_SCHEDULE:-0 18 * * *}
@@ -17,6 +19,11 @@ services:
       - REDIS_HOST=valkey-service
       - REDIS_PORT=6379
       - REDIS_STREAM_KEY=${REDIS_STREAM_KEY:-daily-job-results}
+
+      # BERLink API
+      - TRAILER_API_URL=http://localhost:8080
+      - TRAILER_API_KEY=tfp-test-key-2025-DO-NOT-USE-IN-PRODUCTION
+      - TRAILER_API_TIMEOUT=${TRAILER_API_TIMEOUT:-30000}
 
       # TFP API
       - TPF_API_URL=${TPF_API_URL}

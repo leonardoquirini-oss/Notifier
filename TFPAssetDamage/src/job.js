@@ -10,56 +10,99 @@ const redisClient = require('./redis-client');
 
 /**
  * Processes raw API data into desired format
- * This function can be easily extended for more complex transformations
+ * Fetches trailer data for each plate and builds report_data structure
  * @param {Object} apiData - Raw data from API
- * @returns {Object} Processed data
+ * @returns {Object} Processed data with report_data array
  */
-function processData(apiData) {
+async function processData(apiData) {
   // Validation
   if (!apiData) {
     throw new Error('API data is null or undefined');
   }
 
-  // Basic transformation - can be extended as needed
-  const processedData = {
-    recordCount: Array.isArray(apiData) ? apiData.length : 0,
-    processedAt: new Date().toISOString(),
-    records: apiData,
-  };
+  if (!apiData.resultList || !Array.isArray(apiData.resultList)) {
+    throw new Error('API data does not contain resultList array');
+  }
 
-  logger.debug('Data processed', { recordCount: processedData.recordCount });
+  logger.info('Processing asset damage data', {
+    totalRecords: apiData.resultList.length
+  });
 
-  /*
-    QUI FARE IL PARSING DEI VEICOLI, PER CIASCUNO INVOCARE IL METODO 
+  const reportData = [];
 
-    http://localhost:8080/api/trailers/by-plate/AB123CD
-    
-    Passando la targa trimmata da tutti gli spazi
+  // Process each record sequentially
+  for (const record of apiData.resultList) {
+    const plate = record.assetIdentifier;
+    const reportNotes = record.reportNotes;
 
-    e se rispetta i criteri (da vedere con Giuseppe/Francesco) creare un oggetto:
+    logger.debug('###DEBUG### plate : ' , {plate : record.assetIdentifier});
 
-    {
-      "report_data" : [
-        {
-          "plate" : "AA 111 BB",
-          "report_notes" : "<contenuto dell'attributo reportNotes>""
-        }
-      ]
+    // Skip if no plate or reportNotes
+    if (!plate || !reportNotes) {
+      logger.debug('Skipping record - missing plate or reportNotes', {
+        id: record.id,
+        plate,
+        hasReportNotes: !!reportNotes
+      });
+      continue;
     }
-  */
+    
+    logger.debug('###DEBUG### plate : ' , plate);
+    
+    if ( plate.toLowerCase().startsWith("gbtu") ) {
+      // No Container, trailers only
+      continue;
+    }
 
-  return processedData;
+    // Fetch trailer data from trailer API
+    const trailerData = await apiClient.fetchTrailerByPlate(plate);
+
+    // Skip if trailer API call failed or returned null
+    if (!trailerData) {
+      logger.debug('Skipping record - trailer data not found', {
+        id: record.id,
+        plate
+      });
+      continue;
+    }
+
+    logger.debug('###DEBUG### TRAILER_DATA : ' , {data : trailerData});
+
+    // Add to report data
+    reportData.push({
+      plate: plate,
+      report_notes: reportNotes
+    });
+
+    logger.debug('Record processed successfully', {
+      id: record.id,
+      plate
+    });
+  }
+
+  logger.info('Data processing completed', {
+    totalProcessed: apiData.resultList.length,
+    reportDataCount: reportData.length
+  });
+
+
+  logger.debug('Valkey Event : ', reportData );
+
+  return {
+    report_data: reportData
+  };
 }
 
 /**
  * Executes the main job workflow
  * Always writes to Redis, even on failure
+ * @param {Object} dataSource - Optional data source (if provided, skips API fetch)
  */
-async function executeJob() {
+async function executeJob(dataSource = null) {
   const jobId = uuidv4();
   const startTime = Date.now();
 
-  logger.info('Job started', { jobId });
+  logger.info('Job started', { jobId, mode: dataSource ? 'file' : 'api' });
 
   const result = {
     jobId,
@@ -71,13 +114,20 @@ async function executeJob() {
   };
 
   try {
-    // Step 1: Fetch data from API
-    logger.info('Fetching data from API', { jobId });
-    const apiData = await apiClient.fetchData();
+    // Step 1: Fetch data from API or use provided data
+    let apiData;
+
+    if (dataSource) {
+      logger.info('Using provided data source', { jobId });
+      apiData = dataSource;
+    } else {
+      logger.info('Fetching data from API', { jobId });
+      apiData = await apiClient.fetchData();
+    }
 
     // Step 2: Process the data
     logger.info('Processing data', { jobId });
-    const processedData = processData(apiData);
+    const processedData = await processData(apiData);
 
     // Step 3: Prepare success result
     result.data = processedData;
@@ -124,7 +174,7 @@ async function executeJob() {
         originalStatus: result.status,
       });
     }
-  
+
   }
 
   return result;

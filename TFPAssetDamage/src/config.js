@@ -24,6 +24,13 @@ const config = {
     password: process.env.TPF_API_PASSWORD,
   },
 
+  // Trailer API
+  trailerApi: {
+    url: process.env.TRAILER_API_URL || 'http://localhost:8080',
+    apiKey: process.env.TRAILER_API_KEY,
+    timeout: parseInt(process.env.TRAILER_API_TIMEOUT, 10) || 30000,
+  },
+
   // Logging
   logLevel: process.env.LOG_LEVEL || 'info',
 };
@@ -36,6 +43,7 @@ function validateConfig() {
   const required = [
     'TPF_API_USERNAME',
     'TPF_API_PASSWORD',
+    'TRAILER_API_KEY',
   ];
 
   const missing = required.filter(key => !process.env[key]);

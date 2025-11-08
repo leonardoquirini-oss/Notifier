@@ -173,6 +173,49 @@ class ApiClient {
   }
 
   /**
+   * Fetches trailer information by plate from Trailer API
+   * @param {string} plate - Vehicle plate number (will be trimmed)
+   * @returns {Promise<Object|null>} Trailer data or null if not found/error
+   */
+  async fetchTrailerByPlate(plate) {
+    try {
+      // Trim all spaces from the plate
+      const trimmedPlate = plate.replace(/\s/g, '');
+
+      logger.debug('Fetching trailer by plate', {
+        originalPlate: plate,
+        trimmedPlate
+      });
+
+      const trailerAxios = axios.create({
+        baseURL: config.trailerApi.url,
+        timeout: config.trailerApi.timeout,
+        headers: {
+          'X-API-Key': config.trailerApi.apiKey,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const response = await trailerAxios.get(`/api/trailers/by-plate/${trimmedPlate}`);
+
+      logger.debug('Trailer data fetched successfully', {
+        plate: trimmedPlate,
+        hasReportNotes: !!response.data?.reportNotes
+      });
+
+      return response.data;
+    } catch (error) {
+      logger.warn('Failed to fetch trailer data for plate', {
+        plate,
+        error: error.message,
+        status: error.response?.status,
+      });
+      // Return null to skip this record as per requirements
+      return null;
+    }
+  }
+
+  /**
    * Main entry point to fetch data with retry logic
    * @returns {Promise<Object>} Asset damage data
    */

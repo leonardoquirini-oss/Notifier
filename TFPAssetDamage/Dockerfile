@@ -43,10 +43,10 @@ USER nodejs
 ENV NODE_ENV=production
 
 # Expose health check port (optional - for future HTTP health endpoint)
-# EXPOSE 3000
+EXPOSE 3000 9229
 
 # Use dumb-init to handle signals properly
 ENTRYPOINT ["dumb-init", "--"]
 
 # Start the application
-CMD ["node", "src/index.js"]
+CMD ["node", "--inspect=0.0.0.0:9229", "src/index.js"]
