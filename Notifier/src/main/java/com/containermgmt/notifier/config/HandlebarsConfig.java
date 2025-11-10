@@ -98,6 +98,23 @@ public class HandlebarsConfig {
             }
         });
 
+        // Registra helper custom per tag {{eq}} 
+        handlebars.registerHelper("eq", new Helper<Object>() {
+            @Override
+            public Object apply(Object context, Options options) throws IOException {
+                Object left = context;
+                Object right = options.param(0, null);
+                if (left == null || right == null) {
+                    return options.inverse();
+                }
+                if (left.toString().equals(right.toString())) {
+                    return options.fn(context);   // ramo TRUE
+                } else {
+                    return options.inverse();     // ramo ELSE
+                }    
+            }
+        });
+
         // Configura opzioni Handlebars
         handlebars.setPrettyPrint(false);  // Non formattare l'output (mantieni HTML come da template)
         handlebars.setInfiniteLoops(false);  // Previeni loop infiniti

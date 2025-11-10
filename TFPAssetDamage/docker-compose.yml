@@ -41,16 +41,6 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-
-  #valkey:
-  #  hostname: valkey-service
-  #  container_name: valkey-service
-  #  image: valkey/valkey:9.0.0-alpine
-  #  restart: always
-  #  ports:
-  #    - 6399:6379    
-  #  networks:
-  #    - berlink-network
   
 networks:
   berlink-network:

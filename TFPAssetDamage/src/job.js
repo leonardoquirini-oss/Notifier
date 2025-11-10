@@ -34,8 +34,7 @@ async function processData(apiData) {
   for (const record of apiData.resultList) {
     const plate = record.assetIdentifier;
     const reportNotes = record.reportNotes;
-
-    logger.debug('###DEBUG### plate : ' , {plate : record.assetIdentifier});
+    const status = record.status;
 
     // Skip if no plate or reportNotes
     if (!plate || !reportNotes) {
@@ -52,6 +51,7 @@ async function processData(apiData) {
       continue;
     }
 
+    logger.debug('###DEBUG### Plate : ' , {plate : record.assetIdentifier});
     // Fetch trailer data from trailer API
     const trailerData = await apiClient.fetchTrailerByPlate(plate);
 
@@ -69,6 +69,7 @@ async function processData(apiData) {
     // Add to report data
     reportData.push({
       plate: plate,
+      status: status,
       report_notes: reportNotes
     });
 
@@ -126,9 +127,15 @@ async function executeJob(dataSource = null) {
       let damageApiData     = await apiClient.fetchAssetDamageData('OPEN');
       apiData = damageApiData;
 
+      let num = damageApiData?.resultList?.length;
+      logger.info('Response for OPEN status : ', { num });
+
       // UNDER REPAIR
       let repairinigApiData = await apiClient.fetchAssetDamageData('UNDER_REPAIR');
       apiData.resultList.concat(repairinigApiData.resultList); 
+
+      num = repairinigApiData?.resultList?.length;
+      logger.info('Response for UNDER_REPAIR status : ', { num });
     }
 
     // Step 2: Process the data

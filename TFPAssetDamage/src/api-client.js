@@ -78,7 +78,7 @@ class ApiClient {
     };
 
     try {
-      logger.info('Fetching asset damage data');
+      logger.info('Fetching asset damage data, status : ', filterStatus);
 
       const response = await this.axiosInstance.post(
         'units-tracking/assetdamage/browse',

@@ -9,13 +9,8 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-
 # Installa dipendenze
 RUN npm install --legacy-peer-deps
-
-#RUN npm ci --only=production && \
-#    npm cache clean --force
 
 # Stage 2: Production image
 FROM node:20-alpine AS runner
