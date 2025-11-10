@@ -194,7 +194,37 @@ public class EmailService {
             // Aggiungi footer al body
             String bodyWithFooter = addFooterToBody(renderedBody, template.getBoolean("is_html"));
 
-            Map<String, Object> parameters = (Map<String, Object>)(variables.getOrDefault("parameters", null));
+            // Gestione sicura dei parametri - può essere Map o String (JSON non parsato)
+            Map<String, Object> parameters = null;
+            Object parametersObj = variables.getOrDefault("parameters", null);
+
+            if (parametersObj instanceof Map) {
+                parameters = (Map<String, Object>) parametersObj;
+                logger.debug("Parameters already parsed as Map");
+            } else if (parametersObj instanceof String) {
+                // Se è una stringa, prova a parsarla come JSON
+                String parametersStr = (String) parametersObj;
+                logger.info("###DEBUG### Parameters is String, attempting to parse: [{}]", parametersStr);
+
+                try {
+                    // Prova prima il parsing diretto
+                    parameters = objectMapper.readValue(parametersStr, Map.class);
+                    logger.info("###DEBUG### Successfully parsed parameters from JSON string (direct)");
+                } catch (Exception e1) {
+                    logger.warn("###DEBUG### Direct parse failed: {}", e1.getMessage());
+
+                    // Se fallisce, la stringa è probabilmente escaped (contiene \" invece di ")
+                    // Rimuovi gli escape e riprova
+                    try {
+                        String unescaped = parametersStr.replace("\\\"", "\"");
+                        logger.info("###DEBUG### Trying with unescaped string: [{}]", unescaped);
+                        parameters = objectMapper.readValue(unescaped, Map.class);
+                        logger.info("###DEBUG### Successfully parsed parameters after unescaping");
+                    } catch (Exception e2) {
+                        logger.warn("###DEBUG### Could not parse parameters even after unescaping: {}", e2.getMessage());
+                    }
+                }
+            }
 
             // Gestione allegato se presente
             EmailAttachment attachment = null;

@@ -91,37 +91,82 @@ public class TemplateRenderer {
 
             logger.info("###DEBUG### Processing key: {}", key);
             logger.info("###DEBUG### Raw value: {}", value);
+            logger.info("###DEBUG### Raw value class: {}", value != null ? value.getClass().getName() : "null");
 
             if (value != null) {
+                // Prima verifica: se la stringa sembra JSON (ma non è escaped), prova il parsing diretto
+                String trimmed = value.trim();
+                boolean looksLikeJson = (trimmed.startsWith("{") && trimmed.endsWith("}")) ||
+                                       (trimmed.startsWith("[") && trimmed.endsWith("]"));
+
+                if (looksLikeJson) {
+                    try {
+                        logger.info("###DEBUG### Value looks like JSON object/array, attempting direct parse");
+                        JsonNode node = objectMapper.readTree(value);
+                        Object parsedValue = parseJsonNode(node);
+                        logger.info("###DEBUG### Successfully parsed JSON - type: {}", parsedValue.getClass().getName());
+                        context.put(key, parsedValue);
+                        continue; // Prossimo campo
+                    } catch (Exception e) {
+                        logger.warn("###DEBUG### Direct JSON parse failed for key '{}': {}", key, e.getMessage());
+
+                        // Potrebbe essere JSON escaped (con \"), prova a togliere gli escape
+                        if (trimmed.contains("\\\"")) {
+                            try {
+                                String unescaped = trimmed.replace("\\\"", "\"");
+                                logger.info("###DEBUG### Trying with unescaped JSON: [{}]", unescaped);
+                                JsonNode unescapedNode = objectMapper.readTree(unescaped);
+                                Object unescapedValue = parseJsonNode(unescapedNode);
+                                logger.info("###DEBUG### Successfully parsed unescaped JSON - type: {}", unescapedValue.getClass().getName());
+                                context.put(key, unescapedValue);
+                                continue; // Prossimo campo
+                            } catch (Exception e2) {
+                                logger.warn("###DEBUG### Unescaped JSON parse also failed for key '{}': {}", key, e2.getMessage());
+                            }
+                        }
+                        // Continua con i tentativi successivi
+                    }
+                }
+
                 try {
-                    // Prova a fare il parse come JSON
+                    // Prova a fare il parse come JSON (gestisce anche stringhe JSON escaped)
+                    logger.info("###DEBUG### Attempting JSON parse with ObjectMapper for key '{}'", key);
                     JsonNode node = objectMapper.readTree(value);
                     logger.info("###DEBUG### Parsed as JSON - node type: {}", node.getNodeType());
 
-                    // Converti il nodo JSON preservando la struttura
-                    Object parsedValue = parseJsonNode(node);
-                    logger.info("###DEBUG### Parsed value type: {}", parsedValue.getClass().getName());
-                    logger.info("###DEBUG### Parsed value: {}", parsedValue);
+                    // Se il nodo è una stringa semplice e sembra JSON escaped, prova a ri-parsare
+                    if (node.isTextual()) {
+                        String textValue = node.asText();
+                        String trimmedText = textValue.trim();
 
-                    context.put(key, parsedValue);
+                        // Se la stringa sembra JSON (inizia con { o [), prova a parsarla di nuovo
+                        if ((trimmedText.startsWith("{") && trimmedText.endsWith("}")) ||
+                            (trimmedText.startsWith("[") && trimmedText.endsWith("]"))) {
+                            try {
+                                logger.info("###DEBUG### String looks like escaped JSON, attempting to re-parse");
+                                JsonNode innerNode = objectMapper.readTree(textValue);
+                                Object innerParsedValue = parseJsonNode(innerNode);
+                                logger.info("###DEBUG### Successfully parsed escaped JSON - type: {}", innerParsedValue.getClass().getName());
+                                context.put(key, innerParsedValue);
+                            } catch (Exception innerEx) {
+                                logger.warn("###DEBUG### Re-parse failed, using as string: {}", innerEx.getMessage());
+                                context.put(key, textValue);
+                            }
+                        } else {
+                            // È solo una stringa normale
+                            context.put(key, textValue);
+                        }
+                    } else {
+                        // Converti il nodo JSON preservando la struttura
+                        Object parsedValue = parseJsonNode(node);
+                        logger.info("###DEBUG### Parsed value type: {}", parsedValue.getClass().getName());
+                        context.put(key, parsedValue);
+                    }
 
                 } catch (Exception e) {
-                    // Primo tentativo fallito, prova a sanitizzare e riparsare
-                    logger.info("###DEBUG### First parse attempt failed: {}. Trying with sanitized JSON...", e.getMessage());
-
-                    try {
-                        String sanitizedValue = sanitizeJsonString(value);
-                        JsonNode node = objectMapper.readTree(sanitizedValue);
-                        logger.info("###DEBUG### Successfully parsed sanitized JSON - node type: {}", node.getNodeType());
-
-                        Object parsedValue = parseJsonNode(node);
-                        context.put(key, parsedValue);
-
-                    } catch (Exception e2) {
-                        // Anche il secondo tentativo è fallito, trattalo come stringa semplice
-                        logger.info("###DEBUG### Not JSON, treating as string: {}", e2.getMessage());
-                        context.put(key, value);
-                    }
+                    // Parsing fallito, trattalo come stringa semplice
+                    logger.warn("###DEBUG### All parse attempts failed for key '{}'. Treating as string. Error: {}", key, e.getMessage());
+                    context.put(key, value);
                 }
             } else {
                 // Valore null -> stampa "null" come richiesto
