@@ -55,7 +55,7 @@ class ApiClient {
    * Fetches asset damage data from TFP API
    * @returns {Promise<Object>} Asset damage data
    */
-  async fetchAssetDamage() {
+  async fetchAssetDamage(filterStatus) {
     // Ensure we have a valid token
     if (!this.token) {
       await this.login();
@@ -67,7 +67,7 @@ class ApiClient {
       filter: {
         enabled: 1,
         assetType: 'UNIT',
-        status: 'OPEN',
+        status: filterStatus,
       },
       sortingList: [
         {
@@ -219,9 +219,9 @@ class ApiClient {
    * Main entry point to fetch data with retry logic
    * @returns {Promise<Object>} Asset damage data
    */
-  async fetchData() {
-    return this.executeWithRetry(() => this.fetchAssetDamage());
-  }
+  async fetchAssetDamageData(filterStatus) {
+    return this.executeWithRetry(() => this.fetchAssetDamage(filterStatus));
+  }  
 }
 
 module.exports = new ApiClient();

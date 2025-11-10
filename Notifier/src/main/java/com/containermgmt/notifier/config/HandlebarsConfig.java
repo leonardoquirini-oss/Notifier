@@ -80,6 +80,24 @@ public class HandlebarsConfig {
             }
         });
 
+        // Registra helper custom per tag {{now "formato"}} o {{now formato}}
+        handlebars.registerHelper("isTruthy", new Helper<Object>() {
+            @Override
+            public Object apply(Object context, Options options) throws IOException {
+                if (context == null) return options.inverse();
+
+                String str = context.toString().trim();
+
+                // Considera "falsy": null, "", "null", "0", "false"
+                if (str.isEmpty() || "null".equalsIgnoreCase(str) || "false".equalsIgnoreCase(str) || "0".equals(str)) {
+                    return options.inverse();
+                }
+
+                // Altrimenti è truthy
+                return options.fn();        
+            }
+        });
+
         // Configura opzioni Handlebars
         handlebars.setPrettyPrint(false);  // Non formattare l'output (mantieni HTML come da template)
         handlebars.setInfiniteLoops(false);  // Previeni loop infiniti

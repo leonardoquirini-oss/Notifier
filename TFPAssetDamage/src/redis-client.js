@@ -89,6 +89,31 @@ class RedisClient {
 
       const streamKey = config.redis.streamKey;
 
+      // Helper function to safely stringify values for Redis
+      // Ensures the output is always a valid JSON string
+      const safeStringify = (value) => {
+        try {
+          // Handle undefined by converting to null
+          if (value === undefined) {
+            return 'null';
+          }
+          // Stringify the value (handles null, objects, strings, etc.)
+          return JSON.stringify(value);
+        } catch (stringifyError) {
+          // Handle circular references or other stringify errors
+          logger.warn('Failed to stringify value, using error placeholder', {
+            error: stringifyError.message,
+            valueType: typeof value,
+          });
+          // Return a safe error representation
+          return JSON.stringify({
+            error: 'Failed to serialize value',
+            reason: stringifyError.message,
+            type: typeof value,
+          });
+        }
+      };
+
       // Convert result object to flat key-value pairs for Redis Stream
       const streamData = [
         'jobId', result.jobId,
@@ -96,8 +121,8 @@ class RedisClient {
         'timestamp', result.timestamp,
         'status', result.status,
         'executionTime', result.executionTime.toString(),
-        'data', JSON.stringify(result.data),
-        'error', JSON.stringify(result.error),
+        'data', safeStringify(result.data),
+        'error', safeStringify(result.error),
       ];
 
       // Use XADD to append to stream (* means auto-generate ID)

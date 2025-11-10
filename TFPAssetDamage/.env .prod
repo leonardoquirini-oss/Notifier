@@ -17,14 +17,14 @@ TZ=Europe/Rome
 # ============================================
 # Redis Configuration
 # ============================================
-REDIS_HOST=172.28.234.122
+REDIS_HOST=127.0.0.1
 REDIS_PORT=6379
 REDIS_STREAM_KEY=trailer-damage-stream
 
 # ============================================
 # BERLink API Configuration
 # ============================================
-TRAILER_API_URL=http://172.28.234.122:8090
+TRAILER_API_URL=http://localhost:8090
 TRAILER_API_KEY=tfp-test-key-2025-DO-NOT-USE-IN-PRODUCTION
 TRAILER_API_TIMEOUT=30000
 
@@ -32,17 +32,17 @@ TRAILER_API_TIMEOUT=30000
 # TFP API Configuration
 # ============================================
 # Base URL for TFP API (without trailing slash)
-TPF_API_URL=http://172.28.234.122:7000/api
+TPF_API_URL=https://tfp.circletouch.eu/api
 
 # API timeout in milliseconds
 TPF_API_TIMEOUT=30000
 
 # Number of retry attempts for failed API calls
-TPF_API_RETRY_ATTEMPTS=1
+TPF_API_RETRY_ATTEMPTS=3
 
 # TFP API Credentials (REQUIRED)
-TPF_API_USERNAME=test
-TPF_API_PASSWORD=test
+TPF_API_USERNAME=admin.b
+TPF_API_PASSWORD=admin.b
 
 # ============================================
 # Logging Configuration

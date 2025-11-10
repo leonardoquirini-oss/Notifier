@@ -34,9 +34,6 @@ public class ActiveJDBCConfig {
     @PostConstruct
     public void init() {
         try {
-
-            log.debug("###DEBUG### URL {} user {} pwd {} class {}", dbUrl,dbUsername,dbPassword,driverClassName);
-
             // Load the PostgreSQL driver
             Class.forName(driverClassName);
 

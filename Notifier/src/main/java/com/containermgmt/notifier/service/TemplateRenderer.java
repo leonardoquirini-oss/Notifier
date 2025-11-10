@@ -106,9 +106,22 @@ public class TemplateRenderer {
                     context.put(key, parsedValue);
 
                 } catch (Exception e) {
-                    // Non è JSON, trattalo come stringa semplice
-                    logger.info("###DEBUG### Not JSON, treating as string: {}", e.getMessage());
-                    context.put(key, value);
+                    // Primo tentativo fallito, prova a sanitizzare e riparsare
+                    logger.info("###DEBUG### First parse attempt failed: {}. Trying with sanitized JSON...", e.getMessage());
+
+                    try {
+                        String sanitizedValue = sanitizeJsonString(value);
+                        JsonNode node = objectMapper.readTree(sanitizedValue);
+                        logger.info("###DEBUG### Successfully parsed sanitized JSON - node type: {}", node.getNodeType());
+
+                        Object parsedValue = parseJsonNode(node);
+                        context.put(key, parsedValue);
+
+                    } catch (Exception e2) {
+                        // Anche il secondo tentativo è fallito, trattalo come stringa semplice
+                        logger.info("###DEBUG### Not JSON, treating as string: {}", e2.getMessage());
+                        context.put(key, value);
+                    }
                 }
             } else {
                 // Valore null -> stampa "null" come richiesto
@@ -162,6 +175,92 @@ public class TemplateRenderer {
         } else {
             // Stringa o altro tipo primitivo
             return node.asText();
+        }
+    }
+
+    /**
+     * Sanitizza una stringa JSON gestendo caratteri speciali non escaped
+     * Questo metodo cerca di "aggiustare" JSON che potrebbero contenere
+     * newline, tab o altri caratteri speciali non escaped correttamente
+     *
+     * @param jsonString Stringa JSON potenzialmente malformata
+     * @return Stringa JSON sanitizzata
+     */
+    private String sanitizeJsonString(String jsonString) {
+        if (jsonString == null || jsonString.isEmpty()) {
+            return jsonString;
+        }
+
+        // Se la stringa non sembra essere JSON (non inizia con { o [), ritornala così com'è
+        String trimmed = jsonString.trim();
+        if (!trimmed.startsWith("{") && !trimmed.startsWith("[") && !trimmed.startsWith("\"")) {
+            return jsonString;
+        }
+
+        try {
+            // Usa ObjectMapper per re-serializzare: legge come stringa e la serializza correttamente
+            // Questo trucco funziona perché readValue con String.class gestisce meglio gli escape
+            String parsedString = objectMapper.readValue(jsonString, String.class);
+            return objectMapper.writeValueAsString(parsedString);
+        } catch (Exception e) {
+            // Se fallisce, proviamo un approccio manuale
+            logger.debug("ObjectMapper sanitization failed, trying manual approach: {}", e.getMessage());
+
+            // Approccio manuale: escape dei caratteri speciali nelle stringhe JSON
+            // Questo è un approccio semplificato che funziona per la maggior parte dei casi
+            StringBuilder sanitized = new StringBuilder();
+            boolean inString = false;
+            boolean escaped = false;
+
+            for (int i = 0; i < jsonString.length(); i++) {
+                char c = jsonString.charAt(i);
+
+                if (escaped) {
+                    // Carattere già escaped, mantienilo
+                    sanitized.append(c);
+                    escaped = false;
+                    continue;
+                }
+
+                if (c == '\\') {
+                    escaped = true;
+                    sanitized.append(c);
+                    continue;
+                }
+
+                if (c == '"') {
+                    inString = !inString;
+                    sanitized.append(c);
+                    continue;
+                }
+
+                // Se siamo dentro una stringa, escape dei caratteri speciali non escaped
+                if (inString) {
+                    switch (c) {
+                        case '\n':
+                            sanitized.append("\\n");
+                            break;
+                        case '\r':
+                            sanitized.append("\\r");
+                            break;
+                        case '\t':
+                            sanitized.append("\\t");
+                            break;
+                        case '\b':
+                            sanitized.append("\\b");
+                            break;
+                        case '\f':
+                            sanitized.append("\\f");
+                            break;
+                        default:
+                            sanitized.append(c);
+                    }
+                } else {
+                    sanitized.append(c);
+                }
+            }
+
+            return sanitized.toString();
         }
     }
 

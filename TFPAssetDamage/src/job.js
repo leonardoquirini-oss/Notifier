@@ -120,8 +120,15 @@ async function executeJob(dataSource = null) {
       logger.info('Using provided data source', { jobId });
       apiData = dataSource;
     } else {
-      logger.info('Fetching data from API', { jobId });
-      apiData = await apiClient.fetchData();
+      logger.info('Fetching Damage data from API', { jobId });
+
+      // OPEN 
+      let damageApiData     = await apiClient.fetchAssetDamageData('OPEN');
+      apiData = damageApiData;
+
+      // UNDER REPAIR
+      let repairinigApiData = await apiClient.fetchAssetDamageData('UNDER_REPAIR');
+      apiData.resultList.concat(repairinigApiData.resultList); 
     }
 
     // Step 2: Process the data
@@ -139,21 +146,23 @@ async function executeJob(dataSource = null) {
 
     logger.info('Job completed successfully', { jobId });
   } catch (error) {
-    // Step 4: Handle errors
-    logger.error('Job failed', {
-      jobId,
-      error: error.message,
-      stack: error.stack,
-    });
-
     result.status = 'error';
     result.data = null;
     result.error = {
-      message: error.message,
+      message: error.message || 'Unknown error',
       code: error.code || 'UNKNOWN_ERROR',
-      details: error.response?.data || {},
-      stack: error.stack,
+      details: error.response?.data || null,
+      stack: error.stack || null,
     };
+
+    // Step 4: Handle errors
+    logger.error('Job failed', {
+      jobId,
+      result : result
+    });
+
+    
+
   } finally {
     // Step 5: ALWAYS write result to Redis
     result.executionTime = Date.now() - startTime;

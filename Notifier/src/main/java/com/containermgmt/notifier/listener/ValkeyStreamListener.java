@@ -320,9 +320,20 @@ public class ValkeyStreamListener implements StreamListener<String, MapRecord<St
                 // Se il valore inizia e finisce con virgolette, le rimuove (è una stringa JSON serializzata)
                 if (value.startsWith("\"") && value.endsWith("\"") && value.length() > 1) {
                     value = value.substring(1, value.length() - 1);
+
+                    // IMPORTANTE: Fare unescape SOLO se il valore NON è un JSON object/array
+                    // Se è un JSON object (inizia con { o [), gli escape devono rimanere
+                    String trimmed = value.trim();
+                    if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
+                        // È una stringa semplice, possiamo fare unescape
+                        value = value.replace("\\\"", "\"");
+                        value = value.replace("\\n", "\n");
+                        value = value.replace("\\r", "\r");
+                        value = value.replace("\\t", "\t");
+                        value = value.replace("\\\\", "\\");
+                    }
+                    // Se è un JSON object/array, NON fare unescape - verrà parsato da Jackson
                 }
-                // Gestisce anche escape sequences
-                value = value.replace("\\\"", "\"");
             }
 
             cleanedPayload.put(key, value);
