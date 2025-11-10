@@ -155,9 +155,12 @@ public class EmailService {
         Set<String> bccAddresses = new LinkedHashSet<>();
 
         if ( singleMail ) {
-            String email = (String) variables.getOrDefault("parameters.email", "");
-            log.info("Sending mail to {}", email);
-            toAddresses.add(email);
+            Map<String, Object> parameters = (Map<String, Object>)(variables.getOrDefault("parameters", null));
+            if ( parameters != null ) {
+                String email = (String) parameters.getOrDefault("email", "");
+                log.info("Sending mail to {}", email);
+                toAddresses.add(email);
+            }
         } else {
             for (EmailList list : lists) {
                 if (list.isUsable()) {
@@ -191,9 +194,11 @@ public class EmailService {
             // Aggiungi footer al body
             String bodyWithFooter = addFooterToBody(renderedBody, template.getBoolean("is_html"));
 
+            Map<String, Object> parameters = (Map<String, Object>)(variables.getOrDefault("parameters", null));
+
             // Gestione allegato se presente
             EmailAttachment attachment = null;
-            String attachmentId = (String) variables.get("parameters.attachment_id");
+            String attachmentId = parameters != null ? (String) parameters.get("attachment_id") : null;
 
             if (attachmentId != null && !attachmentId.trim().isEmpty()) {
                 try {
