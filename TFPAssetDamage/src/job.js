@@ -9,6 +9,34 @@ const apiClient = require('./api-client');
 const redisClient = require('./redis-client');
 
 /**
+ * Formats ISO date string to DD/MM/YYYY HH:MM:SS format
+ * @param {string} isoDateString - ISO date string (e.g., "2025-10-21T14:44:29Z")
+ * @returns {string} Formatted date string (e.g., "21/10/2025 14:44:29")
+ */
+function formatDate(isoDateString) {
+  if (!isoDateString) {
+    return '';
+  }
+
+  try {
+    const date = new Date(isoDateString);
+
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+
+    return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
+  } catch (error) {
+    logger.warn('Failed to format date', { isoDateString, error: error.message });
+    return isoDateString;
+  }
+}
+
+/**
  * Processes raw API data into desired format
  * Fetches trailer data for each plate and builds report_data structure
  * @param {Object} apiData - Raw data from API
@@ -28,64 +56,135 @@ async function processData(apiData) {
     totalRecords: apiData.resultList.length
   });
 
-  const reportData = [];
+  // Step 1: Filter and sort records by plate
+  const sortedRecords = apiData.resultList
+    .filter(record => {
+      const plate = record.assetIdentifier;
+      const reportNotes = record.reportNotes;
 
-  // Process each record sequentially
-  for (const record of apiData.resultList) {
+      // Skip if no plate or reportNotes
+      if (!plate || !reportNotes) {
+        logger.debug('Skipping record - missing plate or reportNotes', {
+          id: record.id,
+          plate,
+          hasReportNotes: !!reportNotes
+        });
+        return false;
+      }
+
+      // No Container, trailers only
+      if (plate.toLowerCase().startsWith("gbtu")) {
+        return false;
+      }
+
+      return true;
+    })
+    .sort((a, b) => a.assetIdentifier.localeCompare(b.assetIdentifier));
+
+  // Step 2: Group records by status and then by plate
+  const groupedByStatusAndPlate = {
+    open: {},
+    under_repair: {}
+  };
+
+  for (const record of sortedRecords) {
     const plate = record.assetIdentifier;
-    const reportNotes = record.reportNotes;
     const status = record.status;
 
-    // Skip if no plate or reportNotes
-    if (!plate || !reportNotes) {
-      logger.debug('Skipping record - missing plate or reportNotes', {
-        id: record.id,
-        plate,
-        hasReportNotes: !!reportNotes
-      });
-      continue;
-    }
-    
-    if ( plate.toLowerCase().startsWith("gbtu") ) {
-      // No Container, trailers only
-      continue;
-    }
+    // Map status to snake_case key
+    const statusKey = status === 'OPEN' ? 'open' :
+                      status === 'UNDER_REPAIR' ? 'under_repair' : null;
 
-    logger.debug('###DEBUG### Plate : ' , {plate : record.assetIdentifier});
-    // Fetch trailer data from trailer API
-    const trailerData = await apiClient.fetchTrailerByPlate(plate);
-
-    // Skip if trailer API call failed or returned null
-    if (!trailerData) {
-      logger.debug('Skipping record - trailer data not found', {
+    // Skip if status is not recognized
+    if (!statusKey) {
+      logger.debug('Skipping record - unknown status', {
         id: record.id,
-        plate
+        status
       });
       continue;
     }
 
-    logger.debug('###DEBUG### TRAILER_DATA : ' , {data : trailerData});
+    if (!groupedByStatusAndPlate[statusKey][plate]) {
+      groupedByStatusAndPlate[statusKey][plate] = [];
+    }
 
-    // Add to report data
-    reportData.push({
-      plate: plate,
-      status: status,
-      report_notes: reportNotes
-    });
-
-    logger.debug('Record processed successfully', {
-      id: record.id,
-      plate
+    groupedByStatusAndPlate[statusKey][plate].push({
+      priority: record.severity || 'UNKNOWN',
+      report_time: formatDate(record.reportTime),
+      report_time_raw: record.reportTime, // Keep raw for sorting
+      report_notes: record.reportNotes
     });
   }
 
+  // Step 3: Process each status group
+  const priorityOrder = { 'HIGH': 1, 'MEDIUM': 2, 'LOW': 3, 'UNKNOWN': 4 };
+  const reportData = {
+    open: [],
+    under_repair: []
+  };
+
+  // Process plates for each status
+  for (const status of ['open', 'under_repair']) {
+    const platesForStatus = groupedByStatusAndPlate[status];
+
+    for (const plate of Object.keys(platesForStatus)) {
+      logger.debug('###DEBUG### Processing plate : ', { status, plate });
+
+      // Fetch trailer data from trailer API (once per plate)
+      const trailerData = await apiClient.fetchTrailerByPlate(plate);
+
+      // Skip if trailer API call failed or returned null
+      if (!trailerData) {
+        logger.debug('Skipping plate - trailer data not found', { status, plate });
+        continue;
+      }
+
+      logger.debug('###DEBUG### TRAILER_DATA : ', { data: trailerData });
+
+      // Sort reports by priority, then by date (newest first)
+      const sortedReports = platesForStatus[plate].sort((a, b) => {
+        const priorityA = priorityOrder[a.priority] || 999;
+        const priorityB = priorityOrder[b.priority] || 999;
+
+        // First, compare by priority
+        if (priorityA !== priorityB) {
+          return priorityA - priorityB;
+        }
+
+        // If same priority, sort by date (newest first)
+        const dateA = new Date(a.report_time_raw || 0);
+        const dateB = new Date(b.report_time_raw || 0);
+        return dateB - dateA;
+      });
+
+      // Remove the raw date field before adding to final result
+      const reportsWithoutRawDate = sortedReports.map(({ report_time_raw, ...report }) => report);
+
+      // Add to report data with grouped structure
+      reportData[status].push({
+        plate: plate,
+        report: reportsWithoutRawDate
+      });
+
+      logger.debug('Plate processed successfully', {
+        status,
+        plate,
+        reportCount: sortedReports.length
+      });
+    }
+  }
+
+  const totalReports = reportData.open.reduce((sum, item) => sum + item.report.length, 0) +
+                       reportData.under_repair.reduce((sum, item) => sum + item.report.length, 0);
+
   logger.info('Data processing completed', {
     totalProcessed: apiData.resultList.length,
-    reportDataCount: reportData.length
+    openPlates: reportData.open.length,
+    underRepairPlates: reportData.under_repair.length,
+    totalReports: totalReports
   });
 
-
-  logger.debug('Valkey Event : ', reportData );
+  logger.debug('Valkey Event : ', reportData);
 
   return {
     report_data: reportData
