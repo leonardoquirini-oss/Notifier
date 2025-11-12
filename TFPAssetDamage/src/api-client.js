@@ -52,36 +52,135 @@ class ApiClient {
   }
 
   /**
-   * Fetches asset damage data from TFP API
-   * @returns {Promise<Object>} Asset damage data
+   * Fetches asset damage data from TFP API with automatic pagination
+   * @param {string} filterType - Asset Type filter (e.g., 'UNIT', 'VEHICLE')
+   * @param {string} filterStatus - Status filter (e.g., 'OPEN', 'UNDER_REPAIR')
+   * @returns {Promise<Object>} Asset damage data with all results
    */
-  async fetchAssetDamage(filterStatus) {
+  async fetchAssetDamage(filterType, filterStatus) {
     // Ensure we have a valid token
     if (!this.token) {
       await this.login();
     }
 
-    const requestBody = {
-      offset: 0,
-      limit: 200,
-      filter: {
-        enabled: 1,
-        assetType: 'UNIT',
-        status: filterStatus,
-      },
-      sortingList: [
-        {
-          column: 'reportTime',
-          direction: 'DESC',
-        },
-      ],
-    };
+    const limit = 200;
+    let offset = 0;
+    let allResults = [];
+    let totalCount = 0;
+    let fetchedCount = 0;
 
     try {
-      logger.info('Fetching asset damage data, status : ', filterStatus);
+      logger.info('Fetching asset damage data [type - status] : ', filterType, filterStatus);
 
-      const response = await this.axiosInstance.post(
+      // First request to get initial data and totalCount
+      const firstRequestBody = {
+        offset: 0,
+        limit: limit,
+        filter: {
+          enabled: 1,
+          assetType: filterType,
+          status: filterStatus,
+        },
+        sortingList: [
+          {
+            column: 'reportTime',
+            direction: 'DESC',
+          },
+        ],
+      };
+
+      const firstResponse = await this.makeAuthenticatedRequest(
         'units-tracking/assetdamage/browse',
+        firstRequestBody
+      );
+
+      // Collect first batch of results
+      if (firstResponse.data?.resultList && Array.isArray(firstResponse.data.resultList)) {
+        allResults = [...firstResponse.data.resultList];
+        fetchedCount = allResults.length;
+      }
+
+      totalCount = firstResponse.data?.totalCount || 0;
+
+      logger.info('First batch fetched', {
+        fetchedCount,
+        totalCount,
+        status: filterStatus
+      });
+
+      // If there are more results to fetch, continue with pagination
+      if (totalCount > limit) {
+        offset = limit;
+
+        while (fetchedCount < totalCount) {
+          logger.info('Fetching next batch', {
+            offset,
+            fetchedCount,
+            totalCount,
+            status: filterStatus
+          });
+
+          const requestBody = {
+            offset: offset,
+            limit: limit,
+            filter: {
+              enabled: 1,
+              assetType: filterType,
+              status: filterStatus,
+            },
+            sortingList: [
+              {
+                column: 'reportTime',
+                direction: 'DESC',
+              },
+            ],
+          };
+
+          const response = await this.makeAuthenticatedRequest(
+            'units-tracking/assetdamage/browse',
+            requestBody
+          );
+
+          if (response.data?.resultList && Array.isArray(response.data.resultList)) {
+            allResults = allResults.concat(response.data.resultList);
+            fetchedCount = allResults.length;
+          }
+
+          offset += limit;
+        }
+      }
+
+      logger.info('Asset damage data fetched successfully', {
+        totalCount,
+        fetchedCount,
+        status: filterStatus
+      });
+
+      // Return in the same format as original API response
+      return {
+        resultList: allResults,
+        totalCount: totalCount
+      };
+    } catch (error) {
+      logger.error('Failed to fetch asset damage data', {
+        error: error.message,
+        status: error.response?.status,
+        data: error.response?.data,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Makes an authenticated API request with automatic retry on 401
+   * @param {string} endpoint - API endpoint
+   * @param {Object} requestBody - Request payload
+   * @returns {Promise<Object>} API response
+   */
+  async makeAuthenticatedRequest(endpoint, requestBody) {
+    try {
+      const response = await this.axiosInstance.post(
+        endpoint,
         requestBody,
         {
           headers: {
@@ -90,11 +189,7 @@ class ApiClient {
         }
       );
 
-      logger.info('Asset damage data fetched successfully', {
-        recordCount: response.data?.length || 0,
-      });
-
-      return response.data;
+      return response;
     } catch (error) {
       // If unauthorized, try to re-login once and retry
       if (error.response?.status === 401) {
@@ -103,7 +198,7 @@ class ApiClient {
 
         // Retry the request with new token
         const retryResponse = await this.axiosInstance.post(
-          'units-tracking/assetdamage/browse',
+          endpoint,
           requestBody,
           {
             headers: {
@@ -112,14 +207,9 @@ class ApiClient {
           }
         );
 
-        return retryResponse.data;
+        return retryResponse;
       }
 
-      logger.error('Failed to fetch asset damage data', {
-        error: error.message,
-        status: error.response?.status,
-        data: error.response?.data,
-      });
       throw error;
     }
   }
@@ -219,8 +309,8 @@ class ApiClient {
    * Main entry point to fetch data with retry logic
    * @returns {Promise<Object>} Asset damage data
    */
-  async fetchAssetDamageData(filterStatus) {
-    return this.executeWithRetry(() => this.fetchAssetDamage(filterStatus));
+  async fetchAssetDamageData(filterType, filterStatus) {
+    return this.executeWithRetry(() => this.fetchAssetDamage(filterType, filterStatus));
   }  
 }
 

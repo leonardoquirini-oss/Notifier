@@ -8,6 +8,8 @@ const logger = require('./logger');
 const apiClient = require('./api-client');
 const redisClient = require('./redis-client');
 
+const sanitize = v => (v == null || v === 'null' ? '' : v);
+
 /**
  * Formats ISO date string to DD/MM/YYYY HH:MM:SS format
  * @param {string} isoDateString - ISO date string (e.g., "2025-10-21T14:44:29Z")
@@ -52,21 +54,23 @@ async function processData(apiData) {
     throw new Error('API data does not contain resultList array');
   }
 
-  logger.info('Processing asset damage data', {
+  logger.info('Processing asset damage data ', {
     totalRecords: apiData.resultList.length
   });
 
   // Step 1: Filter and sort records by plate
   const sortedRecords = apiData.resultList
     .filter(record => {
-      const plate = record.assetIdentifier;
-      const reportNotes = record.reportNotes;
+      const plate = record.assetIdentifier ?? '';
+      const status = record.status;
+      const reportNotes = record.reportNotes ?? '';
 
       // Skip if no plate or reportNotes
-      if (!plate || !reportNotes) {
-        logger.debug('Skipping record - missing plate or reportNotes', {
+      if (!plate || ( status === 'OPEN' && !reportNotes) ) {
+        logger.debug('Skipping record - missing plate or reportNotes (if its an OPEN issue)', {
           id: record.id,
           plate,
+          status,
           hasReportNotes: !!reportNotes
         });
         return false;
@@ -80,6 +84,8 @@ async function processData(apiData) {
       return true;
     })
     .sort((a, b) => a.assetIdentifier.localeCompare(b.assetIdentifier));
+
+   logger.debug('###DEBUG### LISTA SEGNALAZIONI', { sortedRecords } );
 
   // Step 2: Group records by status and then by plate
   const groupedByStatusAndPlate = {
@@ -112,7 +118,7 @@ async function processData(apiData) {
       priority: record.severity || 'UNKNOWN',
       report_time: formatDate(record.reportTime),
       report_time_raw: record.reportTime, // Keep raw for sorting
-      report_notes: record.reportNotes
+      report_notes: sanitize(record.reportNotes)
     });
   }
 
@@ -222,23 +228,39 @@ async function executeJob(dataSource = null) {
     } else {
       logger.info('Fetching Damage data from API', { jobId });
 
-      // OPEN 
-      let damageApiData     = await apiClient.fetchAssetDamageData('OPEN');
-      apiData = damageApiData;
+      // =======================================================================
+      // UNIT - OPEN 
+      let damageUnitApiData     = await apiClient.fetchAssetDamageData('UNIT','OPEN');
+      apiData = damageUnitApiData;
 
-      let num = damageApiData?.resultList?.length;
-      logger.info('Response for OPEN status : ', { num });
+      let num = damageUnitApiData?.resultList?.length;
+      logger.info('--> Response for UNIT/OPEN status : ', { num });
+      // =======================================================================
+      // UNIT - UNDER REPAIR
+      let repairinigUnitApiData = await apiClient.fetchAssetDamageData('UNIT','UNDER_REPAIR');
+      apiData.resultList.push(...repairinigUnitApiData.resultList);
 
-      // UNDER REPAIR
-      let repairinigApiData = await apiClient.fetchAssetDamageData('UNDER_REPAIR');
-      apiData.resultList.concat(repairinigApiData.resultList); 
+      num = repairinigUnitApiData?.resultList?.length;
+      logger.info('--> Response for UNIT/UNDER_REPAIR status : ', { num });
+      // =======================================================================
+      // UNIT - OPEN 
+      let damageVehicleApiData     = await apiClient.fetchAssetDamageData('VEHICLE','OPEN');
+      apiData.resultList.push(...damageVehicleApiData.resultList);
 
-      num = repairinigApiData?.resultList?.length;
-      logger.info('Response for UNDER_REPAIR status : ', { num });
+      num = damageVehicleApiData?.resultList?.length;
+      logger.info('--> Response for VEHICLE/OPEN status : ', { num });
+      // =======================================================================
+      // UNIT - UNDER REPAIR
+      let repairinigVehicleApiData = await apiClient.fetchAssetDamageData('VEHICLE','UNDER_REPAIR');
+      apiData.resultList.push(...repairinigVehicleApiData.resultList);
+
+      num = repairinigVehicleApiData?.resultList?.length;
+      logger.info('--> Response for VEHICLE/UNDER_REPAIR status : ', { num });
     }
 
     // Step 2: Process the data
-    logger.info('Processing data', { jobId });
+    logger.info('Processing data, num record : ', { num : apiData.resultList.length });
+
     const processedData = await processData(apiData);
 
     // Step 3: Prepare success result
@@ -266,9 +288,7 @@ async function executeJob(dataSource = null) {
       jobId,
       result : result
     });
-
     
-
   } finally {
     // Step 5: ALWAYS write result to Redis
     result.executionTime = Date.now() - startTime;
