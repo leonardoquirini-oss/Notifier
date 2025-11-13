@@ -56,6 +56,13 @@ notifications:
       auto-ack: true      
       single-mail: true                           # Utilizza il template ma non la lista distribuzione (invio email singolo)
             
+  # Richiesta HR APPROVATA
+    - stream: "hr-requests-stream"
+      event-type: events:new_hr_request_ok_no_ts        # Evento
+      template-code: "RICHIESTA_HR_OK_NO_TIMESHEET"  # Template messaggio
+      consumer-group: "notifier-group"  
+      auto-ack: true      
+      single-mail: true                           # Utilizza il template ma non la lista distribuzione (invio email singolo)            
 
 
 
