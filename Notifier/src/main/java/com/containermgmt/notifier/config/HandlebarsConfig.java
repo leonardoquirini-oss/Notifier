@@ -1,5 +1,6 @@
 package com.containermgmt.notifier.config;
 
+import com.containermgmt.notifier.util.Dates;
 import com.github.jknack.handlebars.Handlebars;
 import com.github.jknack.handlebars.Helper;
 import com.github.jknack.handlebars.Options;
@@ -9,8 +10,10 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import java.io.IOException;
+import java.text.SimpleDateFormat;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Date;
 
 /**
  * Configurazione Handlebars per il rendering dei template email
@@ -34,14 +37,6 @@ public class HandlebarsConfig {
         handlebars.registerHelper("now", new Helper<Object>() {
             @Override
             public CharSequence apply(Object context, Options options) throws IOException {
-                logger.info("###DEBUG### Helper 'now' chiamato");
-                logger.info("###DEBUG### Context: {}", context);
-                logger.info("###DEBUG### Numero parametri: {}", options.params.length);
-
-                for (int i = 0; i < options.params.length; i++) {
-                    logger.info("###DEBUG### Parametro {}: {}", i, options.params[i]);
-                }
-
                 // Il formato può essere passato in due modi:
                 // 1. Come context: {{now DD/MM/YYYY}} -> context contiene "DD/MM/YYYY"
                 // 2. Come parametro: {{now "DD/MM/YYYY"}} -> params[0] contiene "DD/MM/YYYY"
@@ -98,8 +93,18 @@ public class HandlebarsConfig {
             }
         });
 
-        // Registra helper custom per tag {{eq}} 
+
         handlebars.registerHelper("eq", new Helper<Object>() {
+            @Override
+            public Object apply(Object a, Options options) {
+                Object b = options.param(0, null);
+                if (a == null || b == null) return false;
+                return a.toString().equalsIgnoreCase(b.toString());
+            }
+        });
+
+        // Registra helper custom per tag {{eq}} 
+        handlebars.registerHelper("eq1", new Helper<Object>() {
             @Override
             public Object apply(Object context, Options options) throws IOException {
                 Object left = context;
@@ -112,6 +117,21 @@ public class HandlebarsConfig {
                 } else {
                     return options.inverse();     // ramo ELSE
                 }    
+            }
+        });
+
+        // ✅ Registra un helper per formattare le date
+        handlebars.registerHelper("formatDate", new Helper<Object>() {
+            @Override
+            public Object apply(Object context, Options options) {
+                if (context == null) return "";
+                String format = options.param(0, "yyyy-MM-dd");
+                try {
+                    Date date = Dates.parse(context.toString());
+                    return new SimpleDateFormat(format).format(date);
+                } catch (Exception e) {
+                    return context.toString(); // se non è una data, restituisci com’è
+                }
             }
         });
 
