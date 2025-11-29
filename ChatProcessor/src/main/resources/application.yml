@@ -1,0 +1,42 @@
+spring:
+  application:
+    name: chat-processor-service
+
+  # PostgreSQL Database Configuration
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:postgres-service}:${DB_PORT:5432}/${DB_NAME:berlinkdb}
+    username: ${DB_USER:berlink}
+    password: ${DB_PASSWORD:berlink}
+    driver-class-name: org.postgresql.Driver
+
+# Valkey (Redis) Configuration
+valkey:
+  host: ${VALKEY_HOST:valkey-service}
+  port: ${VALKEY_PORT:6379}
+  database: 0
+  password: ${VALKEY_PASSWORD:}
+
+# ChatProcessor Configuration
+chatprocessor:
+  stream: chatbot-log-stream
+  consumer-group: chatprocessor-group
+
+# Actuator Configuration (Health Checks)
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+# Logging Configuration
+logging:
+  level:
+    root: INFO
+    com.containermgmt.chatprocessor: DEBUG
+    org.javalite.activejdbc: INFO
+    org.springframework.data.redis: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
