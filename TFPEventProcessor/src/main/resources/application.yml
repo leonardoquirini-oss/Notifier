@@ -1,0 +1,58 @@
+spring:
+  application:
+    name: tfp-event-processor
+
+  # Apache Artemis Configuration
+  artemis:
+    mode: native
+    broker-url: tcp://${ARTEMIS_HOST:localhost}:${ARTEMIS_PORT:61616}
+    user: ${ARTEMIS_USER:admin}
+    password: ${ARTEMIS_PASSWORD:admin}
+
+  # JMS Listener Configuration
+  jms:
+    listener:
+      auto-startup: true
+      acknowledge-mode: auto
+
+  # PostgreSQL Database Configuration
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:172.28.234.122}:${DB_PORT:5432}/${DB_NAME:berlinkdb}
+    username: ${DB_USER:berlink}
+    password: ${DB_PASSWORD:berlink}
+    driver-class-name: org.postgresql.Driver
+
+# Event Processor Configuration
+event-processor:
+  # Queues to listen to (can add more as needed)
+  queues:
+    primary: ${EVENT_QUEUE_PRIMARY:events.queue}
+    # secondary: ${EVENT_QUEUE_SECONDARY:events.queue.secondary}
+
+  # JMS concurrency (min-max format)
+  concurrency: 3-10
+
+  # Retry configuration
+  retry-attempts: 3
+  retry-delay-ms: 5000
+
+# Actuator Configuration (Health Checks)
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+# Logging Configuration
+logging:
+  level:
+    root: INFO
+    com.containermgmt.tfpeventprocessor: DEBUG
+    org.javalite.activejdbc: INFO
+    org.springframework.jms: INFO
+    org.apache.activemq.artemis: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"

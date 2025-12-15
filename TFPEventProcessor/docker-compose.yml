@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  # TFP Event Processor Application
+  tfp-event-processor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tfp-event-processor
+    environment:
+      # Artemis Configuration
+      ARTEMIS_HOST: ${ARTEMIS_HOST:-artemis}
+      ARTEMIS_PORT: ${ARTEMIS_PORT:-61616}
+      ARTEMIS_USER: ${ARTEMIS_USER:-admin}
+      ARTEMIS_PASSWORD: ${ARTEMIS_PASSWORD:-admin}
+
+      # Database Configuration
+      DB_HOST: ${DB_HOST:-172.28.234.122}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_NAME: ${DB_NAME:-berlinkdb}
+      DB_USER: ${DB_USER:-berlink}
+      DB_PASSWORD: ${DB_PASSWORD:-berlink}
+
+      # Event Queue Configuration
+      EVENT_QUEUE_PRIMARY: ${EVENT_QUEUE_PRIMARY:-events.queue}
+
+      # JVM Options (con debug remoto)
+      JAVA_TOOL_OPTIONS: "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -Xms256m -Xmx512m"
+
+    ports:
+      - "8085:8080"
+      - "5205:5005"  # Debug port
+    networks:
+      - processor-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Apache Artemis Broker
+  artemis:
+    image: apache/activemq-artemis:2.31.2
+    container_name: artemis-broker
+    environment:
+      ARTEMIS_USER: admin
+      ARTEMIS_PASSWORD: admin
+      ANONYMOUS_LOGIN: "false"
+    ports:
+      - "61616:61616"  # Artemis Core
+      - "8161:8161"    # Web Console
+    networks:
+      - processor-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8161/console"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  processor-network:
+    driver: bridge
+    # If connecting to external network (e.g., BERLink network), use:
+    # external: true
+    # name: berlink_network
