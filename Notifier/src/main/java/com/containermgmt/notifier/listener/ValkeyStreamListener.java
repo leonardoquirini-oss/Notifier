@@ -93,9 +93,11 @@ public class ValkeyStreamListener implements StreamListener<String, MapRecord<St
                 }
 
                 // Crea consumer group se non esiste
+                // Usa offset "0" per leggere tutti i messaggi esistenti nello stream all'avvio
                 try {
                     redisTemplate.opsForStream().createGroup(
                         mapping.getStream(),
+                        ReadOffset.from("0"),
                         mapping.getConsumerGroup()
                     );
                     logger.info("Created consumer group: stream={}, group={}",

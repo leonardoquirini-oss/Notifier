@@ -38,13 +38,13 @@ public class EventListener {
      * Queue name is configured in application.yml
      */
     @JmsListener(
-        destination = "${event-processor.queues.primary:events.queue}",
+        destination = "${event-processor.queues.events:events.queue}",
         containerFactory = "jmsListenerContainerFactory"
     )
-    public void onPrimaryQueueMessage(String messageJson) {
+    public void onEventQueueMessage(String messageJson) {
         try {
             EventMessage eventMessage = objectMapper.readValue(messageJson, EventMessage.class);
-            log.debug("Received message from primary queue: eventId={}", eventMessage.getEventId());
+            log.debug("Received message from events.queue: eventId={}", eventMessage.getEventId());
             processWithRetry(eventMessage);
         } catch (Exception e) {
             log.error("Failed to deserialize message: {}", e.getMessage());

@@ -7,7 +7,6 @@ import com.containermgmt.tfpeventprocessor.model.RawEvent;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import lombok.extern.slf4j.Slf4j;
-import org.javalite.activejdbc.Base;
 import org.springframework.stereotype.Service;
 
 import java.sql.Timestamp;
@@ -53,19 +52,17 @@ public class EventProcessorService {
 
             // Create new event record
             RawEvent event = new RawEvent();
-            event.set("event_id", eventId);
-            event.set("event_type", eventMessage.getEventType());
-            event.set("source", eventMessage.getSource());
-            event.set("timestamp", eventMessage.getTimestamp() != null
-                ? Timestamp.from(eventMessage.getTimestamp()) : null);
-            event.set("payload", serializeToJson(eventMessage.getPayload()));
-            event.set("metadata", serializeToJson(eventMessage.getMetadata()));
+            event.set("event_id",     eventId);
+            event.set("event_type",   eventMessage.getEventType());
+            event.set("source",       eventMessage.getSource());
+            event.set("timestamp",    eventMessage.getTimestamp() != null ? Timestamp.from(eventMessage.getTimestamp()) : null);
+            event.set("payload",      serializeToJson(eventMessage.getPayload()));
+            event.set("metadata",     serializeToJson(eventMessage.getMetadata()));
             event.set("processed_at", Timestamp.from(Instant.now()));
 
             // Save to database
             if (!event.saveIt()) {
-                throw new EventProcessingException(
-                    "Failed to save event: " + eventId + ", errors: " + event.errors());
+                throw new EventProcessingException("Failed to save event: " + eventId + ", errors: " + event.errors());
             }
 
             log.info("Successfully processed event: id={}, type={}",
@@ -74,8 +71,7 @@ public class EventProcessorService {
         } catch (EventProcessingException e) {
             throw e;
         } catch (Exception e) {
-            log.error("Error processing event: id={}, error={}",
-                eventId, e.getMessage(), e);
+            log.error("Error processing event: id={}, error={}",eventId, e.getMessage(), e);
             throw new EventProcessingException("Failed to process event: " + eventId, e);
         } finally {
             // Close connection for this thread
@@ -112,5 +108,4 @@ public class EventProcessorService {
             return null;
         }
     }
-
 }

@@ -26,7 +26,7 @@ spring:
 event-processor:
   # Queues to listen to (can add more as needed)
   queues:
-    primary: ${EVENT_QUEUE_PRIMARY:events.queue}
+    events: events.queue
     # secondary: ${EVENT_QUEUE_SECONDARY:events.queue.secondary}
 
   # JMS concurrency (min-max format)
