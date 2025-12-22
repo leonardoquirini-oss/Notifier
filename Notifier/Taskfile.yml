@@ -1,0 +1,36 @@
+version: '3'
+
+vars:
+  
+
+tasks:
+    
+  stop-ntf:
+    cmds:
+      - docker-compose  -f docker-compose.yml stop notifier
+    silent: true  
+  
+  build-ntf:
+    cmds:
+      - docker-compose  -f docker-compose.yml build notifier
+    silent: true  
+    
+  ntf:
+    cmds:
+      - task stop-ntf
+      - task build-ntf
+    silent: true  
+
+  logs-ntf:
+    cmds:
+      - docker-compose logs -f notifier
+  
+  up:
+    cmds:
+      - docker-compose -f docker-compose.yml up -d
+    silent: true  
+
+  restart:
+    cmds:
+      - docker-compose down && docker-compose -f docker-compose.yml up -d
+    silent: true    

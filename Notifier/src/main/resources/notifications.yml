@@ -56,7 +56,7 @@ notifications:
       auto-ack: true      
       single-mail: true                           # Utilizza il template ma non la lista distribuzione (invio email singolo)
             
-  # Richiesta HR APPROVATA
+    # Richiesta HR APPROVATA
     - stream: "hr-requests-stream"
       event-type: events:new_hr_request_ok_no_ts        # Evento
       template-code: "RICHIESTA_HR_OK_NO_TIMESHEET"  # Template messaggio
@@ -64,31 +64,16 @@ notifications:
       auto-ack: true      
       single-mail: true                           # Utilizza il template ma non la lista distribuzione (invio email singolo)            
 
-
-
-  #  # Purchase Order Approved Event
-  #  - stream: "events-stream"
-  #    event-type: "PURCHASE_ORDER_APPROVED"
-  #    template-code: "PO_APPROVED"
-  #    consumer-group: "notifier-group"
-  #    event-type-field: "event_type"
-  #    auto-ack: true
-  #
-  #  # Purchase Order Rejected Event
-  #  - stream: "purchase-orders"
-  #    event-type: "PURCHASE_ORDER_REJECTED"
-  #    template-code: "PO_REJECTED"
-  #    consumer-group: "notifier-group"
-  #    event-type-field: "event_type"
-  #    auto-ack: true
-  #
-  #  # Container Arrival Event
-  #  - stream: "containers"
-  #    event-type: "CONTAINER_ARRIVED"
-  #    template-code: "CONTAINER_ARRIVAL"
-  #    consumer-group: "notifier-group"
-  #    event-type-field: "event_type"
-  #    auto-ack: true
-  #
-  #  # Add more mappings as needed
-  #  # Each mapping connects a specific event type on a stream
+    # Richiesta SCADENZA_PASSATA
+    - stream: "deadlines-stream"
+      event-type: deadline:overdue        # Evento
+      template-code: "SCADENZE_EXPIRED"            # Template messaggio
+      consumer-group: "notifier-group"  
+      auto-ack: true
+      
+    # Richiesta SCADENZA_PASSATA
+    - stream: "deadlines-stream"
+      event-type: deadline:approaching        # Evento
+      template-code: "SCADENZE_AVVICINAMENTO"            # Template messaggio
+      consumer-group: "notifier-group"  
+      auto-ack: true
