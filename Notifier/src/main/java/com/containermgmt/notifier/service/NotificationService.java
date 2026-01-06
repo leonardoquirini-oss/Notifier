@@ -73,6 +73,7 @@ public class NotificationService {
             Integer logId = emailService.sendFromTemplate(
                     (Integer) template.getId(),
                     mapping.isSingleMail(),
+                    mapping.isEmailListSpecified(),
                     variables,
                     event.getStream(),          // entityType
                     null,              // entityId (potrebbe essere estratto dall'evento)

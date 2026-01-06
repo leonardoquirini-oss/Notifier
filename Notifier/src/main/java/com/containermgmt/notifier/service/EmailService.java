@@ -108,7 +108,7 @@ public class EmailService {
             String entityType,
             Integer entityId,
             String sentBy) throws Exception {
-                return sendFromTemplate(templateId, false, variables, entityType, entityId, sentBy);
+                return sendFromTemplate(templateId, false, false, variables, entityType, entityId, sentBy);
             }
 
 
@@ -126,6 +126,7 @@ public class EmailService {
     public Integer sendFromTemplate(
             Integer templateId,
             Boolean singleMail,
+            Boolean emailListSpecified,
             Map<String, Object> variables,
             String entityType,
             Integer entityId,
@@ -141,7 +142,7 @@ public class EmailService {
 
         // Ottiene liste associate al template
         List<EmailList> lists = template.getAssociatedLists();
-        if ( lists.isEmpty() && !singleMail ) {
+        if ( lists.isEmpty() && !singleMail && !emailListSpecified) {
             throw new IllegalStateException("Nessuna lista email associata al template: " + templateId);
         }        
 
@@ -157,9 +158,26 @@ public class EmailService {
         if ( singleMail ) {
             Map<String, Object> parameters = (Map<String, Object>)(variables.getOrDefault("parameters", null));
             if ( parameters != null ) {
-                String email = (String) parameters.getOrDefault("email", "");
+                String email = (String) parameters.getOrDefault("email_list", "");
                 log.info("Sending mail to {}", email);
                 toAddresses.add(email);
+            }
+        } else if ( emailListSpecified ) {
+            Map<String, Object> parameters = (Map<String, Object>)(variables.getOrDefault("parameters", null));
+            if ( parameters != null ) {
+                String emailList = (String) parameters.getOrDefault("email_list", "");
+                log.info("Sending mail to list {}", emailList);
+                
+                EmailList el = EmailList.findByCode(emailList);
+                if ( el == null ) {
+                    throw new IllegalStateException("Lista email non valida : " + emailList);
+                } 
+
+                if (el.isUsable()) {
+                    toAddresses.addAll(el.getToAddresses());
+                    ccAddresses.addAll(el.getCcAddresses());
+                    bccAddresses.addAll(el.getBccAddresses());
+                }
             }
         } else {
             for (EmailList list : lists) {
@@ -178,7 +196,7 @@ public class EmailService {
         // Crea log di invio
         EmailSendLog log = createSendLog(
             template,
-            singleMail ? null : lists.get(0).getInteger("id_list"), // Prima lista per tracking
+            ((singleMail || emailListSpecified) ? null : lists.get(0).getInteger("id_list")), // Prima lista per tracking
             toAddresses,
             ccAddresses,
             bccAddresses,

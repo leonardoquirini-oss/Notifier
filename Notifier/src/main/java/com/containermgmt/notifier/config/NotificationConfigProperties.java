@@ -80,6 +80,12 @@ public class NotificationConfigProperties {
          */
         private boolean singleMail = false;
 
+        /**
+         * Se true, la lista email da usare non e' la lista associata al template 
+         * ma viene specificata nei parametri
+         */
+        private boolean emailListSpecified = false;
+
     }
 
 }

@@ -14,6 +14,7 @@ import java.text.SimpleDateFormat;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Date;
+import java.util.Locale;
 
 /**
  * Configurazione Handlebars per il rendering dei template email
@@ -128,7 +129,7 @@ public class HandlebarsConfig {
                 String format = options.param(0, "yyyy-MM-dd");
                 try {
                     Date date = Dates.parse(context.toString());
-                    return new SimpleDateFormat(format).format(date);
+                    return new SimpleDateFormat(format, Locale.ITALIAN).format(date);
                 } catch (Exception e) {
                     return context.toString(); // se non è una data, restituisci com’è
                 }
