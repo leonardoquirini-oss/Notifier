@@ -1,5 +1,6 @@
 package com.containermgmt.notifier.service;
 
+import com.containermgmt.notifier.config.NotificationConfigProperties;
 import com.containermgmt.notifier.model.EmailList;
 import com.containermgmt.notifier.model.EmailSendLog;
 import com.containermgmt.notifier.model.EmailTemplate;
@@ -10,6 +11,7 @@ import com.github.jknack.handlebars.Template;
 import jakarta.mail.internet.MimeMessage;
 import lombok.extern.slf4j.Slf4j;
 
+import org.apache.logging.log4j.util.Strings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -93,7 +95,7 @@ public class EmailService {
      * @param sentBy Username utente che invia
      * @return ID del log creato
      * @throws Exception se errore durante invio
-     */
+     
     public Integer sendFromTemplate(
             Integer templateId,
             Map<String, Object> variables,
@@ -110,7 +112,7 @@ public class EmailService {
             String sentBy) throws Exception {
                 return sendFromTemplate(templateId, false, false, variables, entityType, entityId, sentBy);
             }
-
+*/
 
     /**
      * Invia email da template con collegamento a entità
@@ -125,8 +127,9 @@ public class EmailService {
      */
     public Integer sendFromTemplate(
             Integer templateId,
-            Boolean singleMail,
-            Boolean emailListSpecified,
+            NotificationConfigProperties.EventMapping mapping,
+            //Boolean singleMail,
+            //Boolean emailListSpecified,
             Map<String, Object> variables,
             String entityType,
             Integer entityId,
@@ -142,7 +145,7 @@ public class EmailService {
 
         // Ottiene liste associate al template
         List<EmailList> lists = template.getAssociatedLists();
-        if ( lists.isEmpty() && !singleMail && !emailListSpecified) {
+        if ( lists.isEmpty() && !mapping.isSingleMail() && !mapping.isEmailListSpecified()) {
             throw new IllegalStateException("Nessuna lista email associata al template: " + templateId);
         }        
 
@@ -155,14 +158,14 @@ public class EmailService {
         Set<String> ccAddresses = new LinkedHashSet<>();
         Set<String> bccAddresses = new LinkedHashSet<>();
 
-        if ( singleMail ) {
+        if ( mapping.isSingleMail() ) {
             Map<String, Object> parameters = (Map<String, Object>)(variables.getOrDefault("parameters", null));
             if ( parameters != null ) {
                 String email = (String) parameters.getOrDefault("email_list", "");
                 log.info("Sending mail to {}", email);
                 toAddresses.add(email);
             }
-        } else if ( emailListSpecified ) {
+        } else if ( mapping.isEmailListSpecified() ) {
             Map<String, Object> parameters = (Map<String, Object>)(variables.getOrDefault("parameters", null));
             if ( parameters != null ) {
                 String emailList = (String) parameters.getOrDefault("email_list", "");
@@ -196,7 +199,7 @@ public class EmailService {
         // Crea log di invio
         EmailSendLog log = createSendLog(
             template,
-            ((singleMail || emailListSpecified) ? null : lists.get(0).getInteger("id_list")), // Prima lista per tracking
+            ((mapping.isSingleMail() || mapping.isEmailListSpecified()) ? null : lists.get(0).getInteger("id_list")), // Prima lista per tracking
             toAddresses,
             ccAddresses,
             bccAddresses,
@@ -265,6 +268,7 @@ public class EmailService {
                 toAddresses,
                 ccAddresses,
                 bccAddresses,
+                mapping.getEmailSenderName(),
                 renderedSubject,
                 bodyWithFooter,
                 template.getBoolean("is_html"),
@@ -339,7 +343,7 @@ public class EmailService {
             String bodyWithFooter = addFooterToBody(body, isHtml);
 
             // Invia email via SMTP
-            String messageId = sendEmail(to, cc, bcc, subject, bodyWithFooter, isHtml);
+            String messageId = sendEmail(to, cc, bcc, null, subject, bodyWithFooter, isHtml);
 
             // Marca log come inviato
             log.markAsSent(messageId);
@@ -524,10 +528,11 @@ public class EmailService {
             Set<String> to,
             Set<String> cc,
             Set<String> bcc,
+            String name,
             String subject,
             String body,
             boolean isHtml) throws Exception {
-        return sendEmail(to, cc, bcc, subject, body, isHtml, null);
+        return sendEmail(to, cc, bcc, name, subject, body, isHtml, null);
     }
 
     /**
@@ -537,6 +542,7 @@ public class EmailService {
             Set<String> to,
             Set<String> cc,
             Set<String> bcc,
+            String name,
             String subject,
             String body,
             boolean isHtml,
@@ -546,7 +552,7 @@ public class EmailService {
         MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
         // Mittente
-        helper.setFrom(fromAddress, fromName);
+        helper.setFrom(fromAddress, Strings.isBlank(name) ? fromName : name);
 
         // Destinatari TO
         helper.setTo(to.toArray(new String[0]));
@@ -644,7 +650,7 @@ public class EmailService {
 
                 // Ritenta invio
                 String messageId = sendEmail(
-                    to, cc, bcc,
+                    to, cc, bcc, null,
                     log.getString("subject"),
                     log.getString("body"),
                     false // Assume plain text per retry

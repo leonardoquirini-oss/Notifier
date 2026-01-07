@@ -86,6 +86,12 @@ public class NotificationConfigProperties {
          */
         private boolean emailListSpecified = false;
 
+        /**
+         * Se impostato sara' il nome che apparira' nella mail, altrimenti si utilizzera'
+         * il default configurato nel file application.yml
+         */
+        private String emailSenderName;
+
     }
 
 }

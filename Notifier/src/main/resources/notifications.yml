@@ -85,3 +85,4 @@ notifications:
       consumer-group: "notifier-group"  
       auto-ack: true
       email-list-specified: true                           # la lista da usare e' specificata nell'evento
+      email-sender-name: "Bernardini - Richiesta Prenotazione"
