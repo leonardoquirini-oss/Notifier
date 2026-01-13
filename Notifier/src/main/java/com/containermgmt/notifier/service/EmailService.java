@@ -161,8 +161,8 @@ public class EmailService {
         if ( mapping.isSingleMail() ) {
             Map<String, Object> parameters = (Map<String, Object>)(variables.getOrDefault("parameters", null));
             if ( parameters != null ) {
-                String email = (String) parameters.getOrDefault("email_list", "");
-                log.info("Sending mail to {}", email);
+                String email = (String) parameters.getOrDefault("email", "");
+                log.info("Sending single mail to {}", email);
                 toAddresses.add(email);
             }
         } else if ( mapping.isEmailListSpecified() ) {
