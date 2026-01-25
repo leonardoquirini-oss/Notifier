@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  log-processor:
+    build: .
+    container_name: berlink-log-processor
+    ports:
+      - "8082:8082"
+    volumes:
+      - /opt/berlink/backend/log:/berlink/logs/:ro
+    networks:
+      - berlink-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8082/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+networks:
+  berlink-network:
+    driver: bridge

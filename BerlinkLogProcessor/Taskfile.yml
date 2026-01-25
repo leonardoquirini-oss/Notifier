@@ -1,0 +1,36 @@
+version: '3'
+
+vars:
+  
+
+tasks:
+    
+  stop-logp:
+    cmds:
+      - docker-compose  -f docker-compose.yml stop log-processor
+    silent: true  
+  
+  build-logp:
+    cmds:
+      - docker-compose  -f docker-compose.yml build log-processor
+    silent: true  
+
+  logp:
+    cmds:
+      - task stop-logp
+      - task build-logp
+    silent: true  
+  
+  logs-logp:
+    cmds:
+      - docker-compose logs -f log-processor
+  
+  up:
+    cmds:
+      - docker-compose -f docker-compose.yml up -d
+    silent: true  
+
+  restart:
+    cmds:
+      - docker-compose down && docker-compose -f docker-compose.yml up -d
+    silent: true    

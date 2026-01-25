@@ -1,0 +1,48 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: berlink-log-processor
+
+  data:
+    redis:
+      host: 172.28.234.122
+      port: 6379
+      database: 0         
+      timeout: 5000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 2
+          max-wait: -1ms
+
+# Query Monitor Configuration
+query:
+  log:
+    file:
+      path: /berlink/logs/berlink_queries.log
+  monitor:
+    ttl:
+      days: 15
+    poll:
+      interval:
+        ms: 1000
+    max:
+      samples: 1000
+
+# Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    it.berlink: ${LOG_LEVEL:TRACE}
+    org.springframework.data.redis: WARN
