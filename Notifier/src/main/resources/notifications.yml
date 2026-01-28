@@ -4,6 +4,20 @@
 notifications:
   event-mappings:
 
+    # Attachment Sharing Event
+    - stream: "events-stream"
+      event-type: attachment:share                
+      template-code: "CONDIVISIONE_FILE"          
+      consumer-group: "notifier-group"  
+      auto-ack: true      
+      single-mail: true                           # Utilizza il template ma non la lista distribuzione (invio email singolo)
+
+    - stream: "events-stream"
+      event-type: email:send                
+      template-code: "#NO_TEMPLATE#"         
+      consumer-group: "notifier-group"  
+      auto-ack: true            
+
     # Purchase Order Created Event APERTO
     - stream: "purchase-orders-stream"
       event-type: events:new_purchase_order        
@@ -25,15 +39,7 @@ notifications:
       consumer-group: "notifier-group"  
       auto-ack: true
       single-mail: true                           # Utilizza il template ma non la lista distribuzione (invio email singolo)  
-
-    # Attachment Sharing Event
-    - stream: "events-stream"
-      event-type: attachment:share                
-      template-code: "CONDIVISIONE_FILE"          
-      consumer-group: "notifier-group"  
-      auto-ack: true      
-      single-mail: true                           # Utilizza il template ma non la lista distribuzione (invio email singolo)
-      
+        
     # Danni Semirimorchi
     - stream: "trailer-damage-stream"
       event-type: trailer:damage_report      

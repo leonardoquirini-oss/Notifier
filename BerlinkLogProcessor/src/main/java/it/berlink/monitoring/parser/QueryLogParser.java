@@ -100,11 +100,10 @@ public class QueryLogParser {
      */
     private Optional<ParsedLogEntry> parseActiveJdbcFormat(String line) {
 
-        log.trace("Line to be parsed: {} - pattern {}", line, ACTIVEJDBC_LOG_PATTERN);
+        log.trace("Line: {}", line);
 
         Matcher matcher = ACTIVEJDBC_LOG_PATTERN.matcher(line);
         if (!matcher.matches()) {
-            log.trace("No Match!");
             return Optional.empty();
         }
 
