@@ -1,6 +1,7 @@
 package com.containermgmt.notifier.service;
 
 import com.containermgmt.notifier.config.NotificationConfigProperties;
+import com.containermgmt.notifier.dto.DirectEmailRequest;
 import com.containermgmt.notifier.model.EmailList;
 import com.containermgmt.notifier.model.EmailSendLog;
 import com.containermgmt.notifier.model.EmailTemplate;
@@ -519,6 +520,231 @@ public class EmailService {
         preview.put("is_html", String.valueOf(template.getBoolean("is_html")));
 
         return preview;
+    }
+
+    /**
+     * Invia email direttamente dal payload dell'evento (senza template).
+     * Se anche UN SOLO allegato fallisce il download, l'invio viene BLOCCATO.
+     * La cancellazione degli allegati avviene SOLO dopo invio con successo.
+     *
+     * @param request Richiesta email diretta con tutti i parametri
+     * @param messageId ID del messaggio dello stream (per tracking)
+     * @param sentBy Username utente che invia
+     * @return ID del log creato
+     * @throws Exception se errore durante invio
+     */
+    public Integer sendDirectEmail(
+            DirectEmailRequest request,
+            String messageId,
+            String sentBy) throws Exception {
+
+        logger.info("Invio email diretta: to={}, subject={}", request.getTo(), request.getSubject());
+
+        // Validazione input obbligatori
+        if (request.getTo() == null || request.getTo().isEmpty()) {
+            throw new IllegalArgumentException("Destinatari TO obbligatori per email diretta");
+        }
+        if (request.getSubject() == null || request.getSubject().trim().isEmpty()) {
+            throw new IllegalArgumentException("Subject obbligatorio per email diretta");
+        }
+
+        // Body può essere vuoto
+        String body = request.getBody() != null ? request.getBody() : "";
+
+        // Prepara insiemi destinatari
+        Set<String> toAddresses = new LinkedHashSet<>(request.getTo());
+        Set<String> ccAddresses = request.getCc() != null ? new LinkedHashSet<>(request.getCc()) : new LinkedHashSet<>();
+        Set<String> bccAddresses = request.getCcn() != null ? new LinkedHashSet<>(request.getCcn()) : new LinkedHashSet<>();
+
+        // Download allegati (se presenti) - SE ANCHE UNO FALLISCE, BLOCCA L'INVIO
+        List<EmailAttachment> attachments = new ArrayList<>();
+        if (request.getAttachments() != null && !request.getAttachments().isEmpty()) {
+            logger.info("Download di {} allegati per email diretta", request.getAttachments().size());
+            for (Integer attachmentId : request.getAttachments()) {
+                try {
+                    EmailAttachment attachment = downloadAttachment(String.valueOf(attachmentId));
+                    attachments.add(attachment);
+                    logger.info("Allegato ID={} scaricato: {}", attachmentId, attachment.getFilename());
+                } catch (Exception e) {
+                    logger.error("Errore download allegato ID={}: {}. BLOCCO INVIO EMAIL.", attachmentId, e.getMessage());
+                    throw new Exception("Impossibile scaricare allegato ID=" + attachmentId + ": " + e.getMessage(), e);
+                }
+            }
+        }
+
+        // Crea log di invio
+        EmailSendLog log = createSendLog(
+            null,
+            null,
+            toAddresses,
+            ccAddresses,
+            bccAddresses,
+            request.getSubject(),
+            body,
+            null,
+            "direct-email",
+            null,
+            sentBy
+        );
+
+        try {
+            // Aggiungi footer al body
+            String bodyWithFooter = addFooterToBody(body, request.isHtml());
+
+            // Determina il mittente (usa default se non specificato)
+            String senderName = request.getSenderName();
+            String senderAddress = request.getFrom();
+
+            // Invia email via SMTP
+            String smtpMessageId = sendEmailWithMultipleAttachments(
+                toAddresses,
+                ccAddresses,
+                bccAddresses,
+                senderName,
+                senderAddress,
+                request.getSubject(),
+                bodyWithFooter,
+                request.isHtml(),
+                attachments
+            );
+
+            // Marca log come inviato
+            log.markAsSent(smtpMessageId);
+
+            logger.info("Email diretta inviata con successo: destinatari={}, messageId={}, allegati={}",
+                toAddresses, smtpMessageId, attachments.size());
+
+            // Cancella allegati solo se invio riuscito E deleteAttachments=true
+            if (request.isDeleteAttachments() && request.getAttachments() != null && !request.getAttachments().isEmpty()) {
+                deleteAttachments(request.getAttachments());
+            }
+
+        } catch (Exception e) {
+            // Marca log come fallito - NON cancella allegati
+            log.markAsFailed(e.getMessage());
+
+            logger.error("Errore invio email diretta: error={}", e.getMessage(), e);
+
+            throw e;
+        }
+
+        return (Integer) log.getId();
+    }
+
+    /**
+     * Invia email con supporto per allegati multipli
+     *
+     * @param to Destinatari TO
+     * @param cc Destinatari CC
+     * @param bcc Destinatari BCC
+     * @param senderName Nome mittente (opzionale)
+     * @param senderAddress Indirizzo mittente (opzionale, usa default se null)
+     * @param subject Oggetto
+     * @param body Corpo email
+     * @param isHtml Se true, body è HTML
+     * @param attachments Lista allegati
+     * @return Message ID SMTP
+     * @throws Exception se errore durante invio
+     */
+    private String sendEmailWithMultipleAttachments(
+            Set<String> to,
+            Set<String> cc,
+            Set<String> bcc,
+            String senderName,
+            String senderAddress,
+            String subject,
+            String body,
+            boolean isHtml,
+            List<EmailAttachment> attachments) throws Exception {
+
+        MimeMessage message = mailSender.createMimeMessage();
+        MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+        // Mittente: usa indirizzo specificato o default
+        String effectiveFromAddress = (senderAddress != null && !senderAddress.trim().isEmpty())
+            ? senderAddress
+            : fromAddress;
+        String effectiveFromName = (senderName != null && !senderName.trim().isEmpty())
+            ? senderName
+            : fromName;
+        helper.setFrom(effectiveFromAddress, effectiveFromName);
+
+        // Destinatari TO
+        helper.setTo(to.toArray(new String[0]));
+
+        // Destinatari CC (opzionale)
+        if (cc != null && !cc.isEmpty()) {
+            helper.setCc(cc.toArray(new String[0]));
+        }
+
+        // Destinatari BCC (opzionale)
+        if (bcc != null && !bcc.isEmpty()) {
+            helper.setBcc(bcc.toArray(new String[0]));
+        }
+
+        // Subject e body
+        helper.setSubject(subject);
+        helper.setText(body, isHtml);
+
+        // Aggiungi tutti gli allegati
+        if (attachments != null && !attachments.isEmpty()) {
+            for (EmailAttachment attachment : attachments) {
+                ByteArrayResource resource = new ByteArrayResource(attachment.getData());
+                helper.addAttachment(attachment.getFilename(), resource, attachment.getContentType());
+                logger.debug("Allegato aggiunto: filename={}, size={} bytes",
+                    attachment.getFilename(), attachment.getData().length);
+            }
+            logger.info("Aggiunti {} allegati all'email", attachments.size());
+        }
+
+        // Invia
+        mailSender.send(message);
+
+        // Restituisce message ID (se disponibile)
+        return message.getMessageID();
+    }
+
+    /**
+     * Elimina allegati dal backend tramite API.
+     * Continua con gli altri allegati anche se uno fallisce (log errore ma non blocca).
+     *
+     * @param attachmentIds Lista ID allegati da eliminare
+     */
+    private void deleteAttachments(List<Integer> attachmentIds) {
+        if (attachmentIds == null || attachmentIds.isEmpty()) {
+            return;
+        }
+
+        logger.info("Eliminazione di {} allegati dopo invio email", attachmentIds.size());
+
+        for (Integer attachmentId : attachmentIds) {
+            try {
+                String url = backendApiUrl + "/api/attachments/" + attachmentId + "?hard=true";
+
+                HttpHeaders headers = new HttpHeaders();
+                headers.set("X-API-Key", backendApiKey);
+
+                HttpEntity<String> entity = new HttpEntity<>(headers);
+
+                ResponseEntity<Void> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.DELETE,
+                    entity,
+                    Void.class
+                );
+
+                if (response.getStatusCode().is2xxSuccessful()) {
+                    logger.info("Allegato ID={} eliminato con successo", attachmentId);
+                } else {
+                    logger.warn("Eliminazione allegato ID={} non riuscita: status={}",
+                        attachmentId, response.getStatusCode());
+                }
+            } catch (Exception e) {
+                // Log errore ma continua con gli altri allegati
+                logger.error("Errore eliminazione allegato ID={}: {}. Continuo con gli altri.",
+                    attachmentId, e.getMessage());
+            }
+        }
     }
 
     /**

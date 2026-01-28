@@ -12,11 +12,12 @@ notifications:
       auto-ack: true      
       single-mail: true                           # Utilizza il template ma non la lista distribuzione (invio email singolo)
 
+    # Invio di email generica
     - stream: "events-stream"
-      event-type: email:send                
-      template-code: "#NO_TEMPLATE#"         
-      consumer-group: "notifier-group"  
-      auto-ack: true            
+      event-type: email:send
+      consumer-group: "notifier-group"
+      auto-ack: true
+      direct-email: true                            # Email inviata direttamente dal payload senza template            
 
     # Purchase Order Created Event APERTO
     - stream: "purchase-orders-stream"

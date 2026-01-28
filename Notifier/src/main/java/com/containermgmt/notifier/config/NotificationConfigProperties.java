@@ -46,8 +46,8 @@ public class NotificationConfigProperties {
 
         /**
          * Email template code from database (e.g., "PO_CREATED")
+         * Opzionale se directEmail è true
          */
-        @NotBlank(message = "Template code is required")
         private String templateCode;
 
         /**
@@ -91,6 +91,12 @@ public class NotificationConfigProperties {
          * il default configurato nel file application.yml
          */
         private String emailSenderName;
+
+        /**
+         * Se true, l'email viene inviata direttamente dai parametri senza usare template.
+         * Il payload deve contenere: to, subject, body e opzionalmente cc, ccn, from, attachments
+         */
+        private boolean directEmail = false;
 
     }
 

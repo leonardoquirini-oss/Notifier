@@ -23,12 +23,12 @@ public class EmailSendLog extends Model {
     static {
         validatePresenceOf(
             "subject",
-            "body",
             "send_status"
         );
 
         // Validazione send_status
         // Nota: Validazione custom per send_status gestita manualmente
+        // Nota: body non è obbligatorio per email dirette
     }
 
     /**
