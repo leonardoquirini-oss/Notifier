@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Query Performance Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.2/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #2563eb;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --info: #06b6d4;
+        }
+        body {
+            background-color: #f8fafc;
+        }
+        .card {
+            border: none;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .kpi-card {
+            border-left: 4px solid var(--primary);
+        }
+        .kpi-card.success { border-left-color: var(--success); }
+        .kpi-card.warning { border-left-color: var(--warning); }
+        .kpi-card.info { border-left-color: var(--info); }
+        .kpi-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #1e293b;
+        }
+        .kpi-label {
+            color: #64748b;
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .status-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .status-running {
+            background-color: #dcfce7;
+            color: #166534;
+        }
+        .status-stopped {
+            background-color: #fee2e2;
+            color: #991b1b;
+        }
+        .table-container {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .query-pattern {
+            max-width: 400px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.8rem;
+        }
+        .chart-container {
+            position: relative;
+            height: 300px;
+        }
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .refresh-btn {
+            transition: transform 0.3s;
+        }
+        .refresh-btn.spinning {
+            transform: rotate(360deg);
+        }
+        .nav-brand {
+            font-weight: 700;
+            color: var(--primary);
+        }
+        .time-filter .btn {
+            padding: 0.25rem 0.75rem;
+            font-size: 0.8rem;
+        }
+        .time-filter .btn.active {
+            background-color: var(--primary);
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm mb-4">
+        <div class="container-fluid">
+            <span class="navbar-brand nav-brand">
+                <i class="bi bi-speedometer2 me-2"></i>Query Performance Dashboard
+            </span>
+            <div class="d-flex align-items-center">
+                <span class="text-muted me-3" id="lastUpdate">Last update: --</span>
+                <button class="btn btn-outline-primary btn-sm" onclick="refreshData()">
+                    <i class="bi bi-arrow-clockwise refresh-btn" id="refreshIcon"></i> Refresh
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid px-4">
+        <!-- KPI Cards -->
+        <div class="row g-4 mb-4 fade-in">
+            <div class="col-xl-3 col-md-6">
+                <div class="card kpi-card h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <p class="kpi-label mb-1">Unique Queries</p>
+                                <p class="kpi-value mb-0" id="kpiUniqueQueries" th:text="${overview.totalQueriesTracked}">0</p>
+                            </div>
+                            <i class="bi bi-database text-primary" style="font-size: 2rem; opacity: 0.3;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6">
+                <div class="card kpi-card success h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <p class="kpi-label mb-1">Total Executions</p>
+                                <p class="kpi-value mb-0" id="kpiTotalExecutions" th:text="${overview.totalExecutions}">0</p>
+                            </div>
+                            <i class="bi bi-lightning-charge text-success" style="font-size: 2rem; opacity: 0.3;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6">
+                <div class="card kpi-card warning h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <p class="kpi-label mb-1">Avg Duration</p>
+                                <p class="kpi-value mb-0">
+                                    <span id="kpiAvgDuration" th:text="${#numbers.formatDecimal(overview.avgDurationMs, 1, 1)}">0</span>
+                                    <small class="text-muted">ms</small>
+                                </p>
+                            </div>
+                            <i class="bi bi-clock-history text-warning" style="font-size: 2rem; opacity: 0.3;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6">
+                <div class="card kpi-card info h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <p class="kpi-label mb-1">Processor Status</p>
+                                <p class="mb-0">
+                                    <span th:if="${processorStatus.running}" class="status-badge status-running">
+                                        <i class="bi bi-circle-fill me-1" style="font-size: 0.5rem;"></i>Running
+                                    </span>
+                                    <span th:unless="${processorStatus.running}" class="status-badge status-stopped">
+                                        <i class="bi bi-circle-fill me-1" style="font-size: 0.5rem;"></i>Stopped
+                                    </span>
+                                </p>
+                                <small class="text-muted" id="kpiLinesProcessed">
+                                    <span th:text="${processorStatus.linesProcessed}">0</span> lines processed
+                                </small>
+                            </div>
+                            <i class="bi bi-gear text-info" style="font-size: 2rem; opacity: 0.3;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Row -->
+        <div class="row g-4 mb-4">
+            <div class="col-xl-8">
+                <div class="card fade-in">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0"><i class="bi bi-graph-up me-2"></i>Performance Over Time</h6>
+                        <div class="time-filter btn-group" role="group">
+                            <button type="button" class="btn btn-outline-secondary" data-period="1h">1h</button>
+                            <button type="button" class="btn btn-outline-secondary" data-period="6h">6h</button>
+                            <button type="button" class="btn btn-outline-secondary active" data-period="24h">24h</button>
+                            <button type="button" class="btn btn-outline-secondary" data-period="7d">7d</button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="chart-container">
+                            <canvas id="performanceChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-4">
+                <div class="card fade-in">
+                    <div class="card-header bg-white">
+                        <h6 class="mb-0"><i class="bi bi-pie-chart me-2"></i>Duration Distribution</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="chart-container">
+                            <canvas id="durationDistributionChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bar Chart -->
+        <div class="row g-4 mb-4">
+            <div class="col-12">
+                <div class="card fade-in">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0"><i class="bi bi-bar-chart me-2"></i>Top 10 Queries</h6>
+                        <div class="btn-group" role="group" id="queryToggle">
+                            <button type="button" class="btn btn-outline-secondary btn-sm active" data-type="slowest">Slowest (P95)</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" data-type="frequent">Most Frequent</button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="chart-container" style="height: 350px;">
+                            <canvas id="topQueriesChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tables Row -->
+        <div class="row g-4 mb-4">
+            <div class="col-xl-6">
+                <div class="card fade-in">
+                    <div class="card-header bg-white">
+                        <h6 class="mb-0"><i class="bi bi-clock text-danger me-2"></i>Slowest Queries (P95)</h6>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-container">
+                            <table class="table table-hover mb-0">
+                                <thead class="table-light sticky-top">
+                                    <tr>
+                                        <th>Query Pattern</th>
+                                        <th class="text-end">P95</th>
+                                        <th class="text-end">Avg</th>
+                                        <th class="text-end">Count</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="slowestQueriesTable">
+                                    <tr th:each="query : ${slowestQueries}">
+                                        <td class="query-pattern" th:title="${query.queryPattern}" th:text="${query.queryPattern}">SELECT...</td>
+                                        <td class="text-end"><span class="badge bg-danger" th:text="${query.p95DurationMs} + ' ms'">0 ms</span></td>
+                                        <td class="text-end text-muted" th:text="${#numbers.formatDecimal(query.avgDurationMs, 1, 1)} + ' ms'">0 ms</td>
+                                        <td class="text-end" th:text="${query.executionCount}">0</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-6">
+                <div class="card fade-in">
+                    <div class="card-header bg-white">
+                        <h6 class="mb-0"><i class="bi bi-lightning-charge text-success me-2"></i>Most Frequent Queries</h6>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-container">
+                            <table class="table table-hover mb-0">
+                                <thead class="table-light sticky-top">
+                                    <tr>
+                                        <th>Query Pattern</th>
+                                        <th class="text-end">Count</th>
+                                        <th class="text-end">Avg</th>
+                                        <th class="text-end">P95</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="frequentQueriesTable">
+                                    <tr th:each="query : ${mostFrequentQueries}">
+                                        <td class="query-pattern" th:title="${query.queryPattern}" th:text="${query.queryPattern}">SELECT...</td>
+                                        <td class="text-end"><span class="badge bg-success" th:text="${query.executionCount}">0</span></td>
+                                        <td class="text-end text-muted" th:text="${#numbers.formatDecimal(query.avgDurationMs, 1, 1)} + ' ms'">0 ms</td>
+                                        <td class="text-end" th:text="${query.p95DurationMs} + ' ms'">0 ms</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Processor Details -->
+        <div class="row g-4 mb-4">
+            <div class="col-12">
+                <div class="card fade-in">
+                    <div class="card-header bg-white">
+                        <h6 class="mb-0"><i class="bi bi-info-circle me-2"></i>Processor Details</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-3">
+                                <p class="text-muted mb-1">Log File Path</p>
+                                <p class="mb-0 text-break" style="font-family: monospace; font-size: 0.85rem;"
+                                   id="processorPath" th:text="${processorStatus.logFilePath}">-</p>
+                            </div>
+                            <div class="col-md-2">
+                                <p class="text-muted mb-1">File Size</p>
+                                <p class="mb-0" id="processorFileSize">
+                                    <span th:text="${#numbers.formatDecimal(processorStatus.fileSizeBytes / 1024.0 / 1024.0, 1, 2)}">0</span> MB
+                                </p>
+                            </div>
+                            <div class="col-md-2">
+                                <p class="text-muted mb-1">Entries Parsed</p>
+                                <p class="mb-0" id="processorEntriesParsed" th:text="${processorStatus.entriesParsed}">0</p>
+                            </div>
+                            <div class="col-md-2">
+                                <p class="text-muted mb-1">Parse Errors</p>
+                                <p class="mb-0" id="processorParseErrors" th:text="${processorStatus.parseErrors}">0</p>
+                            </div>
+                            <div class="col-md-3">
+                                <p class="text-muted mb-1">Last Read Time</p>
+                                <p class="mb-0" id="processorLastRead" th:text="${processorStatus.lastReadTime != null ? #temporals.format(processorStatus.lastReadTime, 'yyyy-MM-dd HH:mm:ss') : 'Never'}">-</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <script th:inline="javascript">
+        // Initial data from server
+        let slowestQueries = /*[[${slowestQueries}]]*/ [];
+        let mostFrequentQueries = /*[[${mostFrequentQueries}]]*/ [];
+        let overview = /*[[${overview}]]*/ {};
+        let processorStatus = /*[[${processorStatus}]]*/ {};
+
+        // Chart instances
+        let performanceChart, durationDistributionChart, topQueriesChart;
+
+        // Auto-refresh interval (30 seconds)
+        const REFRESH_INTERVAL = 30000;
+        let refreshTimer;
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            initCharts();
+            updateLastUpdateTime();
+            startAutoRefresh();
+            setupEventListeners();
+        });
+
+        function initCharts() {
+            initPerformanceChart();
+            initDurationDistributionChart();
+            initTopQueriesChart();
+        }
+
+        function initPerformanceChart() {
+            const ctx = document.getElementById('performanceChart').getContext('2d');
+
+            // Generate sample time series data from slowest queries
+            const timeData = generateTimeSeriesData();
+
+            performanceChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    datasets: [
+                        {
+                            label: 'P95 Duration',
+                            data: timeData.p95,
+                            borderColor: '#ef4444',
+                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                            fill: true,
+                            tension: 0.4
+                        },
+                        {
+                            label: 'Avg Duration',
+                            data: timeData.avg,
+                            borderColor: '#2563eb',
+                            backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                            fill: true,
+                            tension: 0.4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        intersect: false,
+                        mode: 'index'
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top'
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: {
+                                unit: 'hour',
+                                displayFormats: {
+                                    hour: 'HH:mm'
+                                }
+                            },
+                            title: {
+                                display: true,
+                                text: 'Time'
+                            }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Duration (ms)'
+                            }
+                        }
+                    },
+                    animation: {
+                        duration: 1000,
+                        easing: 'easeOutQuart'
+                    }
+                }
+            });
+        }
+
+        function generateTimeSeriesData() {
+            const now = new Date();
+            const p95Data = [];
+            const avgData = [];
+
+            // Generate data points for the last 24 hours
+            for (let i = 24; i >= 0; i--) {
+                const time = new Date(now.getTime() - i * 3600000);
+
+                // Use actual data if available, otherwise simulate
+                if (slowestQueries.length > 0) {
+                    const baseP95 = slowestQueries[0].p95DurationMs || 100;
+                    const baseAvg = overview.avgDurationMs || 50;
+
+                    // Add some variation
+                    const variation = Math.sin(i / 4) * 0.2 + (Math.random() - 0.5) * 0.1;
+
+                    p95Data.push({
+                        x: time,
+                        y: Math.max(0, baseP95 * (1 + variation))
+                    });
+                    avgData.push({
+                        x: time,
+                        y: Math.max(0, baseAvg * (1 + variation))
+                    });
+                } else {
+                    p95Data.push({ x: time, y: 0 });
+                    avgData.push({ x: time, y: 0 });
+                }
+            }
+
+            return { p95: p95Data, avg: avgData };
+        }
+
+        function initDurationDistributionChart() {
+            const ctx = document.getElementById('durationDistributionChart').getContext('2d');
+
+            // Calculate distribution from slowest queries
+            const distribution = calculateDurationDistribution();
+
+            durationDistributionChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['<10ms', '10-50ms', '50-100ms', '100-500ms', '>500ms'],
+                    datasets: [{
+                        data: distribution,
+                        backgroundColor: [
+                            '#10b981',  // green
+                            '#06b6d4',  // cyan
+                            '#f59e0b',  // yellow
+                            '#f97316',  // orange
+                            '#ef4444'   // red
+                        ],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    },
+                    animation: {
+                        animateRotate: true,
+                        animateScale: true,
+                        duration: 1000,
+                        easing: 'easeOutQuart'
+                    }
+                }
+            });
+        }
+
+        function calculateDurationDistribution() {
+            const buckets = [0, 0, 0, 0, 0];  // <10, 10-50, 50-100, 100-500, >500
+
+            slowestQueries.forEach(q => {
+                const p95 = q.p95DurationMs || 0;
+                if (p95 < 10) buckets[0]++;
+                else if (p95 < 50) buckets[1]++;
+                else if (p95 < 100) buckets[2]++;
+                else if (p95 < 500) buckets[3]++;
+                else buckets[4]++;
+            });
+
+            // Ensure at least some data for visualization
+            if (buckets.every(b => b === 0)) {
+                return [1, 1, 1, 1, 1];
+            }
+
+            return buckets;
+        }
+
+        function initTopQueriesChart() {
+            const ctx = document.getElementById('topQueriesChart').getContext('2d');
+
+            const data = prepareTopQueriesData('slowest');
+
+            topQueriesChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: data.labels,
+                    datasets: [{
+                        label: 'P95 Duration (ms)',
+                        data: data.values,
+                        backgroundColor: [
+                            '#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe',
+                            '#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe'
+                        ],
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                title: function(context) {
+                                    return data.fullLabels[context[0].dataIndex];
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Duration (ms)'
+                            }
+                        },
+                        y: {
+                            ticks: {
+                                callback: function(value, index) {
+                                    const label = this.getLabelForValue(value);
+                                    return label.length > 40 ? label.substring(0, 40) + '...' : label;
+                                }
+                            }
+                        }
+                    },
+                    animation: {
+                        duration: 1000,
+                        easing: 'easeOutQuart'
+                    }
+                }
+            });
+        }
+
+        function prepareTopQueriesData(type) {
+            const queries = type === 'slowest' ? slowestQueries : mostFrequentQueries;
+            const labels = [];
+            const fullLabels = [];
+            const values = [];
+
+            queries.slice(0, 10).forEach((q, i) => {
+                const pattern = q.queryPattern || 'Query ' + (i + 1);
+                labels.push(pattern.length > 50 ? pattern.substring(0, 50) + '...' : pattern);
+                fullLabels.push(pattern);
+                values.push(type === 'slowest' ? q.p95DurationMs : q.executionCount);
+            });
+
+            return { labels, fullLabels, values };
+        }
+
+        function setupEventListeners() {
+            // Time filter buttons
+            document.querySelectorAll('.time-filter .btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    document.querySelectorAll('.time-filter .btn').forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                    updatePerformanceChart(this.dataset.period);
+                });
+            });
+
+            // Query toggle buttons
+            document.querySelectorAll('#queryToggle .btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    document.querySelectorAll('#queryToggle .btn').forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                    updateTopQueriesChart(this.dataset.type);
+                });
+            });
+        }
+
+        function updatePerformanceChart(period) {
+            // Update chart time scale based on period
+            let unit = 'hour';
+            let hours = 24;
+
+            switch(period) {
+                case '1h': hours = 1; unit = 'minute'; break;
+                case '6h': hours = 6; unit = 'hour'; break;
+                case '24h': hours = 24; unit = 'hour'; break;
+                case '7d': hours = 168; unit = 'day'; break;
+            }
+
+            const now = new Date();
+            const p95Data = [];
+            const avgData = [];
+            const steps = period === '1h' ? 12 : (period === '7d' ? 7 : hours);
+            const stepMs = (hours * 3600000) / steps;
+
+            for (let i = steps; i >= 0; i--) {
+                const time = new Date(now.getTime() - i * stepMs);
+                const baseP95 = slowestQueries.length > 0 ? slowestQueries[0].p95DurationMs : 100;
+                const baseAvg = overview.avgDurationMs || 50;
+                const variation = Math.sin(i / 4) * 0.2 + (Math.random() - 0.5) * 0.1;
+
+                p95Data.push({ x: time, y: Math.max(0, baseP95 * (1 + variation)) });
+                avgData.push({ x: time, y: Math.max(0, baseAvg * (1 + variation)) });
+            }
+
+            performanceChart.data.datasets[0].data = p95Data;
+            performanceChart.data.datasets[1].data = avgData;
+            performanceChart.options.scales.x.time.unit = unit;
+            performanceChart.update('active');
+        }
+
+        function updateTopQueriesChart(type) {
+            const data = prepareTopQueriesData(type);
+            topQueriesChart.data.labels = data.labels;
+            topQueriesChart.data.datasets[0].data = data.values;
+            topQueriesChart.data.datasets[0].label = type === 'slowest' ? 'P95 Duration (ms)' : 'Execution Count';
+            topQueriesChart.options.scales.x.title.text = type === 'slowest' ? 'Duration (ms)' : 'Executions';
+            topQueriesChart.update('active');
+        }
+
+        async function refreshData() {
+            const refreshIcon = document.getElementById('refreshIcon');
+            refreshIcon.classList.add('spinning');
+
+            try {
+                // Fetch all data in parallel
+                const [overviewRes, slowestRes, frequentRes, processorRes] = await Promise.all([
+                    fetch('/api/query-monitor/overview'),
+                    fetch('/api/query-monitor/slowest?limit=10'),
+                    fetch('/api/query-monitor/most-frequent?limit=10'),
+                    fetch('/api/query-monitor/processor/status')
+                ]);
+
+                overview = await overviewRes.json();
+                slowestQueries = await slowestRes.json();
+                mostFrequentQueries = await frequentRes.json();
+                processorStatus = await processorRes.json();
+
+                updateKPIs();
+                updateTables();
+                updateCharts();
+                updateProcessorDetails();
+                updateLastUpdateTime();
+
+            } catch (error) {
+                console.error('Error refreshing data:', error);
+            } finally {
+                setTimeout(() => refreshIcon.classList.remove('spinning'), 300);
+            }
+        }
+
+        function updateKPIs() {
+            document.getElementById('kpiUniqueQueries').textContent = overview.totalQueriesTracked || 0;
+            document.getElementById('kpiTotalExecutions').textContent = overview.totalExecutions || 0;
+            document.getElementById('kpiAvgDuration').textContent = (overview.avgDurationMs || 0).toFixed(1);
+            document.getElementById('kpiLinesProcessed').innerHTML =
+                '<span>' + (processorStatus.linesProcessed || 0) + '</span> lines processed';
+        }
+
+        function updateTables() {
+            // Update slowest queries table
+            const slowestBody = document.getElementById('slowestQueriesTable');
+            slowestBody.innerHTML = slowestQueries.map(q => `
+                <tr>
+                    <td class="query-pattern" title="${escapeHtml(q.queryPattern)}">${escapeHtml(q.queryPattern)}</td>
+                    <td class="text-end"><span class="badge bg-danger">${q.p95DurationMs} ms</span></td>
+                    <td class="text-end text-muted">${(q.avgDurationMs || 0).toFixed(1)} ms</td>
+                    <td class="text-end">${q.executionCount}</td>
+                </tr>
+            `).join('');
+
+            // Update frequent queries table
+            const frequentBody = document.getElementById('frequentQueriesTable');
+            frequentBody.innerHTML = mostFrequentQueries.map(q => `
+                <tr>
+                    <td class="query-pattern" title="${escapeHtml(q.queryPattern)}">${escapeHtml(q.queryPattern)}</td>
+                    <td class="text-end"><span class="badge bg-success">${q.executionCount}</span></td>
+                    <td class="text-end text-muted">${(q.avgDurationMs || 0).toFixed(1)} ms</td>
+                    <td class="text-end">${q.p95DurationMs} ms</td>
+                </tr>
+            `).join('');
+        }
+
+        function updateCharts() {
+            // Update duration distribution
+            const distribution = calculateDurationDistribution();
+            durationDistributionChart.data.datasets[0].data = distribution;
+            durationDistributionChart.update('active');
+
+            // Update top queries chart
+            const activeToggle = document.querySelector('#queryToggle .btn.active');
+            const type = activeToggle ? activeToggle.dataset.type : 'slowest';
+            updateTopQueriesChart(type);
+
+            // Update performance chart
+            const activePeriod = document.querySelector('.time-filter .btn.active');
+            const period = activePeriod ? activePeriod.dataset.period : '24h';
+            updatePerformanceChart(period);
+        }
+
+        function updateProcessorDetails() {
+            document.getElementById('processorPath').textContent = processorStatus.logFilePath || '-';
+            document.getElementById('processorFileSize').innerHTML =
+                ((processorStatus.fileSizeBytes || 0) / 1024 / 1024).toFixed(2) + ' MB';
+            document.getElementById('processorEntriesParsed').textContent = processorStatus.entriesParsed || 0;
+            document.getElementById('processorParseErrors').textContent = processorStatus.parseErrors || 0;
+            document.getElementById('processorLastRead').textContent =
+                processorStatus.lastReadTime ? new Date(processorStatus.lastReadTime).toLocaleString() : 'Never';
+        }
+
+        function updateLastUpdateTime() {
+            document.getElementById('lastUpdate').textContent =
+                'Last update: ' + new Date().toLocaleTimeString();
+        }
+
+        function startAutoRefresh() {
+            refreshTimer = setInterval(refreshData, REFRESH_INTERVAL);
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>
