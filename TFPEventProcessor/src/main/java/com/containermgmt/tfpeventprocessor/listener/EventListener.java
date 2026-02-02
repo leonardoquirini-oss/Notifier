@@ -4,13 +4,16 @@ import com.containermgmt.tfpeventprocessor.dto.EventMessage;
 import com.containermgmt.tfpeventprocessor.service.EventProcessorService;
 
 import jakarta.annotation.PostConstruct;
-import jakarta.jms.JMSException;
 import jakarta.jms.Message;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
+import java.util.HexFormat;
 
 /**
  * Event Listener
@@ -55,12 +58,19 @@ public class EventListener {
     public void onMessage(String queueName, Message message) {
         if (!(message instanceof jakarta.jms.TextMessage)) {
             log.debug("Ignoring non-text message from queue {}: {}", queueName, message.getClass().getSimpleName());
-            acknowledgeIfEnabled(message);
             return;
         }
         try {
             String jmsMessageId = message.getJMSMessageID();
             String messageJson = ((jakarta.jms.TextMessage) message).getText();
+
+            // Fallback: se il JMS MessageID è assente, genera un hash deterministico
+            // per garantire che l'upsert ON CONFLICT (message_id) funzioni correttamente
+            if (jmsMessageId == null || jmsMessageId.isBlank()) {
+                jmsMessageId = generateMessageHash(queueName, messageJson);
+                log.debug("No JMS MessageID - using generated hash: {}", jmsMessageId);
+            }
+
             EventMessage eventMessage = EventMessage.builder()
                     .messageId(jmsMessageId)
                     .eventType(queueName)
@@ -71,30 +81,14 @@ public class EventListener {
             processWithRetry(eventMessage);
 
             if (!acknowledgeMessages) {
-                log.debug("Event persisted but acknowledge disabled - forcing redelivery");
+                log.debug("Event persisted but acknowledge disabled - forcing redelivery via rollback");
                 throw new MessageRedeliveryException();
             }
-            acknowledgeIfEnabled(message);
         } catch (MessageRedeliveryException e) {
             throw e;
         } catch (Exception e) {
             log.error("Failed to process message from queue {}: {}", queueName, e.getMessage());
             throw new RuntimeException("Failed to process event message", e);
-        }
-    }
-
-    /**
-     * Acknowledges a JMS message if acknowledge is enabled.
-     */
-    private void acknowledgeIfEnabled(Message message) {
-        if (!acknowledgeMessages) {
-            log.debug("Acknowledge disabled - message will be redelivered on next startup");
-            return;
-        }
-        try {
-            message.acknowledge();
-        } catch (JMSException e) {
-            log.error("Failed to acknowledge message: {}", e.getMessage(), e);
         }
     }
 
@@ -140,6 +134,24 @@ public class EventListener {
         } catch (InterruptedException ie) {
             Thread.currentThread().interrupt();
             log.warn("Retry sleep interrupted");
+        }
+    }
+
+    /**
+     * Generates a deterministic SHA-256 hash from queue name and payload.
+     * Used as message_id fallback when JMS MessageID is absent,
+     * ensuring the DB upsert ON CONFLICT (message_id) prevents duplicates.
+     */
+    private String generateMessageHash(String queueName, String payload) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            digest.update(queueName.getBytes(StandardCharsets.UTF_8));
+            digest.update(payload.getBytes(StandardCharsets.UTF_8));
+            byte[] hash = digest.digest();
+            return "SHA256:" + HexFormat.of().formatHex(hash);
+        } catch (NoSuchAlgorithmException e) {
+            // SHA-256 è sempre disponibile in ogni JVM
+            throw new IllegalStateException("SHA-256 not available", e);
         }
     }
 

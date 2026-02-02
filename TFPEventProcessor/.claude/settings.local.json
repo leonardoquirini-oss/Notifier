@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(task build-be:*)",
+      "Bash(task build-ep:*)"
+    ]
+  }
+}

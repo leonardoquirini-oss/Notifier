@@ -2,6 +2,9 @@ package com.containermgmt.tfpeventprocessor.handler;
 
 import com.containermgmt.tfpeventprocessor.dto.EventMessage;
 
+import java.util.Collections;
+import java.util.Set;
+
 /**
  * Strategy interface for event type-specific processing.
  *
@@ -13,4 +16,8 @@ public interface EventTypeHandler {
     boolean supports(String eventType);
 
     void handle(EventMessage eventMessage);
+
+    default Set<String> supportedEventTypes() {
+        return Collections.emptySet();
+    }
 }

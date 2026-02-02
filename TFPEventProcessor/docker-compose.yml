@@ -35,6 +35,9 @@ services:
       ARTEMIS_USER: admin
       ARTEMIS_PASSWORD: admin
       ANONYMOUS_LOGIN: "false"
+    volumes:
+      # DEV/TEST: custom broker.xml with unlimited redelivery (max-delivery-attempts=-1)
+      - ./artemis-config/broker.xml:/var/lib/artemis-instance/etc-override/broker.xml
     ports:
       - "61616:61616"  # Artemis Core
       - "8161:8161"    # Web Console

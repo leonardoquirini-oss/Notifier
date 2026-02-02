@@ -5,14 +5,13 @@ import com.containermgmt.tfpeventprocessor.listener.EventListener.MessageRedeliv
 
 import jakarta.annotation.PostConstruct;
 import jakarta.jms.ConnectionFactory;
-import jakarta.jms.Session;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jms.annotation.EnableJms;
 import org.springframework.jms.config.DefaultJmsListenerContainerFactory;
+import org.springframework.jms.annotation.JmsListenerConfigurer;
 import org.springframework.jms.config.JmsListenerEndpointRegistrar;
-import org.springframework.jms.config.JmsListenerConfigurer;
 import org.springframework.jms.config.SimpleJmsListenerEndpoint;
 import lombok.extern.slf4j.Slf4j;
 
@@ -58,13 +57,13 @@ public class ArtemisConfig implements JmsListenerConfigurer {
 
         factory.setConnectionFactory(connectionFactory);
         factory.setConcurrency(concurrency);
-        factory.setSessionTransacted(false);
-        factory.setSessionAcknowledgeMode(Session.CLIENT_ACKNOWLEDGE);
-        // Error handling — suppress MessageRedeliveryException (expected when acknowledge is disabled)
+        factory.setSessionTransacted(true);
+        // Error handling — re-throw MessageRedeliveryException so DMLC performs session.rollback()
         factory.setErrorHandler(t -> {
             Throwable cause = t.getCause();
             if (cause instanceof MessageRedeliveryException) {
-                log.debug("Message redelivery forced (acknowledge disabled)");
+                log.debug("Message redelivery forced (acknowledge disabled) - rollback will trigger redelivery");
+                throw (MessageRedeliveryException) cause;
             } else {
                 log.error("Error in JMS listener: {}", t.getMessage(), t);
             }

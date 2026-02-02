@@ -6,6 +6,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
+import java.util.Set;
+
 /**
  * Handler for BERNARDINI_ASSET_DAMAGES events.
  * Placeholder — specific business logic to be implemented later.
@@ -16,6 +18,11 @@ import org.springframework.stereotype.Component;
 public class AssetDamageEventHandler implements EventTypeHandler {
 
     private static final String SUPPORTED_TYPE = "BERNARDINI_ASSET_DAMAGES";
+
+    @Override
+    public Set<String> supportedEventTypes() {
+        return Set.of(SUPPORTED_TYPE);
+    }
 
     @Override
     public boolean supports(String eventType) {
