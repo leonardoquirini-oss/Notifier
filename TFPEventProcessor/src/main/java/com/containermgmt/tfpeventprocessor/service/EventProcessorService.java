@@ -3,10 +3,11 @@ package com.containermgmt.tfpeventprocessor.service;
 import com.containermgmt.tfpeventprocessor.config.ActiveJDBCConfig;
 import com.containermgmt.tfpeventprocessor.dto.EventMessage;
 import com.containermgmt.tfpeventprocessor.exception.EventProcessingException;
-import com.containermgmt.tfpeventprocessor.model.RawEvent;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.containermgmt.tfpeventprocessor.handler.EventHandlerRegistry;
+import com.containermgmt.tfpeventprocessor.handler.EventTypeHandler;
 
 import lombok.extern.slf4j.Slf4j;
+import org.javalite.activejdbc.Base;
 import org.springframework.stereotype.Service;
 
 import java.sql.Timestamp;
@@ -16,96 +17,73 @@ import java.time.Instant;
  * Event Processor Service
  *
  * Handles the business logic for processing events received from Artemis.
- * Manages ActiveJDBC connections per-thread for concurrent processing.
+ * 1. Upserts the raw event in evt_raw_events (idempotent on message_id)
+ * 2. Dispatches to the appropriate EventTypeHandler via the registry
  */
 @Service
 @Slf4j
 public class EventProcessorService {
 
-    private final ActiveJDBCConfig activeJDBCConfig;
-    private final ObjectMapper objectMapper;
+    private static final String UPSERT_SQL =
+            "INSERT INTO evt_raw_events (id_event, message_id, event_type, event_time, payload, processed_at) " +
+            "VALUES (nextval('s_evt_raw_events'), ?, ?, ?, CAST(? AS jsonb), ?) " +
+            "ON CONFLICT (message_id) DO UPDATE SET " +
+            "  event_type  = EXCLUDED.event_type, " +
+            "  event_time  = EXCLUDED.event_time, " +
+            "  payload     = EXCLUDED.payload, " +
+            "  processed_at = EXCLUDED.processed_at";
 
-    public EventProcessorService(ActiveJDBCConfig activeJDBCConfig, ObjectMapper objectMapper) {
+    private final ActiveJDBCConfig activeJDBCConfig;
+    private final EventHandlerRegistry handlerRegistry;
+
+    public EventProcessorService(ActiveJDBCConfig activeJDBCConfig, EventHandlerRegistry handlerRegistry) {
         this.activeJDBCConfig = activeJDBCConfig;
-        this.objectMapper = objectMapper;
+        this.handlerRegistry = handlerRegistry;
     }
 
     /**
-     * Processes an event message and persists it to the database.
-     *
-     * @param eventMessage the event to process
+     * Processes an event message: upsert raw event, then dispatch to handler.
      */
     public void processEvent(EventMessage eventMessage) {
-        String eventId = eventMessage.getEventId();
-        log.info("Processing event: id={}, type={}", eventId, eventMessage.getEventType());
+        log.info("Processing event: type={}, messageId={}", eventMessage.getEventType(), eventMessage.getMessageId());
 
         try {
-            // Open connection for this thread
             activeJDBCConfig.openConnection();
-
-            // Check for duplicate
-            RawEvent existing = RawEvent.findByEventId(eventId);
-            if (existing != null) {
-                log.warn("Duplicate event detected, skipping: id={}", eventId);
-                return;
-            }
-
-            // Create new event record
-            RawEvent event = new RawEvent();
-            event.set("event_id",     eventId);
-            event.set("event_type",   eventMessage.getEventType());
-            event.set("source",       eventMessage.getSource());
-            event.set("timestamp",    eventMessage.getTimestamp() != null ? Timestamp.from(eventMessage.getTimestamp()) : null);
-            event.set("payload",      serializeToJson(eventMessage.getPayload()));
-            event.set("metadata",     serializeToJson(eventMessage.getMetadata()));
-            event.set("processed_at", Timestamp.from(Instant.now()));
-
-            // Save to database
-            if (!event.saveIt()) {
-                throw new EventProcessingException("Failed to save event: " + eventId + ", errors: " + event.errors());
-            }
-
-            log.info("Successfully processed event: id={}, type={}",
-                eventId, eventMessage.getEventType());
-
+            upsertRawEvent(eventMessage);
+            dispatchToHandler(eventMessage);
         } catch (EventProcessingException e) {
             throw e;
         } catch (Exception e) {
-            log.error("Error processing event: id={}, error={}",eventId, e.getMessage(), e);
-            throw new EventProcessingException("Failed to process event: " + eventId, e);
+            log.error("Error processing event: type={}, messageId={}, error={}",
+                    eventMessage.getEventType(), eventMessage.getMessageId(), e.getMessage(), e);
+            throw new EventProcessingException(
+                    "Failed to process event: type=" + eventMessage.getEventType(), e);
         } finally {
-            // Close connection for this thread
             activeJDBCConfig.closeConnection();
         }
     }
 
-    /**
-     * Processes a raw JSON message string.
-     *
-     * @param json the raw JSON message
-     */
-    public void processRawMessage(String json) {
-        try {
-            EventMessage eventMessage = objectMapper.readValue(json, EventMessage.class);
-            processEvent(eventMessage);
-        } catch (Exception e) {
-            log.error("Failed to parse raw message: {}", e.getMessage(), e);
-            throw new EventProcessingException("Failed to parse event message", e);
-        }
+    private void upsertRawEvent(EventMessage eventMessage) {
+        Timestamp eventTime = eventMessage.getEventTime() != null
+                ? Timestamp.from(eventMessage.getEventTime())
+                : null;
+        Timestamp processedAt = Timestamp.from(Instant.now());
+
+        Base.exec(UPSERT_SQL,
+                eventMessage.getMessageId(),
+                eventMessage.getEventType(),
+                eventTime,
+                eventMessage.getRawPayload(),
+                processedAt);
+
+        log.info("Upserted raw event: messageId={}, type={}",
+                eventMessage.getMessageId(), eventMessage.getEventType());
     }
 
-    /**
-     * Serializes an object to JSON string.
-     */
-    private String serializeToJson(Object obj) {
-        if (obj == null) {
-            return null;
-        }
-        try {
-            return objectMapper.writeValueAsString(obj);
-        } catch (Exception e) {
-            log.warn("Failed to serialize object to JSON: {}", e.getMessage());
-            return null;
-        }
+    private void dispatchToHandler(EventMessage eventMessage) {
+        EventTypeHandler handler = handlerRegistry.getHandler(eventMessage.getEventType());
+        log.debug("Dispatching to handler: {} for eventType={}",
+                handler.getClass().getSimpleName(), eventMessage.getEventType());
+        handler.handle(eventMessage);
     }
 }

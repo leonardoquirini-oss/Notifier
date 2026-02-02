@@ -5,32 +5,41 @@ spring:
   # Apache Artemis Configuration
   artemis:
     mode: native
-    broker-url: tcp://${ARTEMIS_HOST:localhost}:${ARTEMIS_PORT:61616}
-    user: ${ARTEMIS_USER:admin}
-    password: ${ARTEMIS_PASSWORD:admin}
+    
+    broker-url: tcp://artemis-external-connection-test.circletouch.eu:443?sslEnabled=true&trustAll=true&verifyHost=false
+    user: artemis_external
+    password: 6hjzbVP_j8ALBLg
+
+    ## LOCALHOST
+    #broker-url: tcp://artemis-broker:61616
+    #user: admin
+    #password: admin
 
   # JMS Listener Configuration
   jms:
     listener:
       auto-startup: true
-      acknowledge-mode: auto
 
   # PostgreSQL Database Configuration
   datasource:
-    url: jdbc:postgresql://${DB_HOST:172.28.234.122}:${DB_PORT:5432}/${DB_NAME:berlinkdb}
-    username: ${DB_USER:berlink}
-    password: ${DB_PASSWORD:berlink}
+    #url: jdbc:postgresql://${DB_HOST:172.28.234.122}:${DB_PORT:5432}/${DB_NAME:berlinkdb}
+    url: jdbc:postgresql://postgres-service:5432/berlinkdb
+    username: berlink
+    password: berlink
     driver-class-name: org.postgresql.Driver
 
 # Event Processor Configuration
 event-processor:
-  # Queues to listen to (can add more as needed)
-  queues:
-    events: events.queue
-    # secondary: ${EVENT_QUEUE_SECONDARY:events.queue.secondary}
+  # Queues to listen to (comma-separated for multiple queues)
+  queues: BERNARDINI_UNIT_POSITIONS_MESSAGE
+  # Per ascoltare più code:
+  # queues: BERNARDINI_UNIT_POSITIONS_MESSAGE,BERNARDINI_ASSET_DAMAGES,BERNARDINI_UNIT_EVENTS
 
   # JMS concurrency (min-max format)
   concurrency: 3-10
+
+  # Message acknowledge: true = messages consumed normally; false = messages redelivered on restart (dev/test only)
+  acknowledge-messages: false
 
   # Retry configuration
   retry-attempts: 3
@@ -39,7 +48,7 @@ event-processor:
 # Actuator Configuration (Health Checks)
 management:
   endpoints:
-    web:
+    web:  
       exposure:
         include: health,info,metrics
   endpoint:

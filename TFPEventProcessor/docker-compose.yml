@@ -8,19 +8,6 @@ services:
       dockerfile: Dockerfile
     container_name: tfp-event-processor
     environment:
-      # Artemis Configuration
-      ARTEMIS_HOST: ${ARTEMIS_HOST:-artemis}
-      ARTEMIS_PORT: ${ARTEMIS_PORT:-61616}
-      ARTEMIS_USER: ${ARTEMIS_USER:-admin}
-      ARTEMIS_PASSWORD: ${ARTEMIS_PASSWORD:-admin}
-
-      # Database Configuration
-      DB_HOST: ${DB_HOST:-172.28.234.122}
-      DB_PORT: ${DB_PORT:-5432}
-      DB_NAME: ${DB_NAME:-berlinkdb}
-      DB_USER: ${DB_USER:-berlink}
-      DB_PASSWORD: ${DB_PASSWORD:-berlink}
-
       # Event Queue Configuration
       EVENT_QUEUE_PRIMARY: ${EVENT_QUEUE_PRIMARY:-events.queue}
 
@@ -31,7 +18,7 @@ services:
       - "8085:8080"
       - "5205:5005"  # Debug port
     networks:
-      - processor-network
+      - berlink-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/actuator/health"]
@@ -43,6 +30,7 @@ services:
   artemis:
     image: apache/activemq-artemis:2.31.2
     container_name: artemis-broker
+    hostname: artemis-broker
     environment:
       ARTEMIS_USER: admin
       ARTEMIS_PASSWORD: admin
@@ -51,7 +39,7 @@ services:
       - "61616:61616"  # Artemis Core
       - "8161:8161"    # Web Console
     networks:
-      - processor-network
+      - berlink-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8161/console"]
       interval: 10s
@@ -59,8 +47,7 @@ services:
       retries: 5
 
 networks:
-  processor-network:
-    driver: bridge
-    # If connecting to external network (e.g., BERLink network), use:
-    # external: true
-    # name: berlink_network
+  berlink-network:
+    external: true
+    name: berlink-dev_berlink-network
+    

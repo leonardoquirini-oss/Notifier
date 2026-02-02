@@ -3,70 +3,31 @@ package com.containermgmt.tfpeventprocessor.dto;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 
 import java.time.Instant;
-import java.util.Map;
 
 /**
- * Generic Event Message DTO
+ * Lightweight carrier for incoming events.
  *
- * Represents an event received from Artemis queue.
- * Can be extended or replaced with specific DTOs for different event types.
+ * Holds the queue name as event type, the reception timestamp,
+ * and the full raw JSON string (stored as JSONB payload).
  */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class EventMessage {
 
-    /**
-     * Unique identifier for the event
-     */
-    private String eventId;
+    /** JMS Message ID — used for upsert idempotency */
+    private String messageId;
 
-    /**
-     * Type of event (e.g., ORDER_CREATED, USER_REGISTERED, etc.)
-     */
+    /** Event type — the Artemis queue name the message was received from */
     private String eventType;
 
-    /**
-     * Source system that generated the event
-     */
-    private String source;
+    /** Instant the message was received by the listener */
+    private Instant eventTime;
 
-    /**
-     * Timestamp when the event was generated
-     */
-    private Instant timestamp;
-
-    /**
-     * Event payload as key-value pairs
-     */
-    private Map<String, Object> payload;
-
-    /**
-     * Optional metadata about the event
-     */
-    private Map<String, String> metadata;
-
-    /**
-     * Helper method to get a payload field as String
-     */
-    public String getPayloadField(String key) {
-        if (payload == null || !payload.containsKey(key)) {
-            return null;
-        }
-        Object value = payload.get(key);
-        return value != null ? value.toString() : null;
-    }
-
-    /**
-     * Helper method to get a metadata field
-     */
-    public String getMetadataField(String key) {
-        if (metadata == null) {
-            return null;
-        }
-        return metadata.get(key);
-    }
-
+    /** The full raw JSON string as received from the queue */
+    private String rawPayload;
 }

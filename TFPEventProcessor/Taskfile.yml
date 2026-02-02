@@ -1,0 +1,49 @@
+version: '3'
+
+tasks:
+    
+  artemis:    
+    cmds:
+      - task stop-artemis
+      - task start-artemis
+    silent: true  
+
+  start-artemis:    
+    cmds:
+      - docker-compose -f docker-compose.yml up -d artemis
+    silent: true
+
+  stop-artemis:    
+    cmds:
+      - docker-compose -f docker-compose.yml stop artemis
+    silent: true
+    
+  stop-ep:
+    cmds:
+      - docker-compose  -f docker-compose.yml stop tfp-event-processor
+    silent: true  
+  
+  build-ep:
+    cmds:
+      - docker-compose  -f docker-compose.yml build tfp-event-processor
+    silent: true  
+
+  ep:
+    cmds:
+      - task stop-ep
+      - task build-ep
+    silent: true  
+
+  logs-ep:
+    cmds:
+      - docker-compose logs -f tfp-event-processor
+  
+  up:
+    cmds:
+      - docker-compose -f docker-compose.yml up -d
+    silent: true  
+
+  restart:
+    cmds:
+      - docker-compose down && docker-compose -f docker-compose.yml up -d
+    silent: true    
