@@ -30,16 +30,18 @@ spring:
 
 # Event Processor Configuration
 event-processor:
-  # Queues to listen to (comma-separated for multiple queues)
-  queues: BERNARDINI_UNIT_POSITIONS_MESSAGE, BERNARDINI_ASSET_DAMAGES
-  # Per ascoltare più code:
-  # queues: BERNARDINI_UNIT_POSITIONS_MESSAGE,BERNARDINI_ASSET_DAMAGES,BERNARDINI_UNIT_EVENTS
+  # Multicast addresses to subscribe to (comma-separated)
+  addresses: BERNARDINI_UNIT_POSITIONS_MESSAGE, BERNARDINI_ASSET_DAMAGES
+  # Per ascoltare più addresses:
+  # addresses: BERNARDINI_UNIT_POSITIONS_MESSAGE,BERNARDINI_ASSET_DAMAGES,BERNARDINI_UNIT_EVENTS
+
+  # Subscriber name (consumer group ID, like Kafka)
+  # Same name = resume from last consumed offset
+  # Different name = new independent subscription
+  subscriber-name: ${SUBSCRIBER_NAME:tfp-processor}
 
   # JMS concurrency (min-max format)
   concurrency: 3-10
-
-  # Message acknowledge: true = messages consumed normally; false = messages redelivered on restart (dev/test only)
-  acknowledge-messages: false
 
   # Retry configuration
   retry-attempts: 3

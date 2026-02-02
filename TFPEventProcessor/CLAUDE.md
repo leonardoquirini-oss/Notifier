@@ -1,11 +1,11 @@
 # TFP Event Processor - Claude Code Reference
 
-Spring Boot application che consuma eventi da code Apache Artemis e li persiste su PostgreSQL usando ActiveJDBC ORM.
+Spring Boot application che consuma eventi da multicast addresses Apache Artemis (durable subscriptions via FQQN) e li persiste su PostgreSQL usando ActiveJDBC ORM.
 
 ## Tech Stack
 
 - **Framework**: Spring Boot 3.1.5
-- **Messaging**: Apache Artemis (JMS)
+- **Messaging**: Apache Artemis 2.31.2 (multicast/FQQN, Kafka-like consumer groups)
 - **ORM**: JavaLite ActiveJDBC 3.0
 - **Database**: PostgreSQL
 - **Java**: 17
@@ -39,6 +39,8 @@ TFPEventProcessor/
 ├── src/main/resources/
 │   ├── application.yml
 │   └── application-docker.yml
+├── artemis-config/
+│   └── broker.xml              # Broker config (multicast addresses)
 ├── Dockerfile
 ├── docker-compose.yml
 └── pom.xml
@@ -51,6 +53,7 @@ TFPEventProcessor/
 
 | Variable | Default | Descrizione |
 |----------|---------|-------------|
+| `SUBSCRIBER_NAME` | tfp-processor | Nome subscriber (consumer group ID) |
 | `ARTEMIS_HOST` | localhost | Host del broker Artemis |
 | `ARTEMIS_PORT` | 61616 | Porta del broker Artemis |
 | `ARTEMIS_USER` | admin | Username Artemis |
@@ -60,34 +63,25 @@ TFPEventProcessor/
 | `DB_NAME` | berlinkdb | Nome database |
 | `DB_USER` | berlink | Username database |
 | `DB_PASSWORD` | berlink | Password database |
-| `EVENT_QUEUE_PRIMARY` | events.queue | Nome coda principale |
 
-### Code Artemis
+### Multicast Addresses (Artemis)
 
-Le code da ascoltare sono configurabili in `application.yml`:
+Le addresses da ascoltare sono configurabili in `application.yml`:
 
 ```yaml
 event-processor:
-  queues:
-    primary: events.queue
-    # secondary: events.queue.secondary  # Aggiungi altre code se necessario
+  addresses: BERNARDINI_UNIT_POSITIONS_MESSAGE, BERNARDINI_ASSET_DAMAGES
+  subscriber-name: ${SUBSCRIBER_NAME:tfp-processor}
 ```
 
-## Aggiungere Nuove Code
+Le addresses devono essere definite come **multicast** in `artemis-config/broker.xml`.
 
-Per ascoltare una nuova coda, aggiungere un nuovo metodo nel `EventListener.java`:
+## Aggiungere Nuove Addresses
 
-```java
-@JmsListener(
-    destination = "${event-processor.queues.secondary:events.queue.secondary}",
-    containerFactory = "jmsListenerContainerFactory"
-)
-public void onSecondaryQueueMessage(EventMessage eventMessage) {
-    log.debug("Received message from secondary queue: eventId={}",
-        eventMessage.getEventId());
-    processWithRetry(eventMessage);
-}
-```
+1. Aggiungere l'address multicast in `artemis-config/broker.xml`
+2. Aggiungere il nome in `application.yml` sotto `event-processor.addresses`
+3. (Opzionale) Creare un handler specifico nel package `handler/`
+4. Riavviare Artemis e il processor
 
 ## Aggiungere Nuovi Event Handlers
 
@@ -95,8 +89,13 @@ Per gestire un nuovo tipo di evento, creare una classe `@Component` nel package 
 
 ```java
 @Component
-@Order(10) // priorità (più basso = più prioritario)
+@Order(10)
 public class MyNewEventHandler implements EventTypeHandler {
+
+    @Override
+    public Set<String> supportedEventTypes() {
+        return Set.of("MY_EVENT_TYPE");
+    }
 
     @Override
     public boolean supports(String eventType) {
@@ -110,7 +109,7 @@ public class MyNewEventHandler implements EventTypeHandler {
 }
 ```
 
-Il `EventHandlerRegistry` lo scopre automaticamente via component scan.
+Il `EventHandlerRegistry` lo scopre automaticamente via component scan e O(1) HashMap lookup.
 
 ## Retry Logic
 
@@ -128,15 +127,14 @@ event-processor:
 ## Comandi Utili
 
 ```bash
-# Build Frontend 
-task build-fe    # Build frontend
-
-# Build Backend 
-task build-be    # Build frontend
+# Build
+task build-ep
 
 # Logs
-docker-compose logs -f backend
-docker-compose logs -f frontend
+docker-compose logs -f tfp-event-processor
+
+# Console Artemis
+# http://localhost:8161 (admin/admin)
 ```
 
 ## Documentazione
