@@ -252,14 +252,16 @@
                                 <thead class="table-light sticky-top">
                                     <tr>
                                         <th>Query Pattern</th>
+                                        <th>Method</th>
                                         <th class="text-end">P95</th>
                                         <th class="text-end">Avg</th>
                                         <th class="text-end">Count</th>
                                     </tr>
                                 </thead>
                                 <tbody id="slowestQueriesTable">
-                                    <tr th:each="query : ${slowestQueries}">
+                                    <tr th:each="query : ${slowestQueries}" style="cursor:pointer" class="query-row" th:data-hash="${query.queryHash}">
                                         <td class="query-pattern" th:title="${query.queryPattern}" th:text="${query.queryPattern}">SELECT...</td>
+                                        <td class="text-nowrap" th:text="${query.topMethod != null ? query.topMethod : '-'}">-</td>
                                         <td class="text-end"><span class="badge bg-danger" th:text="${query.p95DurationMs} + ' ms'">0 ms</span></td>
                                         <td class="text-end text-muted" th:text="${#numbers.formatDecimal(query.avgDurationMs, 1, 1)} + ' ms'">0 ms</td>
                                         <td class="text-end" th:text="${query.executionCount}">0</td>
@@ -281,14 +283,16 @@
                                 <thead class="table-light sticky-top">
                                     <tr>
                                         <th>Query Pattern</th>
+                                        <th>Method</th>
                                         <th class="text-end">Count</th>
                                         <th class="text-end">Avg</th>
                                         <th class="text-end">P95</th>
                                     </tr>
                                 </thead>
                                 <tbody id="frequentQueriesTable">
-                                    <tr th:each="query : ${mostFrequentQueries}">
+                                    <tr th:each="query : ${mostFrequentQueries}" style="cursor:pointer" class="query-row" th:data-hash="${query.queryHash}">
                                         <td class="query-pattern" th:title="${query.queryPattern}" th:text="${query.queryPattern}">SELECT...</td>
+                                        <td class="text-nowrap" th:text="${query.topMethod != null ? query.topMethod : '-'}">-</td>
                                         <td class="text-end"><span class="badge bg-success" th:text="${query.executionCount}">0</span></td>
                                         <td class="text-end text-muted" th:text="${#numbers.formatDecimal(query.avgDurationMs, 1, 1)} + ' ms'">0 ms</td>
                                         <td class="text-end" th:text="${query.p95DurationMs} + ' ms'">0 ms</td>
@@ -340,6 +344,94 @@
         </div>
     </div>
 
+    <!-- Query Detail Modal -->
+    <div class="modal fade" id="queryDetailModal" tabindex="-1" aria-labelledby="queryDetailModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h6 class="modal-title" id="queryDetailModalLabel">
+                        <i class="bi bi-search me-2"></i>Query Detail: <code id="modalQueryHash"></code>
+                    </h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Metrics -->
+                    <div class="row g-3 mb-4">
+                        <div class="col-4 col-md-2">
+                            <div class="text-muted small">P95</div>
+                            <div class="fw-bold" id="modalP95">-</div>
+                        </div>
+                        <div class="col-4 col-md-2">
+                            <div class="text-muted small">P99</div>
+                            <div class="fw-bold" id="modalP99">-</div>
+                        </div>
+                        <div class="col-4 col-md-2">
+                            <div class="text-muted small">Avg</div>
+                            <div class="fw-bold" id="modalAvg">-</div>
+                        </div>
+                        <div class="col-4 col-md-2">
+                            <div class="text-muted small">Min</div>
+                            <div class="fw-bold" id="modalMin">-</div>
+                        </div>
+                        <div class="col-4 col-md-2">
+                            <div class="text-muted small">Max</div>
+                            <div class="fw-bold" id="modalMax">-</div>
+                        </div>
+                        <div class="col-4 col-md-2">
+                            <div class="text-muted small">Count</div>
+                            <div class="fw-bold" id="modalCount">-</div>
+                        </div>
+                    </div>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-4">
+                            <div class="text-muted small">Method</div>
+                            <div class="fw-bold" id="modalMethod">-</div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="text-muted small">First Seen</div>
+                            <div class="fw-bold" id="modalFirstSeen">-</div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="text-muted small">Last Seen</div>
+                            <div class="fw-bold" id="modalLastSeen">-</div>
+                        </div>
+                    </div>
+
+                    <!-- Query Pattern -->
+                    <div class="mb-4">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6 class="mb-0">Query Pattern</h6>
+                            <button class="btn btn-outline-secondary btn-sm" onclick="copyQueryToClipboard()">
+                                <i class="bi bi-clipboard me-1"></i>Copy
+                            </button>
+                        </div>
+                        <pre class="bg-light p-3 rounded border" id="modalQueryPattern" style="white-space: pre-wrap; word-break: break-all; max-height: 200px; overflow-y: auto; font-size: 0.85rem;"></pre>
+                    </div>
+
+                    <!-- Recent Executions -->
+                    <h6>Recent Executions</h6>
+                    <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                        <table class="table table-sm table-hover mb-0">
+                            <thead class="table-light sticky-top">
+                                <tr>
+                                    <th>Timestamp</th>
+                                    <th class="text-end">Duration</th>
+                                    <th>Method</th>
+                                    <th class="text-end">Row Count</th>
+                                </tr>
+                            </thead>
+                            <tbody id="modalExecutionsTable">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
@@ -350,6 +442,11 @@
         let overview = /*[[${overview}]]*/ {};
         let processorStatus = /*[[${processorStatus}]]*/ {};
 
+        // Data for charts (loaded from API)
+        let timeSeriesData = [];
+        let durationDistribution = null;
+        let currentPeriodHours = 24;
+
         // Chart instances
         let performanceChart, durationDistributionChart, topQueriesChart;
 
@@ -358,12 +455,28 @@
         let refreshTimer;
 
         // Initialize on page load
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', async function() {
+            await loadChartData();
             initCharts();
             updateLastUpdateTime();
             startAutoRefresh();
             setupEventListeners();
         });
+
+        async function loadChartData() {
+            try {
+                const [timeSeriesRes, distributionRes] = await Promise.all([
+                    fetch('/api/query-monitor/time-series?hours=' + currentPeriodHours),
+                    fetch('/api/query-monitor/duration-distribution')
+                ]);
+                timeSeriesData = await timeSeriesRes.json();
+                durationDistribution = await distributionRes.json();
+            } catch (error) {
+                console.error('Error loading chart data:', error);
+                timeSeriesData = [];
+                durationDistribution = null;
+            }
+        }
 
         function initCharts() {
             initPerformanceChart();
@@ -442,35 +555,20 @@
         }
 
         function generateTimeSeriesData() {
-            const now = new Date();
+            // Return empty arrays if no data available
+            if (!timeSeriesData || timeSeriesData.length === 0) {
+                return { p95: [], avg: [] };
+            }
+
             const p95Data = [];
             const avgData = [];
 
-            // Generate data points for the last 24 hours
-            for (let i = 24; i >= 0; i--) {
-                const time = new Date(now.getTime() - i * 3600000);
-
-                // Use actual data if available, otherwise simulate
-                if (slowestQueries.length > 0) {
-                    const baseP95 = slowestQueries[0].p95DurationMs || 100;
-                    const baseAvg = overview.avgDurationMs || 50;
-
-                    // Add some variation
-                    const variation = Math.sin(i / 4) * 0.2 + (Math.random() - 0.5) * 0.1;
-
-                    p95Data.push({
-                        x: time,
-                        y: Math.max(0, baseP95 * (1 + variation))
-                    });
-                    avgData.push({
-                        x: time,
-                        y: Math.max(0, baseAvg * (1 + variation))
-                    });
-                } else {
-                    p95Data.push({ x: time, y: 0 });
-                    avgData.push({ x: time, y: 0 });
-                }
-            }
+            // Use real data from API
+            timeSeriesData.forEach(point => {
+                const time = new Date(point.timestamp);
+                p95Data.push({ x: time, y: point.p95DurationMs || 0 });
+                avgData.push({ x: time, y: point.avgDurationMs || 0 });
+            });
 
             return { p95: p95Data, avg: avgData };
         }
@@ -516,23 +614,18 @@
         }
 
         function calculateDurationDistribution() {
-            const buckets = [0, 0, 0, 0, 0];  // <10, 10-50, 50-100, 100-500, >500
-
-            slowestQueries.forEach(q => {
-                const p95 = q.p95DurationMs || 0;
-                if (p95 < 10) buckets[0]++;
-                else if (p95 < 50) buckets[1]++;
-                else if (p95 < 100) buckets[2]++;
-                else if (p95 < 500) buckets[3]++;
-                else buckets[4]++;
-            });
-
-            // Ensure at least some data for visualization
-            if (buckets.every(b => b === 0)) {
-                return [1, 1, 1, 1, 1];
+            // Use real data from API
+            if (!durationDistribution) {
+                return [0, 0, 0, 0, 0];
             }
 
-            return buckets;
+            return [
+                durationDistribution.under10ms || 0,
+                durationDistribution.from10to50ms || 0,
+                durationDistribution.from50to100ms || 0,
+                durationDistribution.from100to500ms || 0,
+                durationDistribution.over500ms || 0
+            ];
         }
 
         function initTopQueriesChart() {
@@ -612,6 +705,14 @@
         }
 
         function setupEventListeners() {
+            // Query row click (delegated)
+            document.addEventListener('click', function(e) {
+                const row = e.target.closest('.query-row');
+                if (row && row.dataset.hash) {
+                    openQueryDetail(row.dataset.hash);
+                }
+            });
+
             // Time filter buttons
             document.querySelectorAll('.time-filter .btn').forEach(btn => {
                 btn.addEventListener('click', function() {
@@ -631,7 +732,7 @@
             });
         }
 
-        function updatePerformanceChart(period) {
+        async function updatePerformanceChart(period) {
             // Update chart time scale based on period
             let unit = 'hour';
             let hours = 24;
@@ -643,21 +744,34 @@
                 case '7d': hours = 168; unit = 'day'; break;
             }
 
-            const now = new Date();
+            // Fetch new data for the selected period
+            currentPeriodHours = hours;
+            try {
+                const response = await fetch('/api/query-monitor/time-series?hours=' + hours);
+                timeSeriesData = await response.json();
+            } catch (error) {
+                console.error('Error fetching time series data:', error);
+                timeSeriesData = [];
+            }
+
+            // Return empty data if no data available
+            if (!timeSeriesData || timeSeriesData.length === 0) {
+                performanceChart.data.datasets[0].data = [];
+                performanceChart.data.datasets[1].data = [];
+                performanceChart.options.scales.x.time.unit = unit;
+                performanceChart.update('active');
+                return;
+            }
+
+            // Use real data from API
             const p95Data = [];
             const avgData = [];
-            const steps = period === '1h' ? 12 : (period === '7d' ? 7 : hours);
-            const stepMs = (hours * 3600000) / steps;
 
-            for (let i = steps; i >= 0; i--) {
-                const time = new Date(now.getTime() - i * stepMs);
-                const baseP95 = slowestQueries.length > 0 ? slowestQueries[0].p95DurationMs : 100;
-                const baseAvg = overview.avgDurationMs || 50;
-                const variation = Math.sin(i / 4) * 0.2 + (Math.random() - 0.5) * 0.1;
-
-                p95Data.push({ x: time, y: Math.max(0, baseP95 * (1 + variation)) });
-                avgData.push({ x: time, y: Math.max(0, baseAvg * (1 + variation)) });
-            }
+            timeSeriesData.forEach(point => {
+                const time = new Date(point.timestamp);
+                p95Data.push({ x: time, y: point.p95DurationMs || 0 });
+                avgData.push({ x: time, y: point.avgDurationMs || 0 });
+            });
 
             performanceChart.data.datasets[0].data = p95Data;
             performanceChart.data.datasets[1].data = avgData;
@@ -680,21 +794,25 @@
 
             try {
                 // Fetch all data in parallel
-                const [overviewRes, slowestRes, frequentRes, processorRes] = await Promise.all([
+                const [overviewRes, slowestRes, frequentRes, processorRes, timeSeriesRes, distributionRes] = await Promise.all([
                     fetch('/api/query-monitor/overview'),
                     fetch('/api/query-monitor/slowest?limit=10'),
                     fetch('/api/query-monitor/most-frequent?limit=10'),
-                    fetch('/api/query-monitor/processor/status')
+                    fetch('/api/query-monitor/processor/status'),
+                    fetch('/api/query-monitor/time-series?hours=' + currentPeriodHours),
+                    fetch('/api/query-monitor/duration-distribution')
                 ]);
 
                 overview = await overviewRes.json();
                 slowestQueries = await slowestRes.json();
                 mostFrequentQueries = await frequentRes.json();
                 processorStatus = await processorRes.json();
+                timeSeriesData = await timeSeriesRes.json();
+                durationDistribution = await distributionRes.json();
 
                 updateKPIs();
                 updateTables();
-                updateCharts();
+                await updateCharts();
                 updateProcessorDetails();
                 updateLastUpdateTime();
 
@@ -717,8 +835,9 @@
             // Update slowest queries table
             const slowestBody = document.getElementById('slowestQueriesTable');
             slowestBody.innerHTML = slowestQueries.map(q => `
-                <tr>
+                <tr style="cursor:pointer" class="query-row" data-hash="${escapeHtml(q.queryHash)}">
                     <td class="query-pattern" title="${escapeHtml(q.queryPattern)}">${escapeHtml(q.queryPattern)}</td>
+                    <td class="text-nowrap">${escapeHtml(q.topMethod) || '-'}</td>
                     <td class="text-end"><span class="badge bg-danger">${q.p95DurationMs} ms</span></td>
                     <td class="text-end text-muted">${(q.avgDurationMs || 0).toFixed(1)} ms</td>
                     <td class="text-end">${q.executionCount}</td>
@@ -728,8 +847,9 @@
             // Update frequent queries table
             const frequentBody = document.getElementById('frequentQueriesTable');
             frequentBody.innerHTML = mostFrequentQueries.map(q => `
-                <tr>
+                <tr style="cursor:pointer" class="query-row" data-hash="${escapeHtml(q.queryHash)}">
                     <td class="query-pattern" title="${escapeHtml(q.queryPattern)}">${escapeHtml(q.queryPattern)}</td>
+                    <td class="text-nowrap">${escapeHtml(q.topMethod) || '-'}</td>
                     <td class="text-end"><span class="badge bg-success">${q.executionCount}</span></td>
                     <td class="text-end text-muted">${(q.avgDurationMs || 0).toFixed(1)} ms</td>
                     <td class="text-end">${q.p95DurationMs} ms</td>
@@ -737,7 +857,7 @@
             `).join('');
         }
 
-        function updateCharts() {
+        async function updateCharts() {
             // Update duration distribution
             const distribution = calculateDurationDistribution();
             durationDistributionChart.data.datasets[0].data = distribution;
@@ -748,10 +868,31 @@
             const type = activeToggle ? activeToggle.dataset.type : 'slowest';
             updateTopQueriesChart(type);
 
-            // Update performance chart
-            const activePeriod = document.querySelector('.time-filter .btn.active');
-            const period = activePeriod ? activePeriod.dataset.period : '24h';
-            updatePerformanceChart(period);
+            // Update performance chart with already loaded data (no re-fetch)
+            updatePerformanceChartWithData();
+        }
+
+        function updatePerformanceChartWithData() {
+            // Use data already loaded in timeSeriesData
+            if (!timeSeriesData || timeSeriesData.length === 0) {
+                performanceChart.data.datasets[0].data = [];
+                performanceChart.data.datasets[1].data = [];
+                performanceChart.update('active');
+                return;
+            }
+
+            const p95Data = [];
+            const avgData = [];
+
+            timeSeriesData.forEach(point => {
+                const time = new Date(point.timestamp);
+                p95Data.push({ x: time, y: point.p95DurationMs || 0 });
+                avgData.push({ x: time, y: point.avgDurationMs || 0 });
+            });
+
+            performanceChart.data.datasets[0].data = p95Data;
+            performanceChart.data.datasets[1].data = avgData;
+            performanceChart.update('active');
         }
 
         function updateProcessorDetails() {
@@ -778,6 +919,81 @@
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
+        }
+
+        // Query Detail Modal
+        let queryDetailModal = null;
+
+        async function openQueryDetail(hash) {
+            try {
+                const response = await fetch('/api/query-monitor/' + hash);
+                if (!response.ok) {
+                    console.error('Failed to fetch query detail:', response.status);
+                    return;
+                }
+                const detail = response.status === 204 ? null : await response.json();
+                if (!detail || !detail.metrics) {
+                    console.error('No detail found for query:', hash);
+                    return;
+                }
+
+                const m = detail.metrics;
+
+                // Populate metrics
+                document.getElementById('modalQueryHash').textContent = hash;
+                document.getElementById('modalP95').textContent = m.p95DurationMs + ' ms';
+                document.getElementById('modalP99').textContent = m.p99DurationMs + ' ms';
+                document.getElementById('modalAvg').textContent = (m.avgDurationMs || 0).toFixed(1) + ' ms';
+                document.getElementById('modalMin').textContent = m.minDurationMs + ' ms';
+                document.getElementById('modalMax').textContent = m.maxDurationMs + ' ms';
+                document.getElementById('modalCount').textContent = m.executionCount;
+                document.getElementById('modalMethod').textContent = m.topMethod || '-';
+                document.getElementById('modalFirstSeen').textContent = m.firstSeen ? new Date(m.firstSeen).toLocaleString() : '-';
+                document.getElementById('modalLastSeen').textContent = m.lastSeen ? new Date(m.lastSeen).toLocaleString() : '-';
+
+                // Populate query pattern
+                document.getElementById('modalQueryPattern').textContent = m.queryPattern || '-';
+
+                // Populate recent executions table
+                const tbody = document.getElementById('modalExecutionsTable');
+                if (detail.recentExecutions && detail.recentExecutions.length > 0) {
+                    tbody.innerHTML = detail.recentExecutions.map(ex => `
+                        <tr>
+                            <td class="text-nowrap">${ex.timestamp ? new Date(ex.timestamp).toLocaleString() : '-'}</td>
+                            <td class="text-end">${ex.durationMs} ms</td>
+                            <td>${escapeHtml(ex.method) || '-'}</td>
+                            <td class="text-end">${ex.rowCount != null ? ex.rowCount : '-'}</td>
+                        </tr>
+                    `).join('');
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No recent executions</td></tr>';
+                }
+
+                // Show modal
+                if (!queryDetailModal) {
+                    queryDetailModal = new bootstrap.Modal(document.getElementById('queryDetailModal'));
+                }
+                queryDetailModal.show();
+
+            } catch (error) {
+                console.error('Error opening query detail:', error);
+            }
+        }
+
+        function copyQueryToClipboard() {
+            const queryText = document.getElementById('modalQueryPattern').textContent;
+            navigator.clipboard.writeText(queryText).then(() => {
+                const btn = document.querySelector('#queryDetailModal .btn-outline-secondary');
+                const originalHtml = btn.innerHTML;
+                btn.innerHTML = '<i class="bi bi-check me-1"></i>Copied!';
+                btn.classList.replace('btn-outline-secondary', 'btn-success');
+                setTimeout(() => {
+                    btn.innerHTML = originalHtml;
+                    btn.classList.replace('btn-success', 'btn-outline-secondary');
+                }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+            });
         }
     </script>
 </body>

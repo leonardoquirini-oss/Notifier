@@ -1,9 +1,11 @@
 package it.berlink.monitoring.controller;
 
+import it.berlink.monitoring.model.DurationDistribution;
 import it.berlink.monitoring.model.MonitorOverview;
 import it.berlink.monitoring.model.ProcessorStatus;
 import it.berlink.monitoring.model.QueryDetail;
 import it.berlink.monitoring.model.QueryMetric;
+import it.berlink.monitoring.model.TimeSeriesPoint;
 import it.berlink.monitoring.service.QueryLogFileProcessor;
 import it.berlink.monitoring.service.QueryMonitorService;
 import lombok.RequiredArgsConstructor;
@@ -78,5 +80,27 @@ public class QueryMonitorController {
     @GetMapping("/processor/status")
     public ResponseEntity<ProcessorStatus> getProcessorStatus() {
         return ResponseEntity.ok(fileProcessor.getStatus());
+    }
+
+    /**
+     * Returns time series data for performance charts.
+     *
+     * @param hours Number of hours to look back (default 24)
+     * @return List of time series points aggregated by hour
+     */
+    @GetMapping("/time-series")
+    public ResponseEntity<List<TimeSeriesPoint>> getTimeSeries(
+            @RequestParam(defaultValue = "24") int hours) {
+        return ResponseEntity.ok(monitorService.getTimeSeriesData(hours));
+    }
+
+    /**
+     * Returns duration distribution across predefined buckets.
+     *
+     * @return Duration distribution with counts per bucket
+     */
+    @GetMapping("/duration-distribution")
+    public ResponseEntity<DurationDistribution> getDurationDistribution() {
+        return ResponseEntity.ok(monitorService.getDurationDistribution());
     }
 }

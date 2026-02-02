@@ -1,9 +1,11 @@
 package it.berlink.monitoring.service;
 
+import it.berlink.monitoring.model.DurationDistribution;
 import it.berlink.monitoring.model.ExecutionPoint;
 import it.berlink.monitoring.model.MonitorOverview;
 import it.berlink.monitoring.model.QueryDetail;
 import it.berlink.monitoring.model.QueryMetric;
+import it.berlink.monitoring.model.TimeSeriesPoint;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -93,6 +95,16 @@ public class QueryMonitorService {
             .sorted()
             .toArray();
 
+        // Compute the most frequent method from samples
+        String topMethod = samples.stream()
+            .map(ExecutionPoint::getMethod)
+            .filter(Objects::nonNull)
+            .collect(Collectors.groupingBy(m -> m, Collectors.counting()))
+            .entrySet().stream()
+            .max(Map.Entry.comparingByValue())
+            .map(Map.Entry::getKey)
+            .orElse(null);
+
         QueryMetric metric = QueryMetric.builder()
             .queryHash(queryHash)
             .queryPattern(normalizedQuery)
@@ -111,6 +123,7 @@ public class QueryMonitorService {
                 .map(ExecutionPoint::getTimestamp)
                 .max(Instant::compareTo)
                 .orElse(Instant.now()))
+            .topMethod(topMethod)
             .build();
 
         redisTemplate.opsForValue().set(metricKey, metric, Duration.ofDays(ttlDays));
@@ -315,6 +328,7 @@ public class QueryMonitorService {
                     .p99DurationMs(((Number) map.get("p99DurationMs")).longValue())
                     .firstSeen(parseInstant(map.get("firstSeen")))
                     .lastSeen(parseInstant(map.get("lastSeen")))
+                    .topMethod((String) map.get("topMethod"))
                     .build();
             } catch (Exception e) {
                 log.warn("Failed to convert map to QueryMetric: {}", e.getMessage());
@@ -334,5 +348,130 @@ public class QueryMonitorService {
             return Instant.ofEpochMilli(num.longValue());
         }
         return null;
+    }
+
+    /**
+     * Returns time series data aggregated by hourly intervals.
+     *
+     * @param hours Number of hours to look back
+     * @return List of time series points with aggregated metrics
+     */
+    public List<TimeSeriesPoint> getTimeSeriesData(int hours) {
+        List<ExecutionPoint> allExecutions = getAllExecutions();
+        if (allExecutions.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        Instant cutoff = Instant.now().minus(Duration.ofHours(hours));
+
+        // Filter executions within the time range
+        List<ExecutionPoint> filteredExecutions = allExecutions.stream()
+            .filter(ep -> ep.getTimestamp() != null && ep.getTimestamp().isAfter(cutoff))
+            .toList();
+
+        if (filteredExecutions.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        // Group by hour
+        Map<Instant, List<ExecutionPoint>> byHour = filteredExecutions.stream()
+            .collect(Collectors.groupingBy(ep -> {
+                Instant ts = ep.getTimestamp();
+                return ts.truncatedTo(java.time.temporal.ChronoUnit.HOURS);
+            }));
+
+        // Convert to time series points
+        List<TimeSeriesPoint> result = new ArrayList<>();
+        for (Map.Entry<Instant, List<ExecutionPoint>> entry : byHour.entrySet()) {
+            List<ExecutionPoint> hourExecutions = entry.getValue();
+
+            long[] durations = hourExecutions.stream()
+                .mapToLong(ExecutionPoint::getDurationMs)
+                .sorted()
+                .toArray();
+
+            double avg = Arrays.stream(durations).average().orElse(0);
+            long p95 = percentile(durations, 95);
+
+            result.add(TimeSeriesPoint.builder()
+                .timestamp(entry.getKey())
+                .avgDurationMs(avg)
+                .p95DurationMs(p95)
+                .executionCount(hourExecutions.size())
+                .build());
+        }
+
+        // Sort by timestamp
+        result.sort(Comparator.comparing(TimeSeriesPoint::getTimestamp));
+        return result;
+    }
+
+    /**
+     * Returns the distribution of execution durations across predefined buckets.
+     *
+     * @return Duration distribution with counts per bucket
+     */
+    public DurationDistribution getDurationDistribution() {
+        List<ExecutionPoint> allExecutions = getAllExecutions();
+
+        long under10 = 0, from10to50 = 0, from50to100 = 0, from100to500 = 0, over500 = 0;
+
+        for (ExecutionPoint ep : allExecutions) {
+            long duration = ep.getDurationMs();
+            if (duration < 10) {
+                under10++;
+            } else if (duration < 50) {
+                from10to50++;
+            } else if (duration < 100) {
+                from50to100++;
+            } else if (duration < 500) {
+                from100to500++;
+            } else {
+                over500++;
+            }
+        }
+
+        return DurationDistribution.builder()
+            .under10ms(under10)
+            .from10to50ms(from10to50)
+            .from50to100ms(from50to100)
+            .from100to500ms(from100to500)
+            .over500ms(over500)
+            .totalExecutions(allExecutions.size())
+            .build();
+    }
+
+    /**
+     * Retrieves all execution points from all tracked queries.
+     */
+    private List<ExecutionPoint> getAllExecutions() {
+        Set<Object> hashes = redisTemplate.opsForSet().members(INDEX_KEY);
+        if (hashes == null || hashes.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<ExecutionPoint> allExecutions = new ArrayList<>();
+        for (Object hashObj : hashes) {
+            String hash = hashObj.toString();
+            String samplesKey = KEY_PREFIX + hash + SAMPLES_SUFFIX;
+            List<Object> rawSamples = redisTemplate.opsForList().range(samplesKey, 0, -1);
+
+            if (rawSamples != null) {
+                for (Object obj : rawSamples) {
+                    if (obj instanceof ExecutionPoint ep) {
+                        if (ep.getTimestamp() != null) {
+                            allExecutions.add(ep);
+                        }
+                    } else if (obj instanceof Map) {
+                        ExecutionPoint ep = mapToExecutionPoint(obj);
+                        if (ep != null && ep.getTimestamp() != null) {
+                            allExecutions.add(ep);
+                        }
+                    }
+                }
+            }
+        }
+
+        return allExecutions;
     }
 }

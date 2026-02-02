@@ -27,4 +27,5 @@ public class QueryMetric {
     private long p99DurationMs;
     private Instant firstSeen;
     private Instant lastSeen;
+    private String topMethod;
 }
