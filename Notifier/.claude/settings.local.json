@@ -3,7 +3,8 @@
     "allow": [
       "Read(//mnt/c/Projects/GIT/ContainerManagementSystem/RCS/backend/**)",
       "Read(//mnt/c/Projects/GIT/ContainerManagementSystem/**)",
-      "Bash(chmod:*)"
+      "Bash(chmod:*)",
+      "Bash(find:*)"
     ],
     "deny": [],
     "ask": []
