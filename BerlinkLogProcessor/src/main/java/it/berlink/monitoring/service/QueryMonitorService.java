@@ -6,6 +6,7 @@ import it.berlink.monitoring.model.MonitorOverview;
 import it.berlink.monitoring.model.PaginatedResult;
 import it.berlink.monitoring.model.QueryDetail;
 import it.berlink.monitoring.model.QueryMetric;
+import it.berlink.monitoring.model.QueryMetricWithTrend;
 import it.berlink.monitoring.model.TimeSeriesPoint;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -66,10 +67,18 @@ public class QueryMonitorService {
         log.debug("Recorded execution for query {}: {}ms", queryHash, execution.getDurationMs());
     }
 
-    private void updateMetrics(String queryHash, String normalizedQuery, String metricKey, String samplesKey) {
-        List<Object> rawSamples = redisTemplate.opsForList().range(samplesKey, 0, -1);
+    /**
+     * Loads and parses all samples for a given query hash from Redis.
+     */
+    private List<ExecutionPoint> getSamplesForQuery(String queryHash) {
+        String samplesKey = KEY_PREFIX + queryHash + SAMPLES_SUFFIX;
+        return parseSamplesFromRedis(samplesKey, -1);
+    }
+
+    private List<ExecutionPoint> parseSamplesFromRedis(String samplesKey, long end) {
+        List<Object> rawSamples = redisTemplate.opsForList().range(samplesKey, 0, end);
         if (rawSamples == null || rawSamples.isEmpty()) {
-            return;
+            return Collections.emptyList();
         }
 
         List<ExecutionPoint> samples = rawSamples.stream()
@@ -79,7 +88,6 @@ public class QueryMonitorService {
             .toList();
 
         if (samples.isEmpty()) {
-            // Try to handle LinkedHashMap format from JSON deserialization
             samples = rawSamples.stream()
                 .filter(obj -> obj instanceof Map)
                 .map(this::mapToExecutionPoint)
@@ -87,6 +95,11 @@ public class QueryMonitorService {
                 .toList();
         }
 
+        return samples;
+    }
+
+    private void updateMetrics(String queryHash, String normalizedQuery, String metricKey, String samplesKey) {
+        List<ExecutionPoint> samples = parseSamplesFromRedis(samplesKey, -1);
         if (samples.isEmpty()) {
             return;
         }
@@ -202,43 +215,63 @@ public class QueryMonitorService {
             String queryFilter, String methodFilter) {
 
         List<QueryMetric> all = getAllMetrics();
+        all = filterMetrics(all, queryFilter, methodFilter);
 
-        // Apply filters
-        if (queryFilter != null && !queryFilter.isBlank()) {
-            String lowerFilter = queryFilter.toLowerCase();
-            all = all.stream()
-                .filter(m -> m.getQueryPattern() != null
-                    && m.getQueryPattern().toLowerCase().contains(lowerFilter))
-                .collect(Collectors.toList());
-        }
-        if (methodFilter != null && !methodFilter.isBlank()) {
-            String lowerFilter = methodFilter.toLowerCase();
-            all = all.stream()
-                .filter(m -> m.getTopMethod() != null
-                    && m.getTopMethod().toLowerCase().contains(lowerFilter))
-                .collect(Collectors.toList());
-        }
-
-        // Sort
         Comparator<QueryMetric> comparator = buildComparator(sortBy);
         if ("desc".equalsIgnoreCase(sortDir)) {
             comparator = comparator.reversed();
         }
         all.sort(comparator);
 
-        // Paginate
-        long totalElements = all.size();
-        int totalPages = (int) Math.ceil((double) totalElements / size);
-        int fromIndex = Math.min(page * size, all.size());
-        int toIndex = Math.min(fromIndex + size, all.size());
-        List<QueryMetric> content = all.subList(fromIndex, toIndex);
+        return paginate(all, page, size);
+    }
 
-        return PaginatedResult.<QueryMetric>builder()
-            .content(content)
-            .totalElements(totalElements)
-            .totalPages(totalPages)
-            .currentPage(page)
-            .build();
+    /**
+     * Returns queries with windowed P95 calculation and trend indicators.
+     */
+    public PaginatedResult<QueryMetricWithTrend> getQueriesPaginatedWindowed(
+            int page, int size, String sortBy, String sortDir,
+            String queryFilter, String methodFilter, int timeWindowHours) {
+
+        Set<Object> hashes = redisTemplate.opsForSet().members(INDEX_KEY);
+        if (hashes == null || hashes.isEmpty()) {
+            return PaginatedResult.<QueryMetricWithTrend>builder()
+                .content(Collections.emptyList())
+                .totalElements(0).totalPages(0).currentPage(page).build();
+        }
+
+        Instant now = Instant.now();
+        Instant windowStart = now.minus(Duration.ofHours(timeWindowHours));
+        Instant prevWindowStart = now.minus(Duration.ofHours((long) timeWindowHours * 2));
+
+        List<QueryMetricWithTrend> results = new ArrayList<>();
+        for (Object hashObj : hashes) {
+            String hash = hashObj.toString();
+            String metricKey = KEY_PREFIX + hash + METRIC_SUFFIX;
+            Object metricObj = redisTemplate.opsForValue().get(metricKey);
+            if (metricObj == null) continue;
+
+            QueryMetric base = convertToQueryMetric(metricObj);
+            if (base == null) continue;
+
+            List<ExecutionPoint> samples = getSamplesForQuery(hash);
+            QueryMetricWithTrend windowed = buildWindowedMetric(base, samples, windowStart, now, prevWindowStart);
+            if (windowed != null) {
+                results.add(windowed);
+            }
+        }
+
+        // Filter
+        results = filterMetrics(results, queryFilter, methodFilter);
+
+        // Sort using same comparator logic (QueryMetricWithTrend has same getter names)
+        Comparator<QueryMetricWithTrend> comparator = buildComparatorForTrend(sortBy);
+        if ("desc".equalsIgnoreCase(sortDir)) {
+            comparator = comparator.reversed();
+        }
+        results.sort(comparator);
+
+        return paginate(results, page, size);
     }
 
     private Comparator<QueryMetric> buildComparator(String sortBy) {
@@ -248,6 +281,7 @@ public class QueryMonitorService {
         return switch (sortBy) {
             case "avgDurationMs" -> Comparator.comparingDouble(QueryMetric::getAvgDurationMs);
             case "executionCount" -> Comparator.comparingLong(QueryMetric::getExecutionCount);
+            case "impactScore" -> Comparator.comparingDouble(QueryMetric::getImpactScore);
             case "queryPattern" -> Comparator.comparing(
                 QueryMetric::getQueryPattern, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER));
             case "topMethod" -> Comparator.comparing(
@@ -256,12 +290,159 @@ public class QueryMonitorService {
         };
     }
 
+    private Comparator<QueryMetricWithTrend> buildComparatorForTrend(String sortBy) {
+        if (sortBy == null) {
+            return Comparator.comparingLong(QueryMetricWithTrend::getP95DurationMs);
+        }
+        return switch (sortBy) {
+            case "avgDurationMs" -> Comparator.comparingDouble(QueryMetricWithTrend::getAvgDurationMs);
+            case "executionCount" -> Comparator.comparingLong(QueryMetricWithTrend::getExecutionCount);
+            case "impactScore" -> Comparator.comparingDouble(QueryMetricWithTrend::getImpactScore);
+            case "queryPattern" -> Comparator.comparing(
+                QueryMetricWithTrend::getQueryPattern, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER));
+            case "topMethod" -> Comparator.comparing(
+                QueryMetricWithTrend::getTopMethod, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER));
+            default -> Comparator.comparingLong(QueryMetricWithTrend::getP95DurationMs);
+        };
+    }
+
+    private <T> List<T> filterMetrics(List<T> items, String queryFilter, String methodFilter) {
+        List<T> result = new ArrayList<>(items);
+        if (queryFilter != null && !queryFilter.isBlank()) {
+            String lowerFilter = queryFilter.toLowerCase();
+            result = result.stream()
+                .filter(m -> {
+                    String pattern = (m instanceof QueryMetric qm) ? qm.getQueryPattern()
+                        : ((QueryMetricWithTrend) m).getQueryPattern();
+                    return pattern != null && pattern.toLowerCase().contains(lowerFilter);
+                })
+                .collect(Collectors.toList());
+        }
+        if (methodFilter != null && !methodFilter.isBlank()) {
+            String lowerFilter = methodFilter.toLowerCase();
+            result = result.stream()
+                .filter(m -> {
+                    String method = (m instanceof QueryMetric qm) ? qm.getTopMethod()
+                        : ((QueryMetricWithTrend) m).getTopMethod();
+                    return method != null && method.toLowerCase().contains(lowerFilter);
+                })
+                .collect(Collectors.toList());
+        }
+        return result;
+    }
+
+    private <T> PaginatedResult<T> paginate(List<T> items, int page, int size) {
+        long totalElements = items.size();
+        int totalPages = (int) Math.ceil((double) totalElements / size);
+        int fromIndex = Math.min(page * size, items.size());
+        int toIndex = Math.min(fromIndex + size, items.size());
+        List<T> content = items.subList(fromIndex, toIndex);
+
+        return PaginatedResult.<T>builder()
+            .content(content)
+            .totalElements(totalElements)
+            .totalPages(totalPages)
+            .currentPage(page)
+            .build();
+    }
+
+    private long calculateWindowedP95(List<ExecutionPoint> samples, Instant from, Instant to) {
+        long[] durations = samples.stream()
+            .filter(ep -> ep.getTimestamp() != null
+                && !ep.getTimestamp().isBefore(from)
+                && ep.getTimestamp().isBefore(to))
+            .mapToLong(ExecutionPoint::getDurationMs)
+            .sorted()
+            .toArray();
+
+        if (durations.length == 0) return -1;
+        return percentile(durations, 95);
+    }
+
+    private QueryMetricWithTrend buildWindowedMetric(
+            QueryMetric base, List<ExecutionPoint> samples,
+            Instant windowStart, Instant windowEnd, Instant prevWindowStart) {
+
+        long currentP95 = calculateWindowedP95(samples, windowStart, windowEnd);
+        if (currentP95 < 0) {
+            return null; // no samples in current window
+        }
+
+        // Recalculate execution count and avg for current window
+        List<ExecutionPoint> windowSamples = samples.stream()
+            .filter(ep -> ep.getTimestamp() != null
+                && !ep.getTimestamp().isBefore(windowStart)
+                && ep.getTimestamp().isBefore(windowEnd))
+            .toList();
+
+        long[] windowDurations = windowSamples.stream()
+            .mapToLong(ExecutionPoint::getDurationMs)
+            .sorted()
+            .toArray();
+
+        QueryMetricWithTrend result = QueryMetricWithTrend.builder()
+            .queryHash(base.getQueryHash())
+            .queryPattern(base.getQueryPattern())
+            .executionCount(windowDurations.length)
+            .avgDurationMs(Arrays.stream(windowDurations).average().orElse(0))
+            .minDurationMs(windowDurations[0])
+            .maxDurationMs(windowDurations[windowDurations.length - 1])
+            .p50DurationMs(percentile(windowDurations, 50))
+            .p95DurationMs(currentP95)
+            .p99DurationMs(percentile(windowDurations, 99))
+            .firstSeen(base.getFirstSeen())
+            .lastSeen(base.getLastSeen())
+            .topMethod(base.getTopMethod())
+            .build();
+
+        // Impact score: recencyFactor = 1.0 for windowed (samples already filtered)
+        result.setImpactScore(currentP95 * Math.log(windowDurations.length + 1) / Math.log(2));
+
+        long prevP95 = calculateWindowedP95(samples, prevWindowStart, windowStart);
+        if (prevP95 < 0) {
+            result.setTrend("new");
+            result.setTrendPercent(0);
+            result.setPreviousP95Ms(null);
+        } else {
+            result.setPreviousP95Ms(prevP95);
+            if (prevP95 == 0) {
+                result.setTrend(currentP95 > 0 ? "degrading" : "stable");
+                result.setTrendPercent(currentP95 > 0 ? 100.0 : 0);
+            } else {
+                double changePercent = ((double)(currentP95 - prevP95) / prevP95) * 100.0;
+                result.setTrendPercent(Math.round(changePercent * 10.0) / 10.0);
+                if (changePercent > 10) {
+                    result.setTrend("degrading");
+                } else if (changePercent < -10) {
+                    result.setTrend("improving");
+                } else {
+                    result.setTrend("stable");
+                }
+            }
+        }
+
+        return result;
+    }
+
+    private double calculateImpactScore(long p95, long executionCount, Instant lastSeen) {
+        double recencyFactor = computeRecencyFactor(lastSeen);
+        return p95 * Math.log(executionCount + 1) / Math.log(2) * recencyFactor;
+    }
+
+    private double computeRecencyFactor(Instant lastSeen) {
+        if (lastSeen == null) return 0.2;
+        long hoursAgo = Duration.between(lastSeen, Instant.now()).toHours();
+        if (hoursAgo < 1) return 1.0;
+        if (hoursAgo < 24) return 0.8;
+        if (hoursAgo < 168) return 0.5;
+        return 0.2;
+    }
+
     /**
      * Returns detailed information about a specific query.
      */
     public Optional<QueryDetail> getQueryDetail(String queryHash) {
         String metricKey = KEY_PREFIX + queryHash + METRIC_SUFFIX;
-        String samplesKey = KEY_PREFIX + queryHash + SAMPLES_SUFFIX;
 
         Object metricObj = redisTemplate.opsForValue().get(metricKey);
         if (metricObj == null) {
@@ -273,21 +454,8 @@ public class QueryMonitorService {
             return Optional.empty();
         }
 
-        List<Object> rawSamples = redisTemplate.opsForList().range(samplesKey, 0, 99);
-        List<ExecutionPoint> recentExecutions = new ArrayList<>();
-
-        if (rawSamples != null) {
-            for (Object obj : rawSamples) {
-                if (obj instanceof ExecutionPoint ep) {
-                    recentExecutions.add(ep);
-                } else if (obj instanceof Map) {
-                    ExecutionPoint ep = mapToExecutionPoint(obj);
-                    if (ep != null) {
-                        recentExecutions.add(ep);
-                    }
-                }
-            }
-        }
+        String samplesKey = KEY_PREFIX + queryHash + SAMPLES_SUFFIX;
+        List<ExecutionPoint> recentExecutions = parseSamplesFromRedis(samplesKey, 99);
 
         return Optional.of(QueryDetail.builder()
             .metrics(metric)
@@ -362,6 +530,10 @@ public class QueryMonitorService {
             if (metricObj != null) {
                 QueryMetric metric = convertToQueryMetric(metricObj);
                 if (metric != null) {
+                    metric.setImpactScore(calculateImpactScore(
+                        metric.getP95DurationMs(),
+                        metric.getExecutionCount(),
+                        metric.getLastSeen()));
                     metrics.add(metric);
                 }
             }
@@ -515,24 +687,7 @@ public class QueryMonitorService {
 
         List<ExecutionPoint> allExecutions = new ArrayList<>();
         for (Object hashObj : hashes) {
-            String hash = hashObj.toString();
-            String samplesKey = KEY_PREFIX + hash + SAMPLES_SUFFIX;
-            List<Object> rawSamples = redisTemplate.opsForList().range(samplesKey, 0, -1);
-
-            if (rawSamples != null) {
-                for (Object obj : rawSamples) {
-                    if (obj instanceof ExecutionPoint ep) {
-                        if (ep.getTimestamp() != null) {
-                            allExecutions.add(ep);
-                        }
-                    } else if (obj instanceof Map) {
-                        ExecutionPoint ep = mapToExecutionPoint(obj);
-                        if (ep != null && ep.getTimestamp() != null) {
-                            allExecutions.add(ep);
-                        }
-                    }
-                }
-            }
+            allExecutions.addAll(getSamplesForQuery(hashObj.toString()));
         }
 
         return allExecutions;

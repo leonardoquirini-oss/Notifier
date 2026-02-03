@@ -43,8 +43,8 @@ public class QueryLogParser {
     private static final Pattern ACTIVEJDBC_LOG_PATTERN = Pattern.compile(
         "^(\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}\\.\\d{3})" +  // timestamp (group 1)
         "\\s+\\w+" +                                                // log level (INFO, DEBUG, etc)
-        "\\s+\\[\\d+\\]" +                                          // thread id [401519]
-        "\\s+\\[([^\\]]+)\\]" +                                     // method (group 2)
+        "\\s+\\[\\d*\\]" +                                          // thread id [401519] or []
+        "\\s+\\[([^\\]]*)\\]" +                                      // method (group 2)
         ".* - " +                                                   // logger name + separator
         "(\\{.+\\})$"                                               // JSON payload (group 3)
     );

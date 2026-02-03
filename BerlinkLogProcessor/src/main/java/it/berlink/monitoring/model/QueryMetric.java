@@ -28,4 +28,5 @@ public class QueryMetric {
     private Instant firstSeen;
     private Instant lastSeen;
     private String topMethod;
+    private double impactScore;
 }

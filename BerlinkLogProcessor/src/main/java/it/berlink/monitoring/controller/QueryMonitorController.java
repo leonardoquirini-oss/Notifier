@@ -54,13 +54,19 @@ public class QueryMonitorController {
      * Returns queries with pagination, filtering and sorting.
      */
     @GetMapping("/queries-paginated")
-    public ResponseEntity<PaginatedResult<QueryMetric>> getQueriesPaginated(
+    public ResponseEntity<?> getQueriesPaginated(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(defaultValue = "p95DurationMs") String sortBy,
             @RequestParam(defaultValue = "desc") String sortDir,
             @RequestParam(required = false) String queryFilter,
-            @RequestParam(required = false) String methodFilter) {
+            @RequestParam(required = false) String methodFilter,
+            @RequestParam(required = false) Integer timeWindowHours) {
+        if (timeWindowHours != null && timeWindowHours > 0) {
+            return ResponseEntity.ok(
+                monitorService.getQueriesPaginatedWindowed(
+                    page, size, sortBy, sortDir, queryFilter, methodFilter, timeWindowHours));
+        }
         return ResponseEntity.ok(
             monitorService.getQueriesPaginated(page, size, sortBy, sortDir, queryFilter, methodFilter));
     }

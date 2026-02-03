@@ -1186,6 +1186,79 @@ Increase batch size for file reading:
 BufferedReader reader = new BufferedReader(new FileReader(logFile), 65536);
 ```
 
+## Dashboard Indicators Guide
+
+### KPI Cards
+
+The four summary cards at the top of the dashboard:
+
+| Card | Description |
+|------|-------------|
+| **Unique Queries** | Number of distinct query patterns currently tracked |
+| **Total Executions** | Sum of all recorded executions across all query patterns |
+| **Avg Duration** | Weighted average duration across all queries (weighted by execution count) |
+| **Processor Status** | Current state of the log file processor (`Running` / `Stopped`) with total lines processed |
+
+### Time Window Filter
+
+The button group above the Slowest Queries table controls the analysis window:
+
+| Button | Behavior |
+|--------|----------|
+| **1h / 6h / 24h / 7d** | Recalculates all metrics (P95, Avg, Count, Impact, Trend) using only samples within the selected window |
+| **All** | Uses all aggregated metrics from Redis (no time filtering) |
+
+When a time window is active, the **Trend** and **Impact Score** columns become available with window-aware calculations.
+
+### Trend Indicator
+
+Visible in the Slowest Queries table only when a time window (1h/6h/24h/7d) is selected. Compares the current window's P95 against the previous window of equal length.
+
+| Icon | Label | Meaning |
+|------|-------|---------|
+| Green arrow down | `improving` | P95 improved by more than 10% compared to the previous window |
+| Red arrow up | `degrading` | P95 worsened by more than 10% compared to the previous window |
+| Grey dash | `stable` | P95 variation within ±10% |
+| Blue star | `new` | No data available in the previous window for comparison |
+
+With **All** selected, the Trend column shows a dash (no comparison available).
+
+### Impact Score
+
+A composite score that ranks queries by their overall operational impact, combining severity, frequency, and recency.
+
+**Formula:**
+
+```
+impactScore = P95 × log₂(executionCount + 1) × recencyFactor
+```
+
+| Factor | Description |
+|--------|-------------|
+| **P95** | The 95th percentile duration (ms) — measures severity |
+| **log₂(executionCount + 1)** | Logarithmic frequency weight — frequent queries score higher, but with diminishing returns |
+| **recencyFactor** | Time-decay weight based on when the query was last executed |
+
+**Recency factor values:**
+
+| Condition | recencyFactor |
+|-----------|---------------|
+| Time window active (1h/6h/24h/7d) | Always `1.0` (samples are already filtered by time) |
+| All — lastSeen < 1 hour ago | `1.0` |
+| All — lastSeen < 24 hours ago | `0.8` |
+| All — lastSeen < 7 days ago | `0.5` |
+| All — lastSeen > 7 days ago | `0.2` |
+
+**Badge colors:**
+
+| Badge | Score Range | Meaning |
+|-------|-------------|---------|
+| 🟢 Green | < 100 | Low impact |
+| 🟡 Yellow | 100–500 | Medium impact |
+| 🔴 Red | > 500 | High impact |
+
+The Impact column is sortable — click the header to rank queries by impact score.
+
 ## Future Enhancements
 
 - [ ] Add alerting for slow queries (email/Slack)

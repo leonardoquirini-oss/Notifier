@@ -290,7 +290,16 @@
                     <div class="card-header bg-white">
                         <div class="d-flex justify-content-between align-items-center mb-2">
                             <h6 class="mb-0"><i class="bi bi-clock text-danger me-2"></i>Slowest Queries (P95)</h6>
-                            <span class="badge bg-secondary" id="slowestTotalBadge">0 results</span>
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="btn-group btn-group-sm" id="slowestTimeFilter" role="group">
+                                    <button type="button" class="btn btn-outline-secondary" data-window="1">1h</button>
+                                    <button type="button" class="btn btn-outline-secondary" data-window="6">6h</button>
+                                    <button type="button" class="btn btn-outline-secondary" data-window="24">24h</button>
+                                    <button type="button" class="btn btn-outline-secondary" data-window="168">7d</button>
+                                    <button type="button" class="btn btn-outline-secondary active" data-window="0">All</button>
+                                </div>
+                                <span class="badge bg-secondary" id="slowestTotalBadge">0 results</span>
+                            </div>
                         </div>
                         <div class="table-filter-row">
                             <input type="text" class="form-control" id="slowestQueryFilter" placeholder="Filter by query...">
@@ -310,6 +319,10 @@
                                         </th>
                                         <th class="sortable-header text-end" data-table="slowest" data-sort="p95DurationMs">
                                             P95 <i class="bi bi-arrow-down sort-icon active"></i>
+                                        </th>
+                                        <th class="text-center" style="width: 70px;">Trend</th>
+                                        <th class="sortable-header text-end" data-table="slowest" data-sort="impactScore">
+                                            Impact <i class="bi bi-arrow-down-up sort-icon"></i>
                                         </th>
                                         <th class="sortable-header text-end" data-table="slowest" data-sort="avgDurationMs">
                                             Avg <i class="bi bi-arrow-down-up sort-icon"></i>
@@ -530,7 +543,7 @@
         const tableState = {
             slowest: {
                 page: 0, size: 20, sortBy: 'p95DurationMs', sortDir: 'desc',
-                queryFilter: '', methodFilter: '',
+                queryFilter: '', methodFilter: '', timeWindowHours: 0,
                 tableBodyId: 'slowestQueriesTable', paginationId: 'slowestPagination',
                 badgeId: 'slowestTotalBadge', queryFilterId: 'slowestQueryFilter',
                 methodFilterId: 'slowestMethodFilter'
@@ -806,6 +819,43 @@
             return { labels, fullLabels, values };
         }
 
+        function renderTrend(q) {
+            if (!q.trend) {
+                return '<span class="text-muted">&mdash;</span>';
+            }
+            switch (q.trend) {
+                case 'improving': {
+                    const pct = Math.abs(q.trendPercent || 0).toFixed(1);
+                    return `<span class="text-success" title="Improved ${pct}% vs previous window (was ${q.previousP95Ms || '?'} ms)">
+                        <i class="bi bi-arrow-down-circle-fill"></i></span>`;
+                }
+                case 'degrading': {
+                    const pct = Math.abs(q.trendPercent || 0).toFixed(1);
+                    return `<span class="text-danger" title="Degraded ${pct}% vs previous window (was ${q.previousP95Ms || '?'} ms)">
+                        <i class="bi bi-arrow-up-circle-fill"></i></span>`;
+                }
+                case 'stable':
+                    return `<span class="text-secondary" title="Stable vs previous window"><i class="bi bi-dash-circle"></i></span>`;
+                case 'new':
+                    return `<span class="text-info" title="No data in previous window"><i class="bi bi-star-fill"></i></span>`;
+                default:
+                    return '<span class="text-muted">&mdash;</span>';
+            }
+        }
+
+        function renderImpactBadge(score) {
+            const rounded = Math.round(score || 0);
+            let bgClass;
+            if (rounded < 100) {
+                bgClass = 'bg-success';
+            } else if (rounded <= 500) {
+                bgClass = 'bg-warning text-dark';
+            } else {
+                bgClass = 'bg-danger';
+            }
+            return `<span class="badge ${bgClass}">${rounded}</span>`;
+        }
+
         function setupEventListeners() {
             // Query row click (delegated)
             document.addEventListener('click', function(e) {
@@ -821,6 +871,17 @@
                     document.querySelectorAll('.time-filter .btn').forEach(b => b.classList.remove('active'));
                     this.classList.add('active');
                     updatePerformanceChart(this.dataset.period);
+                });
+            });
+
+            // Slowest time window filter buttons
+            document.querySelectorAll('#slowestTimeFilter .btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    document.querySelectorAll('#slowestTimeFilter .btn').forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                    tableState.slowest.timeWindowHours = parseInt(this.dataset.window);
+                    tableState.slowest.page = 0;
+                    loadPaginatedTable('slowest');
                 });
             });
 
@@ -897,6 +958,9 @@
             });
             if (state.queryFilter) params.set('queryFilter', state.queryFilter);
             if (state.methodFilter) params.set('methodFilter', state.methodFilter);
+            if (state.timeWindowHours && state.timeWindowHours > 0) {
+                params.set('timeWindowHours', state.timeWindowHours);
+            }
 
             try {
                 const response = await fetch('/api/query-monitor/queries-paginated?' + params);
@@ -913,8 +977,9 @@
             const state = tableState[tableName];
             const tbody = document.getElementById(state.tableBodyId);
 
+            const colSpan = tableName === 'slowest' ? 7 : 5;
             if (!result.content || result.content.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">No queries found</td></tr>';
+                tbody.innerHTML = `<tr><td colspan="${colSpan}" class="text-center text-muted py-3">No queries found</td></tr>`;
                 return;
             }
 
@@ -924,6 +989,8 @@
                         <td class="query-pattern" title="${escapeHtml(q.queryPattern)}">${escapeHtml(q.queryPattern)}</td>
                         <td class="text-nowrap">${escapeHtml(q.topMethod) || '-'}</td>
                         <td class="text-end"><span class="badge bg-danger">${q.p95DurationMs} ms</span></td>
+                        <td class="text-center">${renderTrend(q)}</td>
+                        <td class="text-end">${renderImpactBadge(q.impactScore)}</td>
                         <td class="text-end text-muted">${(q.avgDurationMs || 0).toFixed(1)} ms</td>
                         <td class="text-end">${q.executionCount}</td>
                     </tr>
