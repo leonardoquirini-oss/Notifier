@@ -1,7 +1,6 @@
 package com.containermgmt.tfpeventprocessor.config;
 
 import com.containermgmt.tfpeventprocessor.listener.EventListener;
-import com.containermgmt.tfpeventprocessor.listener.EventListener.MessageRedeliveryException;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.jms.ConnectionFactory;
@@ -20,8 +19,15 @@ import java.util.List;
 /**
  * Apache Artemis JMS Configuration
  *
- * Configures JMS listener container factory and programmatically registers
- * a listener endpoint for each queue listed in event-processor.queues.
+ * Supports two modes based on subscriber-name configuration:
+ *
+ * 1. FQQN multicast mode (subscriber-name set):
+ *    Uses FQQN (ADDRESS::SUBSCRIBER_NAME.ADDRESS) for Kafka-like consumer
+ *    group semantics with durable subscriptions on multicast addresses.
+ *
+ * 2. Direct/anycast mode (subscriber-name empty or absent):
+ *    Connects directly to the queue by address name. Used for external
+ *    Artemis brokers with standard anycast queues.
  */
 @Configuration
 @EnableJms
@@ -31,11 +37,11 @@ public class ArtemisConfig implements JmsListenerConfigurer {
     @Value("${event-processor.concurrency:3-10}")
     private String concurrency;
 
-    @Value("${event-processor.acknowledge-messages:false}")
-    private boolean acknowledgeMessages;
+    @Value("${event-processor.addresses}")
+    private List<String> addresses;
 
-    @Value("${event-processor.queues}")
-    private List<String> queues;
+    @Value("${event-processor.subscriber-name:}")
+    private String subscriberName;
 
     private final EventListener eventListener;
     private final ConnectionFactory connectionFactory;
@@ -47,7 +53,12 @@ public class ArtemisConfig implements JmsListenerConfigurer {
 
     @PostConstruct
     public void init() {
-        log.info("Configured queues: {}", queues);
+        log.info("Addresses: {}", addresses);
+        if (subscriberName == null || subscriberName.isBlank()) {
+            log.info("Mode: DIRECT (anycast queues, no FQQN)");
+        } else {
+            log.info("Mode: FQQN multicast (subscriber-name: {})", subscriberName);
+        }
     }
 
     @Bean
@@ -58,19 +69,11 @@ public class ArtemisConfig implements JmsListenerConfigurer {
         factory.setConnectionFactory(connectionFactory);
         factory.setConcurrency(concurrency);
         factory.setSessionTransacted(true);
-        // Error handling — re-throw MessageRedeliveryException so DMLC performs session.rollback()
-        factory.setErrorHandler(t -> {
-            Throwable cause = t.getCause();
-            if (cause instanceof MessageRedeliveryException) {
-                log.debug("Message redelivery forced (acknowledge disabled) - rollback will trigger redelivery");
-                throw (MessageRedeliveryException) cause;
-            } else {
-                log.error("Error in JMS listener: {}", t.getMessage(), t);
-            }
-        });
+        factory.setErrorHandler(t ->
+            log.error("Error in JMS listener: {}", t.getMessage(), t)
+        );
 
-        log.info("JMS Listener Container Factory configured with concurrency: {}, acknowledgeMessages: {}",
-                concurrency, acknowledgeMessages);
+        log.info("JMS Listener Container Factory configured with concurrency: {}", concurrency);
 
         return factory;
     }
@@ -79,16 +82,35 @@ public class ArtemisConfig implements JmsListenerConfigurer {
     public void configureJmsListeners(JmsListenerEndpointRegistrar registrar) {
         DefaultJmsListenerContainerFactory factory = jmsListenerContainerFactory();
 
-        for (String queue : queues) {
-            String trimmed = queue.trim();
-            log.info("Registering JMS listener for queue: {}", trimmed);
+        for (String address : addresses) {
+            String addressName = address.trim();
+            String destination = resolveDestination(addressName);
+
+            log.info("Registering JMS listener for address: {} (destination: {})",
+                    addressName, destination);
 
             SimpleJmsListenerEndpoint endpoint = new SimpleJmsListenerEndpoint();
-            endpoint.setId("evt-listener-" + trimmed);
-            endpoint.setDestination(trimmed);
-            endpoint.setMessageListener(msg -> eventListener.onMessage(trimmed, msg));
+            endpoint.setId("evt-listener-" + addressName);
+            endpoint.setDestination(destination);
+            endpoint.setMessageListener(msg -> eventListener.onMessage(addressName, msg));
 
             registrar.registerEndpoint(endpoint, factory);
         }
+    }
+
+    /**
+     * Resolves the JMS destination for a given address.
+     *
+     * If subscriber-name is set: returns FQQN (ADDRESS::SUBSCRIBER_NAME.ADDRESS)
+     * for multicast durable subscriptions.
+     *
+     * If subscriber-name is empty: returns the address name directly
+     * for anycast/direct queue consumption.
+     */
+    private String resolveDestination(String addressName) {
+        if (subscriberName == null || subscriberName.isBlank()) {
+            return addressName;
+        }
+        return addressName + "::" + subscriberName + "." + addressName;
     }
 }

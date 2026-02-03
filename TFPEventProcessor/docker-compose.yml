@@ -8,8 +8,8 @@ services:
       dockerfile: Dockerfile
     container_name: tfp-event-processor
     environment:
-      # Event Queue Configuration
-      EVENT_QUEUE_PRIMARY: ${EVENT_QUEUE_PRIMARY:-events.queue}
+      # Subscriber name (consumer group ID)
+      SUBSCRIBER_NAME: ${SUBSCRIBER_NAME:-tfp-processor}
 
       # JVM Options (con debug remoto)
       JAVA_TOOL_OPTIONS: "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -Xms256m -Xmx512m"
@@ -36,7 +36,7 @@ services:
       ARTEMIS_PASSWORD: admin
       ANONYMOUS_LOGIN: "false"
     volumes:
-      # DEV/TEST: custom broker.xml with unlimited redelivery (max-delivery-attempts=-1)
+      # Custom broker.xml: multicast addresses with durable subscriptions
       - ./artemis-config/broker.xml:/var/lib/artemis-instance/etc-override/broker.xml
     ports:
       - "61616:61616"  # Artemis Core

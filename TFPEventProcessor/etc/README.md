@@ -1,43 +1,42 @@
 # TFP Event Processor
 
-Spring Boot application che consuma eventi da code Apache Artemis e li persiste su PostgreSQL usando ActiveJDBC ORM.
+Spring Boot application che consuma eventi da multicast addresses Apache Artemis (topic con durable subscriptions) e li persiste su PostgreSQL usando ActiveJDBC ORM.
 
 ## Tech Stack
 
 - **Framework**: Spring Boot 3.1.5
-- **Messaging**: Apache Artemis (JMS)
+- **Messaging**: Apache Artemis 2.31.2 (multicast/FQQN)
 - **ORM**: JavaLite ActiveJDBC 3.0
 - **Database**: PostgreSQL
 - **Java**: 17
 - **Deployment**: Docker
 
-## Struttura Progetto
+## Architettura Messaging
+
+Il processor usa **multicast addresses** con **durable subscriptions** via FQQN (Fully Qualified Queue Name), con semantica simile a Kafka consumer groups.
 
 ```
-TFPEventProcessor/
-├── src/main/java/com/containermgmt/tfpeventprocessor/
-│   ├── TfpEventProcessorApplication.java
-│   ├── config/
-│   │   ├── ActiveJDBCConfig.java
-│   │   ├── ArtemisConfig.java
-│   │   └── JacksonConfig.java
-│   ├── listener/
-│   │   └── EventListener.java
-│   ├── service/
-│   │   └── EventProcessorService.java
-│   ├── model/
-│   │   └── Event.java
-│   ├── dto/
-│   │   └── EventMessage.java
-│   └── exception/
-│       └── EventProcessingException.java
-├── src/main/resources/
-│   ├── application.yml
-│   └── application-docker.yml
-├── Dockerfile
-├── docker-compose.yml
-└── pom.xml
+Producer (GUI Artemis / TFP) ──► Address MULTICAST (es. BERNARDINI_ASSET_DAMAGES)
+                                          │
+                                          ├──► tfp-processor.BERNARDINI_ASSET_DAMAGES    (Processor A)
+                                          ├──► tfp-audit.BERNARDINI_ASSET_DAMAGES         (Processor B)
+                                          └──► tfp-analytics.BERNARDINI_ASSET_DAMAGES     (Processor C)
 ```
+
+### Concetti chiave
+
+| Concetto | Kafka equivalente | Descrizione |
+|----------|-------------------|-------------|
+| **Address (multicast)** | Topic | L'indirizzo a cui i messaggi vengono inviati |
+| **subscriber-name** | Consumer Group ID | Identifica il gruppo di consumer |
+| **Subscription queue** | Consumer Group partition | Coda dedicata per ogni subscriber-name |
+| **FQQN** | — | `ADDRESS::SUBSCRIBER_NAME.ADDRESS` — formato Artemis per indirizzare la subscription queue |
+
+### Comportamento
+
+- **Stesso `subscriber-name`** → il processor riprende dall'ultimo messaggio consumato (come Kafka)
+- **Nuovo `subscriber-name`** → nuova subscription indipendente, riceve solo i nuovi messaggi
+- **Processor offline** → i messaggi si accumulano nella subscription queue e vengono consegnati al riavvio
 
 ## Configurazione
 
@@ -45,6 +44,7 @@ TFPEventProcessor/
 
 | Variable | Default | Descrizione |
 |----------|---------|-------------|
+| `SUBSCRIBER_NAME` | tfp-processor | Nome subscriber (consumer group ID) |
 | `ARTEMIS_HOST` | localhost | Host del broker Artemis |
 | `ARTEMIS_PORT` | 61616 | Porta del broker Artemis |
 | `ARTEMIS_USER` | admin | Username Artemis |
@@ -54,120 +54,168 @@ TFPEventProcessor/
 | `DB_NAME` | berlinkdb | Nome database |
 | `DB_USER` | berlink | Username database |
 | `DB_PASSWORD` | berlink | Password database |
-| `EVENT_QUEUE_PRIMARY` | events.queue | Nome coda principale |
 
-### Code Artemis
-
-Le code da ascoltare sono configurabili in `application.yml`:
+### application.yml
 
 ```yaml
 event-processor:
-  queues:
-    primary: events.queue
-    # secondary: events.queue.secondary  # Aggiungi altre code se necessario
+  # Multicast addresses (comma-separated)
+  addresses: BERNARDINI_UNIT_POSITIONS_MESSAGE, BERNARDINI_ASSET_DAMAGES
+
+  # Subscriber name (consumer group ID)
+  subscriber-name: ${SUBSCRIBER_NAME:tfp-processor}
+
+  concurrency: 3-10
+  retry-attempts: 3
+  retry-delay-ms: 5000
+```
+
+### broker.xml (Artemis)
+
+Le addresses devono essere definite come **multicast** in `artemis-config/broker.xml`:
+
+```xml
+<address name="BERNARDINI_ASSET_DAMAGES">
+   <multicast />
+</address>
+```
+
+Il file viene montato nel container Artemis via docker-compose:
+```yaml
+volumes:
+  - ./artemis-config/broker.xml:/var/lib/artemis-instance/etc-override/broker.xml
+```
+
+## Aggiungere una nuova Address
+
+1. Aggiungere l'address multicast in `artemis-config/broker.xml`:
+   ```xml
+   <address name="NUOVA_ADDRESS">
+      <multicast />
+   </address>
+   ```
+
+2. Aggiungere l'address in `application.yml`:
+   ```yaml
+   event-processor:
+     addresses: BERNARDINI_UNIT_POSITIONS_MESSAGE, BERNARDINI_ASSET_DAMAGES, NUOVA_ADDRESS
+   ```
+
+3. (Opzionale) Creare un handler specifico nel package `handler/`:
+   ```java
+   @Component
+   @Order(1)
+   public class NuovoEventHandler implements EventTypeHandler {
+       @Override
+       public Set<String> supportedEventTypes() {
+           return Set.of("NUOVA_ADDRESS");
+       }
+       @Override
+       public boolean supports(String eventType) {
+           return "NUOVA_ADDRESS".equalsIgnoreCase(eventType);
+       }
+       @Override
+       public void handle(EventMessage eventMessage) {
+           // logica specifica
+       }
+   }
+   ```
+
+4. Riavviare Artemis (per applicare broker.xml) e il processor.
+
+## Uso del Subscriber Name
+
+### Produzione
+```bash
+# Subscriber fisso — riprende sempre da dove si era fermato
+SUBSCRIBER_NAME=tfp-processor docker-compose up -d
+```
+
+### Dev/test — nuova subscription (ri-legge tutto)
+```bash
+# Genera un nome univoco — crea una nuova subscription queue
+SUBSCRIBER_NAME=tfp-dev-$(date +%s) docker-compose up -d
+```
+
+### Processori multipli indipendenti
+```bash
+# Ogni subscriber-name diverso riceve TUTTI i messaggi indipendentemente
+SUBSCRIBER_NAME=tfp-processor     # processor principale
+SUBSCRIBER_NAME=tfp-audit         # audit processor parallelo
+```
+
+## Inviare messaggi di test
+
+### Dalla GUI Artemis (http://localhost:8161)
+
+1. Aprire la console web
+2. Navigare a **Queues** → trovare la subscription queue (es. `tfp-processor.BERNARDINI_ASSET_DAMAGES`)
+3. Oppure: navigare a **Addresses** → selezionare l'address → **Send Message**
+4. Inserire il JSON del messaggio e inviare
+
+**IMPORTANTE**: Inviare all'**Address** (non alla Queue). Artemis lo distribuisce a tutte le subscription queues.
+
+### Dal sistema TFP esterno
+
+Il sender deve usare `createTopic()` (non `createQueue()`):
+```java
+// Corretto: invia a multicast address
+Destination dest = session.createTopic("BERNARDINI_ASSET_DAMAGES");
+
+// SBAGLIATO: creerebbe una coda anycast separata
+// Destination dest = session.createQueue("BERNARDINI_ASSET_DAMAGES");
 ```
 
 ## Build & Run
 
-### Build con Maven
-
 ```bash
-./mvnw clean package
-```
+# Build
+task build-ep
 
-### Run locale
-
-```bash
-java -jar target/tfp-event-processor-*.jar
-```
-
-### Run con Docker Compose
-
-```bash
+# Run con Docker Compose
 docker-compose up -d --build
-```
 
-### Logs
-
-```bash
+# Logs
 docker-compose logs -f tfp-event-processor
+
+# Stop
+docker-compose down
 ```
 
-## Database
+### Prima volta / reset completo
 
-### Schema tabella (esempio)
-
-```sql
-CREATE TABLE IF NOT EXISTS events (
-    id BIGSERIAL PRIMARY KEY,
-    event_id VARCHAR(255) UNIQUE NOT NULL,
-    event_type VARCHAR(100) NOT NULL,
-    source VARCHAR(255),
-    event_timestamp TIMESTAMP WITH TIME ZONE,
-    payload JSONB,
-    metadata JSONB,
-    processed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX idx_events_event_id ON events(event_id);
-CREATE INDEX idx_events_event_type ON events(event_type);
-CREATE INDEX idx_events_processed_at ON events(processed_at);
-```
-
-**Nota**: Aggiornare il modello `Event.java` e l'annotazione `@Table` quando viene definita la struttura finale del database.
-
-## Formato Eventi
-
-### EventMessage (JSON)
-
-```json
-{
-  "eventId": "evt-12345",
-  "eventType": "ORDER_CREATED",
-  "source": "order-service",
-  "timestamp": "2025-12-15T10:30:00Z",
-  "payload": {
-    "orderId": "ORD-001",
-    "customerId": "CUST-123",
-    "amount": 99.99
-  },
-  "metadata": {
-    "version": "1.0",
-    "region": "EU"
-  }
-}
-```
-
-## Health Check
-
-- **Endpoint**: `http://localhost:8080/actuator/health`
-- **Metrics**: `http://localhost:8080/actuator/metrics`
-
-## Aggiungere Nuove Code
-
-Per ascoltare una nuova coda, aggiungere un nuovo metodo nel `EventListener.java`:
-
-```java
-@JmsListener(
-    destination = "${event-processor.queues.secondary:events.queue.secondary}",
-    containerFactory = "jmsListenerContainerFactory"
-)
-public void onSecondaryQueueMessage(EventMessage eventMessage) {
-    log.debug("Received message from secondary queue: eventId={}",
-        eventMessage.getEventId());
-    processWithRetry(eventMessage);
-}
+Se cambi il broker.xml, devi ricreare il container Artemis per applicare la nuova config:
+```bash
+docker-compose down
+docker volume ls | grep artemis  # identifica il volume
+docker volume rm <volume-name>   # rimuovi i dati broker
+docker-compose up -d --build
 ```
 
 ## Retry Logic
 
-Il processor implementa retry automatico:
+Il processor implementa retry applicativo (prima del rollback JMS):
 - **Max tentativi**: 3 (configurabile)
 - **Delay tra tentativi**: 5000ms (configurabile)
 
-Configurazione in `application.yml`:
-```yaml
-event-processor:
-  retry-attempts: 3
-  retry-delay-ms: 5000
-```
+Se tutti i retry falliscono → JMS rollback → Artemis redelivery con delay 5s → dopo 10 tentativi il messaggio va in DLQ.
+
+## Health Check
+
+- **Health**: `http://localhost:8080/actuator/health`
+- **Metrics**: `http://localhost:8080/actuator/metrics`
+
+## Troubleshooting
+
+### Messaggi non arrivano
+1. Verificare che l'address sia **multicast** nella console Artemis
+2. Verificare nei log: `Registering JMS listener ... via FQQN: ADDRESS::subscriber.ADDRESS`
+3. Controllare che il producer invii all'address (topic), non a una queue (anycast)
+4. Verificare che la subscription queue esista: `tfp-processor.BERNARDINI_*`
+
+### Subscription queue non si crea
+1. Verificare `auto-create-queues=true` nel broker.xml (address-settings per `BERNARDINI_#`)
+2. Controllare i log Artemis per errori di permessi
+
+### Messaggi duplicati su DB
+Il DB usa `ON CONFLICT (message_id) DO UPDATE` — i duplicati vengono gestiti automaticamente via upsert.

@@ -58,8 +58,7 @@
             color: #991b1b;
         }
         .table-container {
-            max-height: 400px;
-            overflow-y: auto;
+            overflow-x: auto;
         }
         .query-pattern {
             max-width: 400px;
@@ -97,6 +96,51 @@
         .time-filter .btn.active {
             background-color: var(--primary);
             color: white;
+        }
+        .sortable-header {
+            cursor: pointer;
+            user-select: none;
+            white-space: nowrap;
+        }
+        .sortable-header:hover {
+            background-color: #e2e8f0;
+        }
+        .sort-icon {
+            opacity: 0.3;
+            font-size: 0.7rem;
+            margin-left: 4px;
+        }
+        .sort-icon.active {
+            opacity: 1;
+        }
+        .table-filter-row {
+            display: flex;
+            gap: 0.75rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .table-filter-row .form-control {
+            max-width: 280px;
+            font-size: 0.85rem;
+        }
+        .pagination-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            padding: 0.75rem 1rem;
+            font-size: 0.85rem;
+            border-top: 1px solid #e2e8f0;
+        }
+        .pagination-controls .page-size-select {
+            width: auto;
+            font-size: 0.85rem;
+            padding: 0.25rem 0.5rem;
+        }
+        .pagination-controls .btn-group .btn {
+            padding: 0.25rem 0.6rem;
+            font-size: 0.8rem;
         }
     </style>
 </head>
@@ -239,66 +283,107 @@
             </div>
         </div>
 
-        <!-- Tables Row -->
+        <!-- Slowest Queries (P95) - Interactive Table -->
         <div class="row g-4 mb-4">
-            <div class="col-xl-6">
+            <div class="col-12">
                 <div class="card fade-in">
                     <div class="card-header bg-white">
-                        <h6 class="mb-0"><i class="bi bi-clock text-danger me-2"></i>Slowest Queries (P95)</h6>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6 class="mb-0"><i class="bi bi-clock text-danger me-2"></i>Slowest Queries (P95)</h6>
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="btn-group btn-group-sm" id="slowestTimeFilter" role="group">
+                                    <button type="button" class="btn btn-outline-secondary" data-window="1">1h</button>
+                                    <button type="button" class="btn btn-outline-secondary" data-window="6">6h</button>
+                                    <button type="button" class="btn btn-outline-secondary" data-window="24">24h</button>
+                                    <button type="button" class="btn btn-outline-secondary" data-window="168">7d</button>
+                                    <button type="button" class="btn btn-outline-secondary active" data-window="0">All</button>
+                                </div>
+                                <span class="badge bg-secondary" id="slowestTotalBadge">0 results</span>
+                            </div>
+                        </div>
+                        <div class="table-filter-row">
+                            <input type="text" class="form-control" id="slowestQueryFilter" placeholder="Filter by query...">
+                            <input type="text" class="form-control" id="slowestMethodFilter" placeholder="Filter by method...">
+                        </div>
                     </div>
                     <div class="card-body p-0">
                         <div class="table-container">
                             <table class="table table-hover mb-0">
-                                <thead class="table-light sticky-top">
+                                <thead class="table-light">
                                     <tr>
-                                        <th>Query Pattern</th>
-                                        <th>Method</th>
-                                        <th class="text-end">P95</th>
-                                        <th class="text-end">Avg</th>
-                                        <th class="text-end">Count</th>
+                                        <th class="sortable-header" data-table="slowest" data-sort="queryPattern">
+                                            Query Pattern <i class="bi bi-arrow-down-up sort-icon"></i>
+                                        </th>
+                                        <th class="sortable-header" data-table="slowest" data-sort="topMethod">
+                                            Method <i class="bi bi-arrow-down-up sort-icon"></i>
+                                        </th>
+                                        <th class="sortable-header text-end" data-table="slowest" data-sort="p95DurationMs">
+                                            P95 <i class="bi bi-arrow-down sort-icon active"></i>
+                                        </th>
+                                        <th class="text-center" style="width: 70px;">Trend</th>
+                                        <th class="sortable-header text-end" data-table="slowest" data-sort="impactScore">
+                                            Impact <i class="bi bi-arrow-down-up sort-icon"></i>
+                                        </th>
+                                        <th class="sortable-header text-end" data-table="slowest" data-sort="avgDurationMs">
+                                            Avg <i class="bi bi-arrow-down-up sort-icon"></i>
+                                        </th>
+                                        <th class="sortable-header text-end" data-table="slowest" data-sort="executionCount">
+                                            Count <i class="bi bi-arrow-down-up sort-icon"></i>
+                                        </th>
                                     </tr>
                                 </thead>
                                 <tbody id="slowestQueriesTable">
-                                    <tr th:each="query : ${slowestQueries}" style="cursor:pointer" class="query-row" th:data-hash="${query.queryHash}">
-                                        <td class="query-pattern" th:title="${query.queryPattern}" th:text="${query.queryPattern}">SELECT...</td>
-                                        <td class="text-nowrap" th:text="${query.topMethod != null ? query.topMethod : '-'}">-</td>
-                                        <td class="text-end"><span class="badge bg-danger" th:text="${query.p95DurationMs} + ' ms'">0 ms</span></td>
-                                        <td class="text-end text-muted" th:text="${#numbers.formatDecimal(query.avgDurationMs, 1, 1)} + ' ms'">0 ms</td>
-                                        <td class="text-end" th:text="${query.executionCount}">0</td>
-                                    </tr>
                                 </tbody>
                             </table>
+                        </div>
+                        <div class="pagination-controls" id="slowestPagination">
                         </div>
                     </div>
                 </div>
             </div>
-            <div class="col-xl-6">
+        </div>
+
+        <!-- Most Frequent Queries - Interactive Table -->
+        <div class="row g-4 mb-4">
+            <div class="col-12">
                 <div class="card fade-in">
                     <div class="card-header bg-white">
-                        <h6 class="mb-0"><i class="bi bi-lightning-charge text-success me-2"></i>Most Frequent Queries</h6>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6 class="mb-0"><i class="bi bi-lightning-charge text-success me-2"></i>Most Frequent Queries</h6>
+                            <span class="badge bg-secondary" id="frequentTotalBadge">0 results</span>
+                        </div>
+                        <div class="table-filter-row">
+                            <input type="text" class="form-control" id="frequentQueryFilter" placeholder="Filter by query...">
+                            <input type="text" class="form-control" id="frequentMethodFilter" placeholder="Filter by method...">
+                        </div>
                     </div>
                     <div class="card-body p-0">
                         <div class="table-container">
                             <table class="table table-hover mb-0">
-                                <thead class="table-light sticky-top">
+                                <thead class="table-light">
                                     <tr>
-                                        <th>Query Pattern</th>
-                                        <th>Method</th>
-                                        <th class="text-end">Count</th>
-                                        <th class="text-end">Avg</th>
-                                        <th class="text-end">P95</th>
+                                        <th class="sortable-header" data-table="frequent" data-sort="queryPattern">
+                                            Query Pattern <i class="bi bi-arrow-down-up sort-icon"></i>
+                                        </th>
+                                        <th class="sortable-header" data-table="frequent" data-sort="topMethod">
+                                            Method <i class="bi bi-arrow-down-up sort-icon"></i>
+                                        </th>
+                                        <th class="sortable-header text-end" data-table="frequent" data-sort="executionCount">
+                                            Count <i class="bi bi-arrow-down sort-icon active"></i>
+                                        </th>
+                                        <th class="sortable-header text-end" data-table="frequent" data-sort="avgDurationMs">
+                                            Avg <i class="bi bi-arrow-down-up sort-icon"></i>
+                                        </th>
+                                        <th class="sortable-header text-end" data-table="frequent" data-sort="p95DurationMs">
+                                            P95 <i class="bi bi-arrow-down-up sort-icon"></i>
+                                        </th>
                                     </tr>
                                 </thead>
                                 <tbody id="frequentQueriesTable">
-                                    <tr th:each="query : ${mostFrequentQueries}" style="cursor:pointer" class="query-row" th:data-hash="${query.queryHash}">
-                                        <td class="query-pattern" th:title="${query.queryPattern}" th:text="${query.queryPattern}">SELECT...</td>
-                                        <td class="text-nowrap" th:text="${query.topMethod != null ? query.topMethod : '-'}">-</td>
-                                        <td class="text-end"><span class="badge bg-success" th:text="${query.executionCount}">0</span></td>
-                                        <td class="text-end text-muted" th:text="${#numbers.formatDecimal(query.avgDurationMs, 1, 1)} + ' ms'">0 ms</td>
-                                        <td class="text-end" th:text="${query.p95DurationMs} + ' ms'">0 ms</td>
-                                    </tr>
                                 </tbody>
                             </table>
+                        </div>
+                        <div class="pagination-controls" id="frequentPagination">
                         </div>
                     </div>
                 </div>
@@ -454,6 +539,33 @@
         const REFRESH_INTERVAL = 30000;
         let refreshTimer;
 
+        // Paginated table state
+        const tableState = {
+            slowest: {
+                page: 0, size: 20, sortBy: 'p95DurationMs', sortDir: 'desc',
+                queryFilter: '', methodFilter: '', timeWindowHours: 0,
+                tableBodyId: 'slowestQueriesTable', paginationId: 'slowestPagination',
+                badgeId: 'slowestTotalBadge', queryFilterId: 'slowestQueryFilter',
+                methodFilterId: 'slowestMethodFilter'
+            },
+            frequent: {
+                page: 0, size: 20, sortBy: 'executionCount', sortDir: 'desc',
+                queryFilter: '', methodFilter: '',
+                tableBodyId: 'frequentQueriesTable', paginationId: 'frequentPagination',
+                badgeId: 'frequentTotalBadge', queryFilterId: 'frequentQueryFilter',
+                methodFilterId: 'frequentMethodFilter'
+            }
+        };
+
+        // Debounce helper
+        function debounce(fn, delay) {
+            let timer;
+            return function(...args) {
+                clearTimeout(timer);
+                timer = setTimeout(() => fn.apply(this, args), delay);
+            };
+        }
+
         // Initialize on page load
         document.addEventListener('DOMContentLoaded', async function() {
             await loadChartData();
@@ -461,6 +573,9 @@
             updateLastUpdateTime();
             startAutoRefresh();
             setupEventListeners();
+            // Load paginated tables
+            loadPaginatedTable('slowest');
+            loadPaginatedTable('frequent');
         });
 
         async function loadChartData() {
@@ -704,6 +819,43 @@
             return { labels, fullLabels, values };
         }
 
+        function renderTrend(q) {
+            if (!q.trend) {
+                return '<span class="text-muted">&mdash;</span>';
+            }
+            switch (q.trend) {
+                case 'improving': {
+                    const pct = Math.abs(q.trendPercent || 0).toFixed(1);
+                    return `<span class="text-success" title="Improved ${pct}% vs previous window (was ${q.previousP95Ms || '?'} ms)">
+                        <i class="bi bi-arrow-down-circle-fill"></i></span>`;
+                }
+                case 'degrading': {
+                    const pct = Math.abs(q.trendPercent || 0).toFixed(1);
+                    return `<span class="text-danger" title="Degraded ${pct}% vs previous window (was ${q.previousP95Ms || '?'} ms)">
+                        <i class="bi bi-arrow-up-circle-fill"></i></span>`;
+                }
+                case 'stable':
+                    return `<span class="text-secondary" title="Stable vs previous window"><i class="bi bi-dash-circle"></i></span>`;
+                case 'new':
+                    return `<span class="text-info" title="No data in previous window"><i class="bi bi-star-fill"></i></span>`;
+                default:
+                    return '<span class="text-muted">&mdash;</span>';
+            }
+        }
+
+        function renderImpactBadge(score) {
+            const rounded = Math.round(score || 0);
+            let bgClass;
+            if (rounded < 100) {
+                bgClass = 'bg-success';
+            } else if (rounded <= 500) {
+                bgClass = 'bg-warning text-dark';
+            } else {
+                bgClass = 'bg-danger';
+            }
+            return `<span class="badge ${bgClass}">${rounded}</span>`;
+        }
+
         function setupEventListeners() {
             // Query row click (delegated)
             document.addEventListener('click', function(e) {
@@ -722,6 +874,17 @@
                 });
             });
 
+            // Slowest time window filter buttons
+            document.querySelectorAll('#slowestTimeFilter .btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    document.querySelectorAll('#slowestTimeFilter .btn').forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                    tableState.slowest.timeWindowHours = parseInt(this.dataset.window);
+                    tableState.slowest.page = 0;
+                    loadPaginatedTable('slowest');
+                });
+            });
+
             // Query toggle buttons
             document.querySelectorAll('#queryToggle .btn').forEach(btn => {
                 btn.addEventListener('click', function() {
@@ -730,6 +893,174 @@
                     updateTopQueriesChart(this.dataset.type);
                 });
             });
+
+            // Sortable headers
+            document.querySelectorAll('.sortable-header').forEach(th => {
+                th.addEventListener('click', function() {
+                    const tableName = this.dataset.table;
+                    const sortField = this.dataset.sort;
+                    const state = tableState[tableName];
+
+                    if (state.sortBy === sortField) {
+                        state.sortDir = state.sortDir === 'desc' ? 'asc' : 'desc';
+                    } else {
+                        state.sortBy = sortField;
+                        state.sortDir = 'desc';
+                    }
+                    state.page = 0;
+                    updateSortIcons(tableName);
+                    loadPaginatedTable(tableName);
+                });
+            });
+
+            // Filter inputs with debounce
+            ['slowest', 'frequent'].forEach(tableName => {
+                const state = tableState[tableName];
+                const queryInput = document.getElementById(state.queryFilterId);
+                const methodInput = document.getElementById(state.methodFilterId);
+
+                const debouncedLoad = debounce(() => {
+                    state.page = 0;
+                    loadPaginatedTable(tableName);
+                }, 300);
+
+                queryInput.addEventListener('input', function() {
+                    state.queryFilter = this.value;
+                    debouncedLoad();
+                });
+                methodInput.addEventListener('input', function() {
+                    state.methodFilter = this.value;
+                    debouncedLoad();
+                });
+            });
+        }
+
+        function updateSortIcons(tableName) {
+            const state = tableState[tableName];
+            document.querySelectorAll(`.sortable-header[data-table="${tableName}"] .sort-icon`).forEach(icon => {
+                const th = icon.closest('.sortable-header');
+                if (th.dataset.sort === state.sortBy) {
+                    icon.className = 'bi sort-icon active ' +
+                        (state.sortDir === 'desc' ? 'bi-arrow-down' : 'bi-arrow-up');
+                } else {
+                    icon.className = 'bi bi-arrow-down-up sort-icon';
+                }
+            });
+        }
+
+        async function loadPaginatedTable(tableName) {
+            const state = tableState[tableName];
+            const params = new URLSearchParams({
+                page: state.page,
+                size: state.size,
+                sortBy: state.sortBy,
+                sortDir: state.sortDir
+            });
+            if (state.queryFilter) params.set('queryFilter', state.queryFilter);
+            if (state.methodFilter) params.set('methodFilter', state.methodFilter);
+            if (state.timeWindowHours && state.timeWindowHours > 0) {
+                params.set('timeWindowHours', state.timeWindowHours);
+            }
+
+            try {
+                const response = await fetch('/api/query-monitor/queries-paginated?' + params);
+                const result = await response.json();
+                renderPaginatedTableBody(tableName, result);
+                renderPaginationControls(tableName, result);
+                document.getElementById(state.badgeId).textContent = result.totalElements + ' results';
+            } catch (error) {
+                console.error('Error loading paginated table:', error);
+            }
+        }
+
+        function renderPaginatedTableBody(tableName, result) {
+            const state = tableState[tableName];
+            const tbody = document.getElementById(state.tableBodyId);
+
+            const colSpan = tableName === 'slowest' ? 7 : 5;
+            if (!result.content || result.content.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="${colSpan}" class="text-center text-muted py-3">No queries found</td></tr>`;
+                return;
+            }
+
+            if (tableName === 'slowest') {
+                tbody.innerHTML = result.content.map(q => `
+                    <tr style="cursor:pointer" class="query-row" data-hash="${escapeHtml(q.queryHash)}">
+                        <td class="query-pattern" title="${escapeHtml(q.queryPattern)}">${escapeHtml(q.queryPattern)}</td>
+                        <td class="text-nowrap">${escapeHtml(q.topMethod) || '-'}</td>
+                        <td class="text-end"><span class="badge bg-danger">${q.p95DurationMs} ms</span></td>
+                        <td class="text-center">${renderTrend(q)}</td>
+                        <td class="text-end">${renderImpactBadge(q.impactScore)}</td>
+                        <td class="text-end text-muted">${(q.avgDurationMs || 0).toFixed(1)} ms</td>
+                        <td class="text-end">${q.executionCount}</td>
+                    </tr>
+                `).join('');
+            } else {
+                tbody.innerHTML = result.content.map(q => `
+                    <tr style="cursor:pointer" class="query-row" data-hash="${escapeHtml(q.queryHash)}">
+                        <td class="query-pattern" title="${escapeHtml(q.queryPattern)}">${escapeHtml(q.queryPattern)}</td>
+                        <td class="text-nowrap">${escapeHtml(q.topMethod) || '-'}</td>
+                        <td class="text-end"><span class="badge bg-success">${q.executionCount}</span></td>
+                        <td class="text-end text-muted">${(q.avgDurationMs || 0).toFixed(1)} ms</td>
+                        <td class="text-end">${q.p95DurationMs} ms</td>
+                    </tr>
+                `).join('');
+            }
+        }
+
+        function renderPaginationControls(tableName, result) {
+            const state = tableState[tableName];
+            const container = document.getElementById(state.paginationId);
+
+            const from = result.totalElements === 0 ? 0 : (result.currentPage * state.size + 1);
+            const to = Math.min((result.currentPage + 1) * state.size, result.totalElements);
+
+            let pagesHtml = '';
+            const maxVisiblePages = 5;
+            let startPage = Math.max(0, result.currentPage - Math.floor(maxVisiblePages / 2));
+            let endPage = Math.min(result.totalPages, startPage + maxVisiblePages);
+            if (endPage - startPage < maxVisiblePages) {
+                startPage = Math.max(0, endPage - maxVisiblePages);
+            }
+
+            for (let i = startPage; i < endPage; i++) {
+                pagesHtml += `<button class="btn ${i === result.currentPage ? 'btn-primary' : 'btn-outline-secondary'}"
+                    onclick="goToPage('${tableName}', ${i})">${i + 1}</button>`;
+            }
+
+            container.innerHTML = `
+                <div class="d-flex align-items-center gap-2">
+                    <span class="text-muted">Rows per page:</span>
+                    <select class="form-select page-size-select" onchange="changePageSize('${tableName}', this.value)">
+                        <option value="10" ${state.size === 10 ? 'selected' : ''}>10</option>
+                        <option value="20" ${state.size === 20 ? 'selected' : ''}>20</option>
+                        <option value="50" ${state.size === 50 ? 'selected' : ''}>50</option>
+                    </select>
+                </div>
+                <span class="text-muted">Showing ${from}-${to} of ${result.totalElements} results</span>
+                <div class="btn-group">
+                    <button class="btn btn-outline-secondary" ${result.currentPage === 0 ? 'disabled' : ''}
+                        onclick="goToPage('${tableName}', ${result.currentPage - 1})">
+                        <i class="bi bi-chevron-left"></i>
+                    </button>
+                    ${pagesHtml}
+                    <button class="btn btn-outline-secondary" ${result.currentPage >= result.totalPages - 1 ? 'disabled' : ''}
+                        onclick="goToPage('${tableName}', ${result.currentPage + 1})">
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+                </div>
+            `;
+        }
+
+        function goToPage(tableName, page) {
+            tableState[tableName].page = page;
+            loadPaginatedTable(tableName);
+        }
+
+        function changePageSize(tableName, size) {
+            tableState[tableName].size = parseInt(size);
+            tableState[tableName].page = 0;
+            loadPaginatedTable(tableName);
         }
 
         async function updatePerformanceChart(period) {
@@ -832,29 +1163,9 @@
         }
 
         function updateTables() {
-            // Update slowest queries table
-            const slowestBody = document.getElementById('slowestQueriesTable');
-            slowestBody.innerHTML = slowestQueries.map(q => `
-                <tr style="cursor:pointer" class="query-row" data-hash="${escapeHtml(q.queryHash)}">
-                    <td class="query-pattern" title="${escapeHtml(q.queryPattern)}">${escapeHtml(q.queryPattern)}</td>
-                    <td class="text-nowrap">${escapeHtml(q.topMethod) || '-'}</td>
-                    <td class="text-end"><span class="badge bg-danger">${q.p95DurationMs} ms</span></td>
-                    <td class="text-end text-muted">${(q.avgDurationMs || 0).toFixed(1)} ms</td>
-                    <td class="text-end">${q.executionCount}</td>
-                </tr>
-            `).join('');
-
-            // Update frequent queries table
-            const frequentBody = document.getElementById('frequentQueriesTable');
-            frequentBody.innerHTML = mostFrequentQueries.map(q => `
-                <tr style="cursor:pointer" class="query-row" data-hash="${escapeHtml(q.queryHash)}">
-                    <td class="query-pattern" title="${escapeHtml(q.queryPattern)}">${escapeHtml(q.queryPattern)}</td>
-                    <td class="text-nowrap">${escapeHtml(q.topMethod) || '-'}</td>
-                    <td class="text-end"><span class="badge bg-success">${q.executionCount}</span></td>
-                    <td class="text-end text-muted">${(q.avgDurationMs || 0).toFixed(1)} ms</td>
-                    <td class="text-end">${q.p95DurationMs} ms</td>
-                </tr>
-            `).join('');
+            // Reload paginated tables (preserving current filters/sort/page)
+            loadPaginatedTable('slowest');
+            loadPaginatedTable('frequent');
         }
 
         async function updateCharts() {
