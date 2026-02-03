@@ -6,14 +6,14 @@ spring:
   artemis:
     mode: native
     
-    #broker-url: tcp://artemis-external-connection-test.circletouch.eu:443?sslEnabled=true&trustAll=true&verifyHost=false
-    #user: artemis_external
-    #password: 6hjzbVP_j8ALBLg
+    broker-url: tcp://artemis-external-connection-test.circletouch.eu:443?sslEnabled=true&trustAll=true&verifyHost=false
+    user: artemis_external
+    password: 6hjzbVP_j8ALBLg
 
     ## LOCALHOST
-    broker-url: tcp://artemis-broker:61616
-    user: admin
-    password: admin
+    #broker-url: tcp://artemis-broker:61616
+    #user: admin
+    #password: admin
 
   # JMS Listener Configuration
   jms:
@@ -31,14 +31,12 @@ spring:
 # Event Processor Configuration
 event-processor:
   # Multicast addresses to subscribe to (comma-separated)
-  addresses: BERNARDINI_UNIT_POSITIONS_MESSAGE, BERNARDINI_ASSET_DAMAGES
-  # Per ascoltare più addresses:
-  # addresses: BERNARDINI_UNIT_POSITIONS_MESSAGE,BERNARDINI_ASSET_DAMAGES,BERNARDINI_UNIT_EVENTS
-
-  # Subscriber name (consumer group ID, like Kafka)
-  # Same name = resume from last consumed offset
-  # Different name = new independent subscription
-  subscriber-name: ${SUBSCRIBER_NAME:tfp-processor}
+  addresses: BERNARDINI_UNIT_POSITIONS_MESSAGE,BERNARDINI_ASSET_DAMAGES,BERNARDINI_UNIT_EVENTS
+    
+  # Subscriber name (consumer group ID):
+  #   - Set: FQQN multicast mode (ADDRESS::subscriber.ADDRESS) for local broker
+  #   - Empty/absent: direct anycast mode for external brokers
+  # subscriber-name: tfp-event-processor-dev-01
 
   # JMS concurrency (min-max format)
   concurrency: 3-10

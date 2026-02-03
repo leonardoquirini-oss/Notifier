@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(task build-be:*)",
-      "Bash(task build-ep:*)"
+      "Bash(task build-ep:*)",
+      "Bash(timeout 5 bash:*)"
     ]
   }
 }

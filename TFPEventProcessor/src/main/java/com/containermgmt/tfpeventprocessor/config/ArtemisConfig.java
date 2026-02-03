@@ -19,13 +19,15 @@ import java.util.List;
 /**
  * Apache Artemis JMS Configuration
  *
- * Uses multicast addresses (topics) with durable subscriptions via FQQN
- * (Fully Qualified Queue Name) for Kafka-like consumer group semantics.
+ * Supports two modes based on subscriber-name configuration:
  *
- * Each processor identifies itself with a subscriber-name. Same name = resume
- * from last consumed offset. Different name = new independent subscription.
+ * 1. FQQN multicast mode (subscriber-name set):
+ *    Uses FQQN (ADDRESS::SUBSCRIBER_NAME.ADDRESS) for Kafka-like consumer
+ *    group semantics with durable subscriptions on multicast addresses.
  *
- * FQQN pattern: ADDRESS::SUBSCRIBER_NAME.ADDRESS
+ * 2. Direct/anycast mode (subscriber-name empty or absent):
+ *    Connects directly to the queue by address name. Used for external
+ *    Artemis brokers with standard anycast queues.
  */
 @Configuration
 @EnableJms
@@ -38,7 +40,7 @@ public class ArtemisConfig implements JmsListenerConfigurer {
     @Value("${event-processor.addresses}")
     private List<String> addresses;
 
-    @Value("${event-processor.subscriber-name:tfp-processor}")
+    @Value("${event-processor.subscriber-name:}")
     private String subscriberName;
 
     private final EventListener eventListener;
@@ -51,11 +53,12 @@ public class ArtemisConfig implements JmsListenerConfigurer {
 
     @PostConstruct
     public void init() {
+        log.info("Addresses: {}", addresses);
         if (subscriberName == null || subscriberName.isBlank()) {
-            throw new IllegalArgumentException("event-processor.subscriber-name must not be empty");
+            log.info("Mode: DIRECT (anycast queues, no FQQN)");
+        } else {
+            log.info("Mode: FQQN multicast (subscriber-name: {})", subscriberName);
         }
-        log.info("Multicast addresses: {}", addresses);
-        log.info("Subscriber name: {}", subscriberName);
     }
 
     @Bean
@@ -81,14 +84,14 @@ public class ArtemisConfig implements JmsListenerConfigurer {
 
         for (String address : addresses) {
             String addressName = address.trim();
-            String fqqn = buildFQQN(addressName);
+            String destination = resolveDestination(addressName);
 
-            log.info("Registering JMS listener for multicast address: {} via FQQN: {}",
-                    addressName, fqqn);
+            log.info("Registering JMS listener for address: {} (destination: {})",
+                    addressName, destination);
 
             SimpleJmsListenerEndpoint endpoint = new SimpleJmsListenerEndpoint();
             endpoint.setId("evt-listener-" + addressName);
-            endpoint.setDestination(fqqn);
+            endpoint.setDestination(destination);
             endpoint.setMessageListener(msg -> eventListener.onMessage(addressName, msg));
 
             registrar.registerEndpoint(endpoint, factory);
@@ -96,13 +99,18 @@ public class ArtemisConfig implements JmsListenerConfigurer {
     }
 
     /**
-     * Builds the FQQN (Fully Qualified Queue Name) for a multicast address.
-     * Format: ADDRESS::SUBSCRIBER_NAME.ADDRESS
+     * Resolves the JMS destination for a given address.
      *
-     * The Artemis JMS client recognizes :: as the FQQN separator and connects
-     * to the specific subscription queue on the multicast address.
+     * If subscriber-name is set: returns FQQN (ADDRESS::SUBSCRIBER_NAME.ADDRESS)
+     * for multicast durable subscriptions.
+     *
+     * If subscriber-name is empty: returns the address name directly
+     * for anycast/direct queue consumption.
      */
-    private String buildFQQN(String addressName) {
+    private String resolveDestination(String addressName) {
+        if (subscriberName == null || subscriberName.isBlank()) {
+            return addressName;
+        }
         return addressName + "::" + subscriberName + "." + addressName;
     }
 }
