@@ -3,6 +3,7 @@ package it.berlink.monitoring.service;
 import it.berlink.monitoring.model.DurationDistribution;
 import it.berlink.monitoring.model.ExecutionPoint;
 import it.berlink.monitoring.model.MonitorOverview;
+import it.berlink.monitoring.model.PaginatedResult;
 import it.berlink.monitoring.model.QueryDetail;
 import it.berlink.monitoring.model.QueryMetric;
 import it.berlink.monitoring.model.TimeSeriesPoint;
@@ -191,6 +192,68 @@ public class QueryMonitorService {
             .sorted(Comparator.comparingLong(QueryMetric::getExecutionCount).reversed())
             .limit(limit)
             .collect(Collectors.toList());
+    }
+
+    /**
+     * Returns queries with pagination, filtering and sorting.
+     */
+    public PaginatedResult<QueryMetric> getQueriesPaginated(
+            int page, int size, String sortBy, String sortDir,
+            String queryFilter, String methodFilter) {
+
+        List<QueryMetric> all = getAllMetrics();
+
+        // Apply filters
+        if (queryFilter != null && !queryFilter.isBlank()) {
+            String lowerFilter = queryFilter.toLowerCase();
+            all = all.stream()
+                .filter(m -> m.getQueryPattern() != null
+                    && m.getQueryPattern().toLowerCase().contains(lowerFilter))
+                .collect(Collectors.toList());
+        }
+        if (methodFilter != null && !methodFilter.isBlank()) {
+            String lowerFilter = methodFilter.toLowerCase();
+            all = all.stream()
+                .filter(m -> m.getTopMethod() != null
+                    && m.getTopMethod().toLowerCase().contains(lowerFilter))
+                .collect(Collectors.toList());
+        }
+
+        // Sort
+        Comparator<QueryMetric> comparator = buildComparator(sortBy);
+        if ("desc".equalsIgnoreCase(sortDir)) {
+            comparator = comparator.reversed();
+        }
+        all.sort(comparator);
+
+        // Paginate
+        long totalElements = all.size();
+        int totalPages = (int) Math.ceil((double) totalElements / size);
+        int fromIndex = Math.min(page * size, all.size());
+        int toIndex = Math.min(fromIndex + size, all.size());
+        List<QueryMetric> content = all.subList(fromIndex, toIndex);
+
+        return PaginatedResult.<QueryMetric>builder()
+            .content(content)
+            .totalElements(totalElements)
+            .totalPages(totalPages)
+            .currentPage(page)
+            .build();
+    }
+
+    private Comparator<QueryMetric> buildComparator(String sortBy) {
+        if (sortBy == null) {
+            return Comparator.comparingLong(QueryMetric::getP95DurationMs);
+        }
+        return switch (sortBy) {
+            case "avgDurationMs" -> Comparator.comparingDouble(QueryMetric::getAvgDurationMs);
+            case "executionCount" -> Comparator.comparingLong(QueryMetric::getExecutionCount);
+            case "queryPattern" -> Comparator.comparing(
+                QueryMetric::getQueryPattern, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER));
+            case "topMethod" -> Comparator.comparing(
+                QueryMetric::getTopMethod, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER));
+            default -> Comparator.comparingLong(QueryMetric::getP95DurationMs);
+        };
     }
 
     /**

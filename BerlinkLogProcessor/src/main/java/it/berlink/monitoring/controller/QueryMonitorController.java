@@ -2,6 +2,7 @@ package it.berlink.monitoring.controller;
 
 import it.berlink.monitoring.model.DurationDistribution;
 import it.berlink.monitoring.model.MonitorOverview;
+import it.berlink.monitoring.model.PaginatedResult;
 import it.berlink.monitoring.model.ProcessorStatus;
 import it.berlink.monitoring.model.QueryDetail;
 import it.berlink.monitoring.model.QueryMetric;
@@ -47,6 +48,21 @@ public class QueryMonitorController {
     public ResponseEntity<List<QueryMetric>> getMostFrequentQueries(
             @RequestParam(defaultValue = "20") int limit) {
         return ResponseEntity.ok(monitorService.getMostFrequentQueries(limit));
+    }
+
+    /**
+     * Returns queries with pagination, filtering and sorting.
+     */
+    @GetMapping("/queries-paginated")
+    public ResponseEntity<PaginatedResult<QueryMetric>> getQueriesPaginated(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "p95DurationMs") String sortBy,
+            @RequestParam(defaultValue = "desc") String sortDir,
+            @RequestParam(required = false) String queryFilter,
+            @RequestParam(required = false) String methodFilter) {
+        return ResponseEntity.ok(
+            monitorService.getQueriesPaginated(page, size, sortBy, sortDir, queryFilter, methodFilter));
     }
 
     /**
