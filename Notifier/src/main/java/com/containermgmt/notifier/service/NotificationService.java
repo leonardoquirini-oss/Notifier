@@ -205,6 +205,11 @@ public class NotificationService {
                 return;
             }
 
+            // DEBUG: diagnostica body dai parameters
+            logger.info("DirectEmail DEBUG (NotifService): body from parameters = [{}]",
+                parameters.get("body") != null ?
+                    ((String)parameters.get("body")).substring(0, Math.min(500, ((String)parameters.get("body")).length())) : "null");
+
             // Parsing della richiesta email
             DirectEmailRequest request = parseDirectEmailRequest(parameters);
 

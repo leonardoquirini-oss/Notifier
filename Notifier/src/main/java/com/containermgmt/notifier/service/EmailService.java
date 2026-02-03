@@ -28,6 +28,7 @@ import java.io.IOException;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * Service per l'invio di email basate su template
@@ -551,6 +552,30 @@ public class EmailService {
         // Body può essere vuoto
         String body = request.getBody() != null ? request.getBody() : "";
 
+        // DEBUG: diagnostica caratteri nel body per problemi \n letterali
+        logger.info("DirectEmail DEBUG: isHtml={}, bodyLength={}", request.isHtml(), body.length());
+        logger.info("DirectEmail DEBUG: body RAW (first 500 chars): [{}]",
+            body.length() > 500 ? body.substring(0, 500) : body);
+        logger.info("DirectEmail DEBUG: body contains literal backslash-n: {}",
+            body.contains("\\n"));
+        logger.info("DirectEmail DEBUG: body contains real newline (0x0A): {}",
+            body.contains("\n"));
+        logger.info("DirectEmail DEBUG: body codepoints (first 200): [{}]",
+            body.codePoints().limit(200)
+                .mapToObj(cp -> cp == 10 ? "<LF>" : cp == 13 ? "<CR>" : cp == 92 ? "<BACKSLASH>" : String.valueOf((char) cp))
+                .collect(Collectors.joining()));
+
+        // Converti literal \n (backslash+n) in veri newline (0x0A)
+        body = body.replace("\\n", "\n");
+
+        // Per email HTML, converti newline in <br> per visualizzazione corretta
+        if (request.isHtml() && !body.isEmpty()) {
+            body = body.replace("\n", "<br>");
+        }
+
+        logger.info("DirectEmail DEBUG: body AFTER replace (first 500 chars): [{}]",
+            body.length() > 500 ? body.substring(0, 500) : body);
+
         // Prepara insiemi destinatari
         Set<String> toAddresses = new LinkedHashSet<>(request.getTo());
         Set<String> ccAddresses = request.getCc() != null ? new LinkedHashSet<>(request.getCc()) : new LinkedHashSet<>();
@@ -588,8 +613,8 @@ public class EmailService {
         );
 
         try {
-            // Aggiungi footer al body
-            String bodyWithFooter = addFooterToBody(body, request.isHtml());
+            // Email dirette: non aggiungere il footer configurato
+            String bodyWithFooter = body;
 
             // Determina il mittente (usa default se non specificato)
             String senderName = request.getSenderName();
