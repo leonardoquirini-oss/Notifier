@@ -47,9 +47,9 @@ event-processor:
 
   # Artemis address -> Valkey stream mapping
   stream-mapping:
-    BERNARDINI_UNIT_POSITIONS_MESSAGE: tfp-unit-positions-stream
-    BERNARDINI_ASSET_DAMAGES: tfp-asset-damages-stream
     BERNARDINI_UNIT_EVENTS: tfp-unit-events-stream
+    BERNARDINI_UNIT_POSITIONS_MESSAGE: tfp-unit-positions-stream
+    BERNARDINI_ASSET_DAMAGES: tfp-asset-damages-stream    
 
 # Valkey (Redis) Configuration
 valkey:
