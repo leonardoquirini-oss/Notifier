@@ -35,10 +35,14 @@ public class EventProcessorService {
 
     private final ActiveJDBCConfig activeJDBCConfig;
     private final EventHandlerRegistry handlerRegistry;
+    private final ValkeyStreamPublisher valkeyStreamPublisher;
 
-    public EventProcessorService(ActiveJDBCConfig activeJDBCConfig, EventHandlerRegistry handlerRegistry) {
+    public EventProcessorService(ActiveJDBCConfig activeJDBCConfig,
+                                 EventHandlerRegistry handlerRegistry,
+                                 ValkeyStreamPublisher valkeyStreamPublisher) {
         this.activeJDBCConfig = activeJDBCConfig;
         this.handlerRegistry = handlerRegistry;
+        this.valkeyStreamPublisher = valkeyStreamPublisher;
     }
 
     /**
@@ -61,6 +65,9 @@ public class EventProcessorService {
         } finally {
             activeJDBCConfig.closeConnection();
         }
+
+        // Fire-and-forget: publish to Valkey stream after DB commit
+        valkeyStreamPublisher.publish(eventMessage);
     }
 
     private void upsertRawEvent(EventMessage eventMessage) {

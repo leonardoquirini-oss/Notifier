@@ -11,6 +11,11 @@ services:
       # Subscriber name (consumer group ID)
       SUBSCRIBER_NAME: ${SUBSCRIBER_NAME:-tfp-processor}
 
+      # Valkey (Redis) connection
+      VALKEY_HOST: ${VALKEY_HOST:-valkey-service}
+      VALKEY_PORT: ${VALKEY_PORT:-6379}
+      VALKEY_PASSWORD: ${VALKEY_PASSWORD:-}
+
       # JVM Options (con debug remoto)
       JAVA_TOOL_OPTIONS: "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -Xms256m -Xmx512m"
 

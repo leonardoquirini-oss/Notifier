@@ -1,0 +1,60 @@
+package com.containermgmt.tfpeventprocessor.service;
+
+import com.containermgmt.tfpeventprocessor.config.EventProcessorProperties;
+import com.containermgmt.tfpeventprocessor.dto.EventMessage;
+
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.connection.stream.StreamRecords;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.stereotype.Service;
+
+import java.time.Instant;
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * Fire-and-forget publisher to Valkey streams.
+ *
+ * Each Artemis address maps to a Valkey stream key (configured in YAML).
+ * Failures are logged as warnings and never propagated.
+ */
+@Service
+@Slf4j
+public class ValkeyStreamPublisher {
+
+    private final RedisTemplate<String, String> redisTemplate;
+    private final EventProcessorProperties properties;
+
+    public ValkeyStreamPublisher(RedisTemplate<String, String> redisTemplate,
+                                 EventProcessorProperties properties) {
+        this.redisTemplate = redisTemplate;
+        this.properties = properties;
+    }
+
+    public void publish(EventMessage eventMessage) {
+        String streamKey = properties.getStreamMapping().get(eventMessage.getEventType());
+        if (streamKey == null) {
+            log.debug("No stream mapping for eventType={}, skipping Valkey publish",
+                    eventMessage.getEventType());
+            return;
+        }
+
+        try {
+            Map<String, String> fields = new HashMap<>();
+            fields.put("message_id", eventMessage.getMessageId());
+            fields.put("event_type", eventMessage.getEventType());
+            fields.put("event_time", eventMessage.getEventTime() != null
+                    ? eventMessage.getEventTime().toString()
+                    : Instant.now().toString());
+            fields.put("payload", eventMessage.getRawPayload());
+
+            redisTemplate.opsForStream()
+                    .add(StreamRecords.string(fields).withStreamKey(streamKey));
+
+            log.info("Published to Valkey stream={}, messageId={}", streamKey, eventMessage.getMessageId());
+        } catch (Exception e) {
+            log.warn("Failed to publish to Valkey stream={}, messageId={}: {}",
+                    streamKey, eventMessage.getMessageId(), e.getMessage());
+        }
+    }
+}

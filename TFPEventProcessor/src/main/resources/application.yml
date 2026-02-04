@@ -6,14 +6,14 @@ spring:
   artemis:
     mode: native
     
-    broker-url: tcp://artemis-external-connection-test.circletouch.eu:443?sslEnabled=true&trustAll=true&verifyHost=false
-    user: artemis_external
-    password: 6hjzbVP_j8ALBLg
+    #broker-url: tcp://artemis-external-connection-test.circletouch.eu:443?sslEnabled=true&trustAll=true&verifyHost=false
+    #user: artemis_external
+    #password: 6hjzbVP_j8ALBLg
 
     ## LOCALHOST
-    #broker-url: tcp://artemis-broker:61616
-    #user: admin
-    #password: admin
+    broker-url: tcp://artemis-broker:61616
+    user: admin
+    password: admin
 
   # JMS Listener Configuration
   jms:
@@ -32,7 +32,7 @@ spring:
 event-processor:
   # Multicast addresses to subscribe to (comma-separated)
   addresses: BERNARDINI_UNIT_POSITIONS_MESSAGE,BERNARDINI_ASSET_DAMAGES,BERNARDINI_UNIT_EVENTS
-    
+  
   # Subscriber name (consumer group ID):
   #   - Set: FQQN multicast mode (ADDRESS::subscriber.ADDRESS) for local broker
   #   - Empty/absent: direct anycast mode for external brokers
@@ -45,6 +45,19 @@ event-processor:
   retry-attempts: 3
   retry-delay-ms: 5000
 
+  # Artemis address -> Valkey stream mapping
+  stream-mapping:
+    BERNARDINI_UNIT_POSITIONS_MESSAGE: tfp-unit-positions-stream
+    BERNARDINI_ASSET_DAMAGES: tfp-asset-damages-stream
+    BERNARDINI_UNIT_EVENTS: tfp-unit-events-stream
+
+# Valkey (Redis) Configuration
+valkey:
+  host: valkey-service}
+  port: 6379
+  database: 0
+  password: 
+
 # Actuator Configuration (Health Checks)
 management:
   endpoints:
@@ -54,6 +67,9 @@ management:
   endpoint:
     health:
       show-details: always
+  health:
+    redis:
+      enabled: false
 
 # Logging Configuration
 logging:
