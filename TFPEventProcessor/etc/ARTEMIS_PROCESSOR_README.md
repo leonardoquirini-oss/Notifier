@@ -1,4 +1,4 @@
-# Apache Artemis Event Processor - Setup Guide
+# Apache Artemis Gateway - Setup Guide
 
 ## Project Overview
 Spring Boot application that consumes events from Apache Artemis queues and persists them to an existing PostgreSQL database using JavaLite ActiveJDBC ORM.
@@ -188,7 +188,7 @@ database:
     max-lifetime: 1800000
 
 # Event Processing Configuration
-event-processor:
+gateway:
   queue-name: events.queue
   retry-attempts: 3
   retry-delay-ms: 5000
@@ -366,7 +366,7 @@ public class EventMessage {
 }
 ```
 
-### 5. Event Processor Service
+### 5. Gateway Service
 
 **EventProcessorService.java:**
 ```java
@@ -466,13 +466,13 @@ public class EventListener {
     @Autowired
     private EventProcessorService eventProcessorService;
 
-    @Value("${event-processor.retry-attempts:3}")
+    @Value("${gateway.retry-attempts:3}")
     private int maxRetries;
 
-    @Value("${event-processor.retry-delay-ms:5000}")
+    @Value("${gateway.retry-delay-ms:5000}")
     private long retryDelay;
 
-    @JmsListener(destination = "${event-processor.queue-name}")
+    @JmsListener(destination = "${gateway.queue-name}")
     public void onMessage(EventMessage eventMessage) {
         logger.debug("Received message from queue: {}", 
             eventMessage.getEventId());
@@ -511,7 +511,7 @@ public class EventListener {
     }
 
     // Alternative: Direct String message processing
-    @JmsListener(destination = "${event-processor.queue-name}.raw")
+    @JmsListener(destination = "${gateway.queue-name}.raw")
     public void onRawMessage(String messageJson) {
         logger.debug("Received raw message");
         // Parse and process JSON string
@@ -613,7 +613,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # Event Processor Application
+  # Gateway Application
   processor:
     build:
       context: .
@@ -934,6 +934,6 @@ docker logs -f artemis-processor
 
 ---
 
-**Created for**: Apache Artemis → PostgreSQL Event Processor  
+**Created for**: Apache Artemis → PostgreSQL Gateway  
 **Date**: 2025-12-15  
 **Purpose**: Production-ready event processing with Spring Boot + ActiveJDBC

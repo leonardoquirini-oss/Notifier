@@ -1,10 +1,10 @@
-package com.containermgmt.tfpeventprocessor.service;
+package com.containermgmt.tfpgateway.service;
 
-import com.containermgmt.tfpeventprocessor.config.ActiveJDBCConfig;
-import com.containermgmt.tfpeventprocessor.dto.EventMessage;
-import com.containermgmt.tfpeventprocessor.exception.EventProcessingException;
-import com.containermgmt.tfpeventprocessor.handler.EventHandlerRegistry;
-import com.containermgmt.tfpeventprocessor.handler.EventTypeHandler;
+import com.containermgmt.tfpgateway.config.ActiveJDBCConfig;
+import com.containermgmt.tfpgateway.dto.EventMessage;
+import com.containermgmt.tfpgateway.exception.EventProcessingException;
+import com.containermgmt.tfpgateway.handler.EventHandlerRegistry;
+import com.containermgmt.tfpgateway.handler.EventTypeHandler;
 
 import lombok.extern.slf4j.Slf4j;
 import org.javalite.activejdbc.Base;

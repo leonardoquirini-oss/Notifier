@@ -1,4 +1,4 @@
-package com.containermgmt.tfpeventprocessor.exception;
+package com.containermgmt.tfpgateway.exception;
 
 /**
  * Custom exception for event processing errors

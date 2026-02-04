@@ -1,4 +1,4 @@
-package com.containermgmt.tfpeventprocessor.config;
+package com.containermgmt.tfpgateway.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;

@@ -1,4 +1,4 @@
-# Multi-stage build per TFP Event Processor
+# Multi-stage build per TFP Gateway
 
 # Stage 1: Build con Maven
 FROM maven:3.9-eclipse-temurin-17 AS build

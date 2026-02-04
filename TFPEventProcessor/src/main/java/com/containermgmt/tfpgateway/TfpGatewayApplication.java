@@ -1,19 +1,19 @@
-package com.containermgmt.tfpeventprocessor;
+package com.containermgmt.tfpgateway;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 /**
- * TFP Event Processor Application
+ * TFP Gateway Application
  *
  * Consumes events from Apache Artemis queues and persists them to PostgreSQL
  * using ActiveJDBC ORM.
  */
 @SpringBootApplication
-public class TfpEventProcessorApplication {
+public class TfpGatewayApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(TfpEventProcessorApplication.class, args);
+        SpringApplication.run(TfpGatewayApplication.class, args);
     }
 
 }

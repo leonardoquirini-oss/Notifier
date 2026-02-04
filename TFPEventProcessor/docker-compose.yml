@@ -1,12 +1,12 @@
 version: '3.8'
 
 services:
-  # TFP Event Processor Application
-  tfp-event-processor:
+  # TFP Gateway Application
+  tfp-gateway:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: tfp-event-processor
+    container_name: tfp-gateway
     environment:
       # Subscriber name (consumer group ID)
       SUBSCRIBER_NAME: ${SUBSCRIBER_NAME:-tfp-processor}

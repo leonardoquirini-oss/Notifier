@@ -1,6 +1,6 @@
 spring:
   application:
-    name: tfp-event-processor
+    name: tfp-gateway
 
   # Apache Artemis Configuration
   artemis:
@@ -28,15 +28,15 @@ spring:
     password: berlink
     driver-class-name: org.postgresql.Driver
 
-# Event Processor Configuration
-event-processor:
+# Gateway Configuration
+gateway:
   # Multicast addresses to subscribe to (comma-separated)
   addresses: BERNARDINI_UNIT_POSITIONS_MESSAGE,BERNARDINI_ASSET_DAMAGES,BERNARDINI_UNIT_EVENTS
   
   # Subscriber name (consumer group ID):
   #   - Set: FQQN multicast mode (ADDRESS::subscriber.ADDRESS) for local broker
   #   - Empty/absent: direct anycast mode for external brokers
-  # subscriber-name: tfp-event-processor-dev-01
+  # subscriber-name: tfp-gateway-dev-01
 
   # JMS concurrency (min-max format)
   concurrency: 3-10
@@ -75,7 +75,7 @@ management:
 logging:
   level:
     root: INFO
-    com.containermgmt.tfpeventprocessor: DEBUG
+    com.containermgmt.tfpgateway: DEBUG
     org.javalite.activejdbc: INFO
     org.springframework.jms: INFO
     org.apache.activemq.artemis: INFO

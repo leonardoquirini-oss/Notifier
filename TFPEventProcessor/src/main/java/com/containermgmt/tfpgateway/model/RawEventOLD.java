@@ -1,4 +1,4 @@
-package com.containermgmt.tfpeventprocessor.model;
+package com.containermgmt.tfpgateway.model;
 
 import org.javalite.activejdbc.Model;
 import org.javalite.activejdbc.annotations.Table;

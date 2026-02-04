@@ -1,6 +1,6 @@
-package com.containermgmt.tfpeventprocessor.config;
+package com.containermgmt.tfpgateway.config;
 
-import com.containermgmt.tfpeventprocessor.listener.EventListener;
+import com.containermgmt.tfpgateway.listener.EventListener;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.jms.ConnectionFactory;
@@ -34,13 +34,13 @@ import java.util.List;
 @Slf4j
 public class ArtemisConfig implements JmsListenerConfigurer {
 
-    @Value("${event-processor.concurrency:3-10}")
+    @Value("${gateway.concurrency:3-10}")
     private String concurrency;
 
-    @Value("${event-processor.addresses}")
+    @Value("${gateway.addresses}")
     private List<String> addresses;
 
-    @Value("${event-processor.subscriber-name:}")
+    @Value("${gateway.subscriber-name:}")
     private String subscriberName;
 
     private final EventListener eventListener;

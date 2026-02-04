@@ -1,6 +1,6 @@
-package com.containermgmt.tfpeventprocessor.handler;
+package com.containermgmt.tfpgateway.handler;
 
-import com.containermgmt.tfpeventprocessor.dto.EventMessage;
+import com.containermgmt.tfpgateway.dto.EventMessage;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.annotation.Order;
@@ -15,9 +15,9 @@ import java.util.Set;
 @Component
 @Order(1)
 @Slf4j
-public class AssetDamageEventHandler implements EventTypeHandler {
+public class UnitPositionEventHandler implements EventTypeHandler {
 
-    private static final String SUPPORTED_TYPE = "BERNARDINI_ASSET_DAMAGES";
+    private static final String SUPPORTED_TYPE = "BERNARDINI_UNIT_POSITIONS_MESSAGE";
 
     @Override
     public Set<String> supportedEventTypes() {
@@ -31,7 +31,7 @@ public class AssetDamageEventHandler implements EventTypeHandler {
 
     @Override
     public void handle(EventMessage eventMessage) {
-        log.info("Handling BERNARDINI_ASSET_DAMAGES event: messageId={}", eventMessage.getMessageId());
+        log.info("Handling {} event: messageId={}", SUPPORTED_TYPE, eventMessage.getMessageId());
         // TODO: implement asset-damage specific logic
     }
 }

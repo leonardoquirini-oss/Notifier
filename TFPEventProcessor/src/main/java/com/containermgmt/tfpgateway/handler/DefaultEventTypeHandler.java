@@ -1,6 +1,6 @@
-package com.containermgmt.tfpeventprocessor.handler;
+package com.containermgmt.tfpgateway.handler;
 
-import com.containermgmt.tfpeventprocessor.dto.EventMessage;
+import com.containermgmt.tfpgateway.dto.EventMessage;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.annotation.Order;

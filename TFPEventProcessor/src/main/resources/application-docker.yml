@@ -11,5 +11,5 @@ spring:
 logging:
   level:
     root: INFO
-    com.containermgmt.tfpeventprocessor: INFO
+    com.containermgmt.tfpgateway: INFO
     org.javalite.activejdbc: WARN

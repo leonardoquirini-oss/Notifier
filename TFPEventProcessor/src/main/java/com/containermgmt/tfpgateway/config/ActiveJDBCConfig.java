@@ -1,4 +1,4 @@
-package com.containermgmt.tfpeventprocessor.config;
+package com.containermgmt.tfpgateway.config;
 
 import org.javalite.activejdbc.Base;
 import org.springframework.beans.factory.annotation.Value;

@@ -1,4 +1,4 @@
-package com.containermgmt.tfpeventprocessor.dto;
+package com.containermgmt.tfpgateway.dto;
 
 import lombok.Data;
 import lombok.NoArgsConstructor;

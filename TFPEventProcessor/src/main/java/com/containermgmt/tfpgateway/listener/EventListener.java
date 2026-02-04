@@ -1,7 +1,7 @@
-package com.containermgmt.tfpeventprocessor.listener;
+package com.containermgmt.tfpgateway.listener;
 
-import com.containermgmt.tfpeventprocessor.dto.EventMessage;
-import com.containermgmt.tfpeventprocessor.service.EventProcessorService;
+import com.containermgmt.tfpgateway.dto.EventMessage;
+import com.containermgmt.tfpgateway.service.EventProcessorService;
 
 import jakarta.jms.Message;
 import lombok.extern.slf4j.Slf4j;
@@ -30,10 +30,10 @@ public class EventListener {
 
     private final EventProcessorService eventProcessorService;
 
-    @Value("${event-processor.retry-attempts:3}")
+    @Value("${gateway.retry-attempts:3}")
     private int maxRetries;
 
-    @Value("${event-processor.retry-delay-ms:5000}")
+    @Value("${gateway.retry-delay-ms:5000}")
     private long retryDelay;
 
     public EventListener(EventProcessorService eventProcessorService) {

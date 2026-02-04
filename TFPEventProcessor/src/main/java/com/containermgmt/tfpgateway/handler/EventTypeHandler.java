@@ -1,6 +1,6 @@
-package com.containermgmt.tfpeventprocessor.handler;
+package com.containermgmt.tfpgateway.handler;
 
-import com.containermgmt.tfpeventprocessor.dto.EventMessage;
+import com.containermgmt.tfpgateway.dto.EventMessage;
 
 import java.util.Collections;
 import java.util.Set;

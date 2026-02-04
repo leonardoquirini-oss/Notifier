@@ -1,7 +1,7 @@
-package com.containermgmt.tfpeventprocessor.service;
+package com.containermgmt.tfpgateway.service;
 
-import com.containermgmt.tfpeventprocessor.config.EventProcessorProperties;
-import com.containermgmt.tfpeventprocessor.dto.EventMessage;
+import com.containermgmt.tfpgateway.config.GatewayProperties;
+import com.containermgmt.tfpgateway.dto.EventMessage;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.connection.stream.StreamRecords;
@@ -23,10 +23,10 @@ import java.util.Map;
 public class ValkeyStreamPublisher {
 
     private final RedisTemplate<String, String> redisTemplate;
-    private final EventProcessorProperties properties;
+    private final GatewayProperties properties;
 
     public ValkeyStreamPublisher(RedisTemplate<String, String> redisTemplate,
-                                 EventProcessorProperties properties) {
+                                 GatewayProperties properties) {
         this.redisTemplate = redisTemplate;
         this.properties = properties;
     }

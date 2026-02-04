@@ -20,12 +20,12 @@ tasks:
     
   stop-ep:
     cmds:
-      - docker-compose  -f docker-compose.yml stop tfp-event-processor
+      - docker-compose  -f docker-compose.yml stop tfp-gateway
     silent: true  
   
   build-ep:
     cmds:
-      - docker-compose  -f docker-compose.yml build tfp-event-processor
+      - docker-compose  -f docker-compose.yml build tfp-gateway
     silent: true  
 
   ep:
@@ -36,7 +36,7 @@ tasks:
 
   logs-ep:
     cmds:
-      - docker-compose logs -f tfp-event-processor
+      - docker-compose logs -f tfp-gateway
   
   up:
     cmds:

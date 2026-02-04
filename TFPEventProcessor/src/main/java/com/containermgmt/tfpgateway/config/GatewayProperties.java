@@ -1,4 +1,4 @@
-package com.containermgmt.tfpeventprocessor.config;
+package com.containermgmt.tfpgateway.config;
 
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -8,13 +8,13 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Typed binding for event-processor.stream-mapping configuration.
+ * Typed binding for gateway.stream-mapping configuration.
  * Maps Artemis address names to Valkey stream keys.
  */
 @Configuration
-@ConfigurationProperties(prefix = "event-processor")
+@ConfigurationProperties(prefix = "gateway")
 @Data
-public class EventProcessorProperties {
+public class GatewayProperties {
 
     /** Artemis address name -> Valkey stream key */
     private Map<String, String> streamMapping = new HashMap<>();

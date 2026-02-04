@@ -1,4 +1,4 @@
-# TFP Event Processor
+# TFP Gateway
 
 Spring Boot application che consuma eventi da multicast addresses Apache Artemis (topic con durable subscriptions) e li persiste su PostgreSQL usando ActiveJDBC ORM.
 
@@ -58,7 +58,7 @@ Producer (GUI Artemis / TFP) ──► Address MULTICAST (es. BERNARDINI_ASSET_D
 ### application.yml
 
 ```yaml
-event-processor:
+gateway:
   # Multicast addresses (comma-separated)
   addresses: BERNARDINI_UNIT_POSITIONS_MESSAGE, BERNARDINI_ASSET_DAMAGES
 
@@ -97,7 +97,7 @@ volumes:
 
 2. Aggiungere l'address in `application.yml`:
    ```yaml
-   event-processor:
+   gateway:
      addresses: BERNARDINI_UNIT_POSITIONS_MESSAGE, BERNARDINI_ASSET_DAMAGES, NUOVA_ADDRESS
    ```
 
@@ -176,7 +176,7 @@ task build-ep
 docker-compose up -d --build
 
 # Logs
-docker-compose logs -f tfp-event-processor
+docker-compose logs -f tfp-gateway
 
 # Stop
 docker-compose down

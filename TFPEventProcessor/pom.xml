@@ -13,10 +13,10 @@
     </parent>
 
     <groupId>com.containermgmt</groupId>
-    <artifactId>tfp-event-processor</artifactId>
+    <artifactId>tfp-gateway</artifactId>
     <version>1.0.0</version>
-    <name>TFP Event Processor</name>
-    <description>Apache Artemis Event Processor for TFP</description>
+    <name>TFP Gateway</name>
+    <description>Apache Artemis Gateway for TFP</description>
 
     <properties>
         <java.version>17</java.version>

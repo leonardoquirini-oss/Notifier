@@ -1,4 +1,4 @@
-# TFP Event Processor - Claude Code Reference
+# TFP Gateway - Claude Code Reference
 
 Spring Boot application che consuma eventi da multicast addresses Apache Artemis (durable subscriptions via FQQN) e li persiste su PostgreSQL usando ActiveJDBC ORM.
 
@@ -14,9 +14,9 @@ Spring Boot application che consuma eventi da multicast addresses Apache Artemis
 ## Struttura Progetto
 
 ```
-TFPEventProcessor/
-├── src/main/java/com/containermgmt/tfpeventprocessor/
-│   ├── TfpEventProcessorApplication.java
+TFPGateway/
+├── src/main/java/com/containermgmt/tfpgateway/
+│   ├── TfpGatewayApplication.java
 │   ├── config/
 │   │   ├── ActiveJDBCConfig.java
 │   │   ├── ArtemisConfig.java
@@ -69,7 +69,7 @@ TFPEventProcessor/
 Le addresses da ascoltare sono configurabili in `application.yml`:
 
 ```yaml
-event-processor:
+gateway:
   addresses: BERNARDINI_UNIT_POSITIONS_MESSAGE, BERNARDINI_ASSET_DAMAGES
   subscriber-name: ${SUBSCRIBER_NAME:tfp-processor}
 ```
@@ -79,7 +79,7 @@ Le addresses devono essere definite come **multicast** in `artemis-config/broker
 ## Aggiungere Nuove Addresses
 
 1. Aggiungere l'address multicast in `artemis-config/broker.xml`
-2. Aggiungere il nome in `application.yml` sotto `event-processor.addresses`
+2. Aggiungere il nome in `application.yml` sotto `gateway.addresses`
 3. (Opzionale) Creare un handler specifico nel package `handler/`
 4. Riavviare Artemis e il processor
 
@@ -119,7 +119,7 @@ Il processor implementa retry automatico:
 
 Configurazione in `application.yml`:
 ```yaml
-event-processor:
+gateway:
   retry-attempts: 3
   retry-delay-ms: 5000
 ```
@@ -131,7 +131,7 @@ event-processor:
 task build-ep
 
 # Logs
-docker-compose logs -f tfp-event-processor
+docker-compose logs -f tfp-gateway
 
 # Console Artemis
 # http://localhost:8161 (admin/admin)
