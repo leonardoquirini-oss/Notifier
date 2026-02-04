@@ -1,0 +1,37 @@
+spring:
+  application:
+    name: tfp-event-ingester-service
+
+  # PostgreSQL Database Configuration
+  datasource:
+    url: jdbc:postgresql://postgres-service:5432/berlinkdb
+    username: berlink
+    password: berlink
+    driver-class-name: org.postgresql.Driver
+
+# Valkey (Redis) Configuration
+valkey:
+  host: valkey-service
+  port: 6379
+  database: 0
+  password: 
+
+# Actuator Configuration (Health Checks)
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+# Logging Configuration
+logging:
+  level:
+    root: INFO
+    com.containermgmt.tfpeventingester: DEBUG
+    org.javalite.activejdbc: INFO
+    org.springframework.data.redis: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"

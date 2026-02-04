@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  tfpeventingester:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tfp-event-ingester
+    environment:
+      # Database Configuration
+      DB_HOST: postgres-service
+      DB_NAME: berlinkdb
+      DB_PORT: 5432
+      DB_USER: berlink
+      DB_PASSWORD: berlink
+
+      # Valkey Configuration
+      VALKEY_HOST: valkey-service
+      VALKEY_PORT: 6379
+      VALKEY_PASSWORD:
+
+    networks:
+      - berlink-network
+    restart: unless-stopped
+
+networks:
+  berlink-network:
+    external: true
+    name: berlink-dev_berlink-network

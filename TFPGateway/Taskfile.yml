@@ -18,23 +18,23 @@ tasks:
       - docker-compose -f docker-compose.yml stop artemis
     silent: true
     
-  stop-ep:
+  stop-gw:
     cmds:
       - docker-compose  -f docker-compose.yml stop tfp-gateway
     silent: true  
   
-  build-ep:
+  build-gw:
     cmds:
       - docker-compose  -f docker-compose.yml build tfp-gateway
     silent: true  
 
-  ep:
+  gw:
     cmds:
-      - task stop-ep
-      - task build-ep
+      - task stop-gw
+      - task build-gw
     silent: true  
 
-  logs-ep:
+  logs-gw:
     cmds:
       - docker-compose logs -f tfp-gateway
   

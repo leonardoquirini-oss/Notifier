@@ -1,0 +1,33 @@
+version: '3'
+
+tasks:
+    
+  stop-ing:
+    cmds:
+      - docker-compose  -f docker-compose.yml stop tfpeventingester
+    silent: true  
+  
+  build-ing:
+    cmds:
+      - docker-compose  -f docker-compose.yml build tfpeventingester
+    silent: true  
+
+  ing:
+    cmds:
+      - task stop-ing
+      - task build-ing
+    silent: true  
+
+  logs-ing:
+    cmds:
+      - docker-compose logs -f tfpeventingester
+  
+  up:
+    cmds:
+      - docker-compose -f docker-compose.yml up -d
+    silent: true  
+
+  restart:
+    cmds:
+      - docker-compose down && docker-compose -f docker-compose.yml up -d
+    silent: true    
