@@ -1,6 +1,12 @@
+server:
+  port: 8080
+
 spring:
   application:
     name: tfp-gateway
+
+  thymeleaf:
+    cache: false
 
   # Apache Artemis Configuration
   artemis:

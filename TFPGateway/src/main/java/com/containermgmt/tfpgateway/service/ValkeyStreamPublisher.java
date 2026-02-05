@@ -2,6 +2,7 @@ package com.containermgmt.tfpgateway.service;
 
 import com.containermgmt.tfpgateway.config.GatewayProperties;
 import com.containermgmt.tfpgateway.dto.EventMessage;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.connection.stream.StreamRecords;
@@ -24,14 +25,21 @@ public class ValkeyStreamPublisher {
 
     private final RedisTemplate<String, String> redisTemplate;
     private final GatewayProperties properties;
+    private final ObjectMapper objectMapper;
 
     public ValkeyStreamPublisher(RedisTemplate<String, String> redisTemplate,
-                                 GatewayProperties properties) {
+                                 GatewayProperties properties,
+                                 ObjectMapper objectMapper) {
         this.redisTemplate = redisTemplate;
         this.properties = properties;
+        this.objectMapper = objectMapper;
     }
 
     public void publish(EventMessage eventMessage) {
+        publish(eventMessage, null);
+    }
+
+    public void publish(EventMessage eventMessage, Map<String, Object> metadata) {
         String streamKey = properties.getStreamMapping().get(eventMessage.getEventType());
         if (streamKey == null) {
             log.debug("No stream mapping for eventType={}, skipping Valkey publish",
@@ -47,6 +55,10 @@ public class ValkeyStreamPublisher {
                     ? eventMessage.getEventTime().toString()
                     : Instant.now().toString());
             fields.put("payload", eventMessage.getRawPayload());
+
+            if (metadata != null && !metadata.isEmpty()) {
+                fields.put("metadata", objectMapper.writeValueAsString(metadata));
+            }
 
             redisTemplate.opsForStream()
                     .add(StreamRecords.string(fields).withStreamKey(streamKey));
