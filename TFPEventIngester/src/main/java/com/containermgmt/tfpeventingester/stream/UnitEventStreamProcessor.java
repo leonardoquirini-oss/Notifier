@@ -1,6 +1,8 @@
 package com.containermgmt.tfpeventingester.stream;
 
 import com.containermgmt.tfpeventingester.model.EvtUnitEvent;
+import com.containermgmt.tfpeventingester.service.BerlinkLookupService;
+import com.containermgmt.tfpeventingester.service.BerlinkLookupService.LookupResult;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -20,9 +22,11 @@ import java.util.Map;
 public class UnitEventStreamProcessor implements StreamProcessor {
 
     private final ObjectMapper objectMapper;
+    private final BerlinkLookupService berlinkLookupService;
 
-    public UnitEventStreamProcessor(ObjectMapper objectMapper) {
+    public UnitEventStreamProcessor(ObjectMapper objectMapper, BerlinkLookupService berlinkLookupService) {
         this.objectMapper = objectMapper;
+        this.berlinkLookupService = berlinkLookupService;
     }
 
     @Override
@@ -75,6 +79,16 @@ public class UnitEventStreamProcessor implements StreamProcessor {
         event.set("unit_type_code", getString(payload, "unitTypeCode"));
         event.set("damage_type", getString(payload, "damageType"));
         event.set("report_notes", getString(payload, "reportNotes"));
+
+        // BERLink lookup per popolare container_number, id_trailer, id_vehicle
+        String unitNumber = getString(payload, "unitNumber");
+        String unitTypeCode = getString(payload, "unitTypeCode");
+        LookupResult lookup = berlinkLookupService.lookupUnit(unitNumber, unitTypeCode);
+        if (lookup.hasData()) {
+            event.set("container_number", lookup.containerNumber());
+            event.set("id_trailer", lookup.idTrailer());
+            event.set("id_vehicle", lookup.idVehicle());
+        }
 
         event.saveIt();
         log.info("Persisted unit event: message_id={}, unit_number={}", messageId, getString(payload, "unitNumber"));

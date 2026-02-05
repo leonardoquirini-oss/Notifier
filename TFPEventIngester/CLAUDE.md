@@ -20,7 +20,10 @@ TFPEventIngester/
 │   ├── config/
 │   │   ├── ActiveJDBCConfig.java          # Connessione DB ActiveJDBC
 │   │   ├── ValkeyConfig.java              # Lettuce connection factory
-│   │   └── JacksonConfig.java             # ObjectMapper config
+│   │   ├── JacksonConfig.java             # ObjectMapper config
+│   │   └── BerlinkApiConfig.java          # RestTemplate + BERLink API config
+│   ├── service/
+│   │   └── BerlinkLookupService.java      # Lookup container/trailer/vehicle via BERLink API
 │   ├── stream/
 │   │   ├── StreamProcessor.java           # Strategy interface
 │   │   ├── StreamListenerOrchestrator.java # Auto-discovery + listener infra
@@ -75,6 +78,8 @@ Valkey Streams                      TFPEventIngester
 | `VALKEY_HOST` | valkey-service | Host Valkey |
 | `VALKEY_PORT` | 6379 | Porta Valkey |
 | `VALKEY_PASSWORD` | (vuoto) | Password Valkey |
+| `BERLINK_API_URL` | http://backend_new:8081 | URL base BERLink API |
+| `BERLINK_API_KEY` | (vuoto) | API Key per autenticazione BERLink |
 
 ### Stream Consumati
 
@@ -116,6 +121,17 @@ I messaggi sullo stream Valkey hanno questi campi (pubblicati da TFPGateway):
 | `event_time` | Timestamp ISO-8601 dell'evento |
 | `payload` | JSON con i dati specifici dell'evento |
 
+## BERLink Lookup
+
+Quando un evento viene processato, `UnitEventStreamProcessor` chiama `BerlinkLookupService` per arricchire l'evento con `container_number`, `id_trailer` o `id_vehicle` dal backend BERLink.
+
+**Logica:**
+- `unit_type_code == "CONTAINER"` → `GET /api/units/search?q={unit_number}&limit=1` → salva `cassa` in `container_number`
+- Altrimenti → `GET /api/units/search?q={unit_number}&limit=1&includeVehicles=true` → `unitType="t"` salva `id_trailer`, `unitType="v"` salva `id_vehicle`
+- Fallback per non-container: `GET /api/vehicles/by-plate/{unit_number}` → salva `id_vehicle`
+
+**Gestione errori:** Se BERLink non è raggiungibile, l'evento viene salvato senza i campi di lookup (log warn). Timeout: connect 5s, read 10s.
+
 ## Deduplication
 
 La dedup avviene tramite `message_id`:
@@ -127,7 +143,7 @@ La dedup avviene tramite `message_id`:
 
 ```bash
 # Build
-mvn clean package -DskipTests
+task ing
 
 # Build e avvia con Docker
 docker-compose up --build -d

@@ -17,6 +17,9 @@ CREATE TABLE IF NOT EXISTS evt_unit_events (
     unit_type_code  VARCHAR(50),
     damage_type     VARCHAR(100),
     report_notes    TEXT,
+    container_number VARCHAR(50),
+    id_trailer       INTEGER,
+    id_vehicle       INTEGER,
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
