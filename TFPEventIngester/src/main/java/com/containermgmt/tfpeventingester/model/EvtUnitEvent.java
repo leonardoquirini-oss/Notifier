@@ -14,4 +14,8 @@ public class EvtUnitEvent extends Model {
         return count("message_id = ?", messageId) > 0;
     }
 
+    public static int deleteByMessageId(String messageId) {
+        return delete("message_id = ?", messageId);
+    }
+
 }

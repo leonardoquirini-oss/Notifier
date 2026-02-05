@@ -51,10 +51,18 @@ public class UnitEventStreamProcessor implements StreamProcessor {
             return;
         }
 
-        // Deduplication check
-        if (EvtUnitEvent.existsByMessageId(messageId)) {
-            log.debug("Duplicate message_id={}, skipping", messageId);
-            return;
+        // Check metadata for resend flag
+        boolean resend = parseResendFlag(fields.get("metadata"));        
+
+        if (resend) {
+            int deleted = EvtUnitEvent.deleteByMessageId(messageId);
+            log.info("Resend requested: deleted {} existing record(s) for message_id={}", deleted, messageId);
+        } else {
+            // Deduplication check
+            if (EvtUnitEvent.existsByMessageId(messageId)) {
+                log.debug("Duplicate message_id={}, skipping", messageId);
+                return;
+            }
         }
 
         Map<String, Object> payload;
@@ -92,6 +100,21 @@ public class UnitEventStreamProcessor implements StreamProcessor {
 
         event.saveIt();
         log.info("Persisted unit event: message_id={}, unit_number={}", messageId, getString(payload, "unitNumber"));
+    }
+
+    @SuppressWarnings("unchecked")
+    private boolean parseResendFlag(String metadataJson) {
+        if (metadataJson == null || metadataJson.isBlank()) {
+            return false;
+        }
+        try {
+            Map<String, Object> metadata = objectMapper.readValue(metadataJson, Map.class);
+            Object resend = metadata.get("resend");
+            return Boolean.TRUE.equals(resend) || "true".equalsIgnoreCase(String.valueOf(resend));
+        } catch (Exception e) {
+            log.warn("Failed to parse metadata JSON, treating as no resend: {}", e.getMessage());
+            return false;
+        }
     }
 
     private String getString(Map<String, Object> payload, String key) {
