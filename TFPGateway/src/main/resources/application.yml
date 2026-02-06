@@ -12,14 +12,14 @@ spring:
   artemis:
     mode: native
     
-    #broker-url: tcp://artemis-external-connection-test.circletouch.eu:443?sslEnabled=true&trustAll=true&verifyHost=false
-    #user: artemis_external
-    #password: 6hjzbVP_j8ALBLg
+    broker-url: tcp://artemis-external-connection-test.circletouch.eu:443?sslEnabled=true&trustAll=true&verifyHost=false
+    user: artemis_external
+    password: 6hjzbVP_j8ALBLg
 
     ## LOCALHOST
-    broker-url: tcp://artemis-broker:61616
-    user: admin
-    password: admin
+    #broker-url: tcp://artemis-broker:61616
+    #user: admin
+    #password: admin
 
   # JMS Listener Configuration
   jms:
@@ -38,7 +38,7 @@ spring:
 gateway:
   # Multicast addresses to subscribe to (comma-separated)
   addresses: BERNARDINI_UNIT_POSITIONS_MESSAGE,BERNARDINI_ASSET_DAMAGES,BERNARDINI_UNIT_EVENTS
-  
+
   # Subscriber name (consumer group ID):
   #   - Set: FQQN multicast mode (ADDRESS::subscriber.ADDRESS) for local broker
   #   - Empty/absent: direct anycast mode for external brokers
@@ -47,9 +47,19 @@ gateway:
   # JMS concurrency (min-max format)
   concurrency: 3-10
 
-  # Retry configuration
+  # Retry configuration (application-level)
   retry-attempts: 3
   retry-delay-ms: 5000
+
+  # Artemis reconnection parameters (client-level)
+  artemis:
+    retry-interval: 1000              # Initial retry interval (ms)
+    retry-interval-multiplier: 2.0    # Exponential backoff: 1s, 2s, 4s, 8s...
+    max-retry-interval: 30000         # Max wait between retries (ms)
+    reconnect-attempts: -1            # -1 = infinite reconnection attempts
+    client-failure-check-period: 5000 # Connection health check interval (ms)
+    connection-ttl: 30000             # Connection timeout (ms)
+    recovery-interval: 5000           # JMS container recovery interval (ms)
 
   # Artemis address -> Valkey stream mapping
   stream-mapping:

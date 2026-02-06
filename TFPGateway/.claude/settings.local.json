@@ -4,7 +4,8 @@
       "Bash(task build-be:*)",
       "Bash(task build-gw:*)",
       "Bash(timeout 5 bash:*)",
-      "Bash(test:*)"
+      "Bash(test:*)",
+      "Bash(mvn compile:*)"
     ]
   }
 }

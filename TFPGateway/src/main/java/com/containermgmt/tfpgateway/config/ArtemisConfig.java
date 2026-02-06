@@ -3,7 +3,7 @@ package com.containermgmt.tfpgateway.config;
 import com.containermgmt.tfpgateway.listener.EventListener;
 
 import jakarta.annotation.PostConstruct;
-import jakarta.jms.ConnectionFactory;
+import org.apache.activemq.artemis.jms.client.ActiveMQConnectionFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -43,12 +43,42 @@ public class ArtemisConfig implements JmsListenerConfigurer {
     @Value("${gateway.subscriber-name:}")
     private String subscriberName;
 
-    private final EventListener eventListener;
-    private final ConnectionFactory connectionFactory;
+    // Artemis connection settings
+    @Value("${spring.artemis.broker-url}")
+    private String brokerUrl;
 
-    public ArtemisConfig(EventListener eventListener, ConnectionFactory connectionFactory) {
+    @Value("${spring.artemis.user}")
+    private String artemisUser;
+
+    @Value("${spring.artemis.password}")
+    private String artemisPassword;
+
+    // Reconnection parameters
+    @Value("${gateway.artemis.retry-interval:1000}")
+    private long retryInterval;
+
+    @Value("${gateway.artemis.retry-interval-multiplier:2.0}")
+    private double retryIntervalMultiplier;
+
+    @Value("${gateway.artemis.max-retry-interval:30000}")
+    private long maxRetryInterval;
+
+    @Value("${gateway.artemis.reconnect-attempts:-1}")
+    private int reconnectAttempts;
+
+    @Value("${gateway.artemis.client-failure-check-period:5000}")
+    private long clientFailureCheckPeriod;
+
+    @Value("${gateway.artemis.connection-ttl:30000}")
+    private long connectionTTL;
+
+    @Value("${gateway.artemis.recovery-interval:5000}")
+    private long recoveryInterval;
+
+    private final EventListener eventListener;
+
+    public ArtemisConfig(EventListener eventListener) {
         this.eventListener = eventListener;
-        this.connectionFactory = connectionFactory;
     }
 
     @PostConstruct
@@ -59,28 +89,69 @@ public class ArtemisConfig implements JmsListenerConfigurer {
         } else {
             log.info("Mode: FQQN multicast (subscriber-name: {})", subscriberName);
         }
+        log.info("Reconnection: retryInterval={}ms, multiplier={}, maxInterval={}ms, attempts={}",
+                retryInterval, retryIntervalMultiplier, maxRetryInterval,
+                reconnectAttempts == -1 ? "infinite" : reconnectAttempts);
+    }
+
+    /**
+     * Custom ActiveMQ Artemis ConnectionFactory with reconnection parameters.
+     * Replaces Spring Boot auto-configured factory to enable automatic reconnection
+     * when broker goes down.
+     */
+    @Bean
+    public ActiveMQConnectionFactory connectionFactory() {
+        ActiveMQConnectionFactory factory = new ActiveMQConnectionFactory(brokerUrl);
+        factory.setUser(artemisUser);
+        factory.setPassword(artemisPassword);
+
+        // Reconnection parameters (exponential backoff)
+        factory.setRetryInterval(retryInterval);
+        factory.setRetryIntervalMultiplier(retryIntervalMultiplier);
+        factory.setMaxRetryInterval(maxRetryInterval);
+        factory.setReconnectAttempts(reconnectAttempts);
+
+        // Connection health monitoring
+        factory.setClientFailureCheckPeriod(clientFailureCheckPeriod);
+        factory.setConnectionTTL(connectionTTL);
+
+        log.info("ActiveMQ ConnectionFactory configured with reconnection support");
+
+        return factory;
     }
 
     @Bean
-    public DefaultJmsListenerContainerFactory jmsListenerContainerFactory() {
+    public DefaultJmsListenerContainerFactory jmsListenerContainerFactory(
+            ActiveMQConnectionFactory connectionFactory) {
 
         DefaultJmsListenerContainerFactory factory = new DefaultJmsListenerContainerFactory();
 
         factory.setConnectionFactory(connectionFactory);
         factory.setConcurrency(concurrency);
         factory.setSessionTransacted(true);
+
+        // Recovery settings for JMS container
+        factory.setRecoveryInterval(recoveryInterval);
+
         factory.setErrorHandler(t ->
-            log.error("Error in JMS listener: {}", t.getMessage(), t)
+            log.error("JMS listener error: {}", t.getMessage(), t)
         );
 
-        log.info("JMS Listener Container Factory configured with concurrency: {}", concurrency);
+        // Exception listener for connection failures
+        factory.setExceptionListener(ex ->
+            log.warn("JMS connection exception: {} - will attempt reconnect", ex.getMessage())
+        );
+
+        log.info("JMS Listener Container Factory configured with concurrency: {}, recoveryInterval: {}ms",
+                concurrency, recoveryInterval);
 
         return factory;
     }
 
     @Override
     public void configureJmsListeners(JmsListenerEndpointRegistrar registrar) {
-        DefaultJmsListenerContainerFactory factory = jmsListenerContainerFactory();
+        // Set default factory bean name - Spring will resolve it
+        registrar.setContainerFactoryBeanName("jmsListenerContainerFactory");
 
         for (String address : addresses) {
             String addressName = address.trim();
@@ -94,7 +165,7 @@ public class ArtemisConfig implements JmsListenerConfigurer {
             endpoint.setDestination(destination);
             endpoint.setMessageListener(msg -> eventListener.onMessage(addressName, msg));
 
-            registrar.registerEndpoint(endpoint, factory);
+            registrar.registerEndpoint(endpoint);
         }
     }
 
