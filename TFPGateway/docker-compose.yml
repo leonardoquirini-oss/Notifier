@@ -24,6 +24,10 @@ services:
       - "5205:5005"  # Debug port
     networks:
       - berlink-network
+
+    volumes:
+      - /opt/berlink/tfp-gateway/data/application.yaml:/app/application.yaml
+
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/actuator/health"]
