@@ -165,7 +165,10 @@ public class BerlinkLookupService {
 
     @SuppressWarnings("unchecked")
     private LookupResult lookupVehicleByPlate(String plateNumber) {
-        String url = config.getBaseUrl() + "/api/vehicles/by-plate/" + plateNumber;
+        String url = UriComponentsBuilder
+                .fromHttpUrl(config.getBaseUrl() + "/api/vehicles/by-plate/{plateNumber}")
+                .buildAndExpand(plateNumber)
+                .toUriString();
         log.debug("BERLink vehicle by plate: {}", url);
 
         try {

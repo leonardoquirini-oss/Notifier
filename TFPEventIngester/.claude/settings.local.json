@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mvn compile:*)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:central.sonatype.com)",
+      "WebFetch(domain:mvnrepository.com)",
+      "Bash(mvn clean compile:*)"
+    ]
+  }
+}

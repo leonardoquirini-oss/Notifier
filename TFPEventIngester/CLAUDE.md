@@ -4,7 +4,7 @@ Spring Boot application che consuma eventi da Valkey Streams e li persiste su Po
 
 ## Tech Stack
 
-- **Framework**: Spring Boot 3.1.5
+- **Framework**: Spring Boot 3.4.3
 - **Messaging**: Valkey Streams (via Spring Data Redis + Lettuce)
 - **ORM**: JavaLite ActiveJDBC 3.0
 - **Database**: PostgreSQL
@@ -26,14 +26,18 @@ TFPEventIngester/
 │   │   └── BerlinkLookupService.java      # Lookup container/trailer/vehicle via BERLink API
 │   ├── stream/
 │   │   ├── StreamProcessor.java           # Strategy interface
+│   │   ├── AbstractStreamProcessor.java   # Base class con helper comuni
 │   │   ├── StreamListenerOrchestrator.java # Auto-discovery + listener infra
-│   │   └── UnitEventStreamProcessor.java  # Impl per tfp-unit-events-stream
+│   │   ├── UnitEventStreamProcessor.java  # Impl per tfp-unit-events-stream
+│   │   └── UnitPositionStreamProcessor.java # Impl per tfp-unit-positions-stream
 │   └── model/
-│       └── EvtUnitEvent.java              # ActiveJDBC model → evt_unit_events
+│       ├── EvtUnitEvent.java              # ActiveJDBC model → evt_unit_events
+│       └── EvtUnitPosition.java           # ActiveJDBC model → evt_unit_positions
 ├── src/main/resources/
 │   ├── application.yml
 │   └── db/
-│       └── 01_evt_unit_events.sql
+│       ├── 01_evt_unit_events.sql
+│       └── 02_evt_unit_positions.sql
 ├── Dockerfile
 ├── docker-compose.yml
 └── pom.xml
@@ -43,26 +47,33 @@ TFPEventIngester/
 
 ```
 Valkey Streams                      TFPEventIngester
-┌─────────────────────────┐         ┌─────────────────────────────────┐
-│ tfp-unit-events-stream  │ ──────> │ StreamListenerOrchestrator      │
-│ (future streams...)     │         │   auto-discovers StreamProcessor│
-└─────────────────────────┘         │   beans via component scan      │
+┌──────────────────────────────┐    ┌─────────────────────────────────┐
+│ tfp-unit-events-stream       │──> │ StreamListenerOrchestrator      │
+│ tfp-unit-positions-stream    │──> │   auto-discovers StreamProcessor│
+└──────────────────────────────┘    │   beans via component scan      │
                                     └──────────┬──────────────────────┘
                                                │
-                                    ┌──────────▼──────────────────────┐
-                                    │ UnitEventStreamProcessor        │
-                                    │   parses payload → EvtUnitEvent │
-                                    │   dedup by message_id           │
-                                    └──────────┬──────────────────────┘
-                                               │
-                                    ┌──────────▼──────────────────────┐
-                                    │ PostgreSQL: evt_unit_events     │
-                                    └─────────────────────────────────┘
+                              ┌────────────────┴────────────────┐
+                              │                                 │
+                   ┌──────────▼──────────────┐      ┌──────────▼───────────────────┐
+                   │ UnitEventStreamProcessor │      │ UnitPositionStreamProcessor  │
+                   │  → EvtUnitEvent          │      │  → EvtUnitPosition           │
+                   │  dedup by message_id     │      │  dedup by message_id         │
+                   └──────────┬───────────────┘      └──────────┬──────────────────┘
+                              │                                 │
+                   ┌──────────▼───────────────┐      ┌──────────▼──────────────────┐
+                   │ PostgreSQL:              │      │ PostgreSQL:                 │
+                   │ evt_unit_events          │      │ evt_unit_positions          │
+                   └──────────────────────────┘      │ (partitioned by            │
+                                                     │  position_time)            │
+                                                     └────────────────────────────┘
 ```
 
 - **StreamProcessor**: Strategy interface con `streamKey()`, `consumerGroup()`, `process(fields)`
-- **StreamListenerOrchestrator**: Inietta `List<StreamProcessor>`, crea consumer group e listener per ciascuno. Gestisce connessione ActiveJDBC per-thread e acknowledge.
-- **UnitEventStreamProcessor**: Prima implementazione. Legge da `tfp-unit-events-stream`, dedup via `message_id`, parsa payload JSON e persiste su `evt_unit_events`.
+- **AbstractStreamProcessor**: Template Method base class. Il metodo `process()` (final) gestisce: validazione message_id, dedup/resend, parsing JSON, chiamata a `buildModel()`, BERLink lookup + enrichment, save. I subclass implementano solo `buildModel()`, `existsByMessageId()`, `deleteByMessageId()`, `processorName()`. Include helper comuni (`getString`, `parseTimestamp`, `parseBigDecimal`, `parseResendFlag`, `getBoolean`, `getInteger`). Stream key e consumer group sono iniettati nel costruttore via `@Value`.
+- **StreamListenerOrchestrator**: Inietta `List<StreamProcessor>`, crea consumer group e listener per ciascuno. Gestisce connessione ActiveJDBC per-thread e acknowledge. Poll timeout configurabile via `stream.poll-timeout-seconds`. I messaggi falliti restano nel PEL (non vengono acknowledged su errore).
+- **UnitEventStreamProcessor**: Implementa `buildModel()` per mappare payload su `EvtUnitEvent`. Stream key da `stream.unit-events.key`.
+- **UnitPositionStreamProcessor**: Implementa `buildModel()` per estrarre primo elemento di `unitPositions[]` e mappare su `EvtUnitPosition`. Stream key da `stream.unit-positions.key`.
 
 ## Configurazione
 
@@ -81,34 +92,62 @@ Valkey Streams                      TFPEventIngester
 | `BERLINK_API_URL` | http://backend_new:8081 | URL base BERLink API |
 | `BERLINK_API_KEY` | (vuoto) | API Key per autenticazione BERLink |
 
+### Proprieta' applicative (application.yml)
+
+| Proprieta' | Default | Descrizione |
+|------------|---------|-------------|
+| `berlink.api.connect-timeout-ms` | 5000 | Timeout connessione BERLink API (ms) |
+| `berlink.api.read-timeout-ms` | 10000 | Timeout lettura BERLink API (ms) |
+| `stream.unit-events.key` | tfp-unit-events-stream | Stream key per unit events |
+| `stream.unit-events.consumer-group` | tfp-event-ingester-group | Consumer group per unit events |
+| `stream.unit-positions.key` | tfp-unit-positions-stream | Stream key per unit positions |
+| `stream.unit-positions.consumer-group` | tfp-event-ingester-group | Consumer group per unit positions |
+| `stream.poll-timeout-seconds` | 1 | Poll timeout del listener (secondi) |
+
 ### Stream Consumati
 
 | Stream Key | Consumer Group | Processor | Tabella Target |
 |------------|---------------|-----------|----------------|
 | `tfp-unit-events-stream` | `tfp-event-ingester-group` | `UnitEventStreamProcessor` | `evt_unit_events` |
+| `tfp-unit-positions-stream` | `tfp-event-ingester-group` | `UnitPositionStreamProcessor` | `evt_unit_positions` |
 
 ## Aggiungere un Nuovo Stream
 
-1. Creare un nuovo Model ActiveJDBC per la tabella target (package `model/`)
+1. Creare un nuovo Model ActiveJDBC per la tabella target (package `model/`) con `existsByMessageId()` e `deleteByMessageId()`
 2. Creare DDL in `src/main/resources/db/`
-3. Creare un `@Component` che implementa `StreamProcessor` (package `stream/`):
+3. Aggiungere configurazione stream in `application.yml`:
+   ```yaml
+   stream:
+     my-new:
+       key: my-new-stream
+       consumer-group: tfp-event-ingester-group
+   ```
+4. Creare un `@Component` che estende `AbstractStreamProcessor` (package `stream/`):
    ```java
    @Component
    @Slf4j
-   public class MyNewStreamProcessor implements StreamProcessor {
-       @Override
-       public String streamKey() { return "my-new-stream"; }
-
-       @Override
-       public String consumerGroup() { return "tfp-event-ingester-group"; }
-
-       @Override
-       public void process(Map<String, String> fields) {
-           // parsing e persistenza
+   public class MyNewStreamProcessor extends AbstractStreamProcessor {
+       public MyNewStreamProcessor(ObjectMapper objectMapper,
+                                    BerlinkLookupService berlinkLookupService,
+                                    @Value("${stream.my-new.key}") String streamKey,
+                                    @Value("${stream.my-new.consumer-group}") String consumerGroup) {
+           super(objectMapper, berlinkLookupService, streamKey, consumerGroup);
        }
+
+       @Override
+       protected Model buildModel(String messageId, String eventType, Map<String, Object> payload) {
+           // Crea e popola il model ActiveJDBC
+       }
+
+       @Override
+       protected boolean existsByMessageId(String messageId) { return MyModel.existsByMessageId(messageId); }
+       @Override
+       protected int deleteByMessageId(String messageId) { return MyModel.deleteByMessageId(messageId); }
+       @Override
+       protected String processorName() { return "my new"; }
    }
    ```
-4. Fine. L'orchestratore lo scopre automaticamente via component scan.
+5. Fine. L'orchestratore lo scopre automaticamente via component scan. Dedup, resend, JSON parsing, BERLink lookup e save sono gestiti dal template method in `AbstractStreamProcessor`.
 
 ## Formato Messaggi Stream
 
@@ -123,7 +162,7 @@ I messaggi sullo stream Valkey hanno questi campi (pubblicati da TFPGateway):
 
 ## BERLink Lookup
 
-Quando un evento viene processato, `UnitEventStreamProcessor` chiama `BerlinkLookupService` per arricchire l'evento con `container_number`, `id_trailer` o `id_vehicle` dal backend BERLink.
+Quando un evento viene processato, `UnitEventStreamProcessor` e `UnitPositionStreamProcessor` chiamano `BerlinkLookupService` per arricchire l'evento con `container_number`, `id_trailer` o `id_vehicle` dal backend BERLink.
 
 **Logica:**
 - `unit_type_code == "CONTAINER"` → `GET /api/units/search?q={unit_number}&limit=1` → salva `cassa` in `container_number`
@@ -132,12 +171,15 @@ Quando un evento viene processato, `UnitEventStreamProcessor` chiama `BerlinkLoo
 
 **Gestione errori:** Se BERLink non è raggiungibile, l'evento viene salvato senza i campi di lookup (log warn). Timeout: connect 5s, read 10s.
 
-## Deduplication
+## Deduplication e Error Handling
 
-La dedup avviene tramite `message_id`:
-- Indice UNIQUE su `evt_unit_events.message_id`
-- Check `EvtUnitEvent.existsByMessageId()` prima di ogni insert
+La dedup avviene tramite `message_id` nel template method `AbstractStreamProcessor.process()`:
+- Indice UNIQUE su `evt_unit_events.message_id` e `evt_unit_positions.message_id`
+- Check `existsByMessageId()` prima di ogni insert (sia `EvtUnitEvent` che `EvtUnitPosition`)
 - Messaggi duplicati vengono acknowledged e skippati silenziosamente
+- Supporto resend: se il campo `metadata.resend=true`, il record esistente viene cancellato e re-inserito
+
+**Error handling:** I messaggi che falliscono durante il processing NON vengono acknowledged. Restano nel PEL (Pending Entries List) di Valkey per ispezione via `XPENDING` e reprocessing manuale.
 
 ## Comandi Utili
 
@@ -160,6 +202,16 @@ redis-cli XADD tfp-unit-events-stream "*" \
 
 # Verifica inserimento
 psql -h localhost -U berlink berlinkdb -c "SELECT * FROM evt_unit_events WHERE message_id = 'test-001'"
+
+# Test manuale: pubblica messaggio posizione su stream
+redis-cli XADD tfp-unit-positions-stream "*" \
+  message_id "test-pos-001" \
+  event_type "BERNARDINI_UNIT_POSITIONS_MESSAGE" \
+  event_time "2026-02-09T16:14:32Z" \
+  payload '{"unitId":2458,"vehicleId":null,"uniqueUnit":true,"unitNumber":"GBTU0281810","unitTypeCode":"CONTAINER","vehiclePlate":null,"uniqueVehicle":false,"unitPositions":[{"id":null,"unitId":2458,"latitude":45.6791948,"longitude":9.5296944,"vehicleId":null,"createTime":"2026-02-09T16:14:32Z","positionTime":"2026-02-09T16:14:32Z"}]}'
+
+# Verifica inserimento posizione
+psql -h localhost -U berlink berlinkdb -c "SELECT * FROM evt_unit_positions WHERE message_id = 'test-pos-001'"
 ```
 
 ---

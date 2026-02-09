@@ -6,23 +6,6 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: tfp-event-ingester
-    environment:
-      # Database Configuration
-      DB_HOST: postgres-service
-      DB_NAME: berlinkdb
-      DB_PORT: 5432
-      DB_USER: berlink
-      DB_PASSWORD: berlink
-
-      # Valkey Configuration
-      VALKEY_HOST: valkey-service
-      VALKEY_PORT: 6379
-      VALKEY_PASSWORD:
-
-      # BERLink API Configuration
-      BERLINK_API_URL: http://backend_new:8081
-      BERLINK_API_KEY:
-
     networks:
       - berlink-network
     restart: unless-stopped

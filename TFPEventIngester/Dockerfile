@@ -32,7 +32,7 @@ USER tfpeventingester
 # Expose actuator port (for health checks)
 EXPOSE 8080
 EXPOSE 5016
-ENV JAVA_TOOL_OPTIONS="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5016"
+#ENV JAVA_TOOL_OPTIONS="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5016"
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \

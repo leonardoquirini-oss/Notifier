@@ -1,5 +1,7 @@
 package com.containermgmt.tfpeventingester.config;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -11,32 +13,20 @@ import java.util.List;
 
 @Configuration
 @ConfigurationProperties(prefix = "berlink.api")
+@Getter
+@Setter
 public class BerlinkApiConfig {
 
     private String baseUrl;
     private String apiKey;
-
-    public String getBaseUrl() {
-        return baseUrl;
-    }
-
-    public void setBaseUrl(String baseUrl) {
-        this.baseUrl = baseUrl;
-    }
-
-    public String getApiKey() {
-        return apiKey;
-    }
-
-    public void setApiKey(String apiKey) {
-        this.apiKey = apiKey;
-    }
+    private int connectTimeoutMs = 5000;
+    private int readTimeoutMs = 10000;
 
     @Bean
     public RestTemplate berlinkRestTemplate() {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(5000);
-        factory.setReadTimeout(10000);
+        factory.setConnectTimeout(connectTimeoutMs);
+        factory.setReadTimeout(readTimeoutMs);
 
         RestTemplate restTemplate = new RestTemplate(factory);
 

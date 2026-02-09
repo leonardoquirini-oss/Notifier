@@ -5,6 +5,7 @@ import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.javalite.activejdbc.Base;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.connection.stream.*;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -32,6 +33,7 @@ public class StreamListenerOrchestrator {
     private final RedisConnectionFactory connectionFactory;
     private final RedisTemplate<String, String> redisTemplate;
     private final ActiveJDBCConfig activeJDBCConfig;
+    private final int pollTimeoutSeconds;
 
     private final List<StreamMessageListenerContainer<String, MapRecord<String, String, String>>> containers = new ArrayList<>();
     private final List<Subscription> subscriptions = new ArrayList<>();
@@ -39,11 +41,13 @@ public class StreamListenerOrchestrator {
     public StreamListenerOrchestrator(List<StreamProcessor> processors,
                                       RedisConnectionFactory connectionFactory,
                                       RedisTemplate<String, String> redisTemplate,
-                                      ActiveJDBCConfig activeJDBCConfig) {
+                                      ActiveJDBCConfig activeJDBCConfig,
+                                      @Value("${stream.poll-timeout-seconds:1}") int pollTimeoutSeconds) {
         this.processors = processors;
         this.connectionFactory = connectionFactory;
         this.redisTemplate = redisTemplate;
         this.activeJDBCConfig = activeJDBCConfig;
+        this.pollTimeoutSeconds = pollTimeoutSeconds;
     }
 
     @PostConstruct
@@ -63,15 +67,10 @@ public class StreamListenerOrchestrator {
 
     private void createConsumerGroup(String streamKey, String consumerGroup) {
         try {
-            try {
-                redisTemplate.opsForStream().createGroup(streamKey, consumerGroup);
-                log.info("Created consumer group: stream={}, group={}", streamKey, consumerGroup);
-            } catch (Exception e) {
-                log.debug("Consumer group already exists: stream={}, group={}", streamKey, consumerGroup);
-            }
+            redisTemplate.opsForStream().createGroup(streamKey, consumerGroup);
+            log.info("Created consumer group: stream={}, group={}", streamKey, consumerGroup);
         } catch (Exception e) {
-            log.error("Error creating consumer group: stream={}, group={}, error={}",
-                    streamKey, consumerGroup, e.getMessage());
+            log.debug("Consumer group already exists: stream={}, group={}", streamKey, consumerGroup);
         }
     }
 
@@ -79,7 +78,7 @@ public class StreamListenerOrchestrator {
         StreamMessageListenerContainer.StreamMessageListenerContainerOptions<String, MapRecord<String, String, String>> options =
                 StreamMessageListenerContainer.StreamMessageListenerContainerOptions
                         .builder()
-                        .pollTimeout(Duration.ofSeconds(1))
+                        .pollTimeout(Duration.ofSeconds(pollTimeoutSeconds))
                         .build();
 
         StreamMessageListenerContainer<String, MapRecord<String, String, String>> container =
@@ -125,12 +124,7 @@ public class StreamListenerOrchestrator {
         } catch (Exception e) {
             log.error("Error processing message: stream={}, messageId={}, error={}",
                     processor.streamKey(), messageId, e.getMessage(), e);
-
-            try {
-                redisTemplate.opsForStream().acknowledge(processor.streamKey(), processor.consumerGroup(), messageId);
-            } catch (Exception ackError) {
-                log.error("Error acknowledging failed message: {}", ackError.getMessage());
-            }
+            // Message stays in PEL for inspection via XPENDING / manual reprocessing
         } finally {
             if (connectionOpened && Base.hasConnection()) {
                 Base.close();

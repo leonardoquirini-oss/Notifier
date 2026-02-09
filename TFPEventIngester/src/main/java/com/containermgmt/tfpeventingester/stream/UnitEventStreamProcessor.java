@@ -2,15 +2,12 @@ package com.containermgmt.tfpeventingester.stream;
 
 import com.containermgmt.tfpeventingester.model.EvtUnitEvent;
 import com.containermgmt.tfpeventingester.service.BerlinkLookupService;
-import com.containermgmt.tfpeventingester.service.BerlinkLookupService.LookupResult;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.javalite.activejdbc.Model;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-import java.math.BigDecimal;
-import java.sql.Timestamp;
-import java.time.Instant;
-import java.time.format.DateTimeParseException;
 import java.util.Map;
 
 /**
@@ -19,60 +16,17 @@ import java.util.Map;
  */
 @Component
 @Slf4j
-public class UnitEventStreamProcessor implements StreamProcessor {
+public class UnitEventStreamProcessor extends AbstractStreamProcessor {
 
-    private final ObjectMapper objectMapper;
-    private final BerlinkLookupService berlinkLookupService;
-
-    public UnitEventStreamProcessor(ObjectMapper objectMapper, BerlinkLookupService berlinkLookupService) {
-        this.objectMapper = objectMapper;
-        this.berlinkLookupService = berlinkLookupService;
+    public UnitEventStreamProcessor(ObjectMapper objectMapper,
+                                     BerlinkLookupService berlinkLookupService,
+                                     @Value("${stream.unit-events.key}") String streamKey,
+                                     @Value("${stream.unit-events.consumer-group}") String consumerGroup) {
+        super(objectMapper, berlinkLookupService, streamKey, consumerGroup);
     }
 
     @Override
-    public String streamKey() {
-        return "tfp-unit-events-stream";
-    }
-
-    @Override
-    public String consumerGroup() {
-        return "tfp-event-ingester-group";
-    }
-
-    @Override
-    @SuppressWarnings("unchecked")
-    public void process(Map<String, String> fields) {
-        String messageId = fields.get("message_id");
-        String eventType = fields.get("event_type");
-        String payloadJson = fields.get("payload");
-
-        if (messageId == null || messageId.isBlank()) {
-            log.warn("Skipping message with null/empty message_id");
-            return;
-        }
-
-        // Check metadata for resend flag
-        boolean resend = parseResendFlag(fields.get("metadata"));        
-
-        if (resend) {
-            int deleted = EvtUnitEvent.deleteByMessageId(messageId);
-            log.info("Resend requested: deleted {} existing record(s) for message_id={}", deleted, messageId);
-        } else {
-            // Deduplication check
-            if (EvtUnitEvent.existsByMessageId(messageId)) {
-                log.debug("Duplicate message_id={}, skipping", messageId);
-                return;
-            }
-        }
-
-        Map<String, Object> payload;
-        try {
-            payload = objectMapper.readValue(payloadJson, Map.class);
-        } catch (Exception e) {
-            log.error("Failed to parse payload JSON for message_id={}: {}", messageId, e.getMessage());
-            return;
-        }
-
+    protected Model buildModel(String messageId, String eventType, Map<String, Object> payload) {
         EvtUnitEvent event = new EvtUnitEvent();
         event.set("message_id", messageId);
         event.set("message_type", eventType);
@@ -87,66 +41,21 @@ public class UnitEventStreamProcessor implements StreamProcessor {
         event.set("unit_type_code", getString(payload, "unitTypeCode"));
         event.set("damage_type", getString(payload, "damageType"));
         event.set("report_notes", getString(payload, "reportNotes"));
-
-        // BERLink lookup per popolare container_number, id_trailer, id_vehicle
-        String unitNumber = getString(payload, "unitNumber");
-        String unitTypeCode = getString(payload, "unitTypeCode");
-        LookupResult lookup = berlinkLookupService.lookupUnit(unitNumber, unitTypeCode);
-        if (lookup.hasData()) {
-            event.set("container_number", lookup.containerNumber());
-            event.set("id_trailer", lookup.idTrailer());
-            event.set("id_vehicle", lookup.idVehicle());
-        }
-
-        event.saveIt();
-        log.info("Persisted unit event: message_id={}, unit_number={}", messageId, getString(payload, "unitNumber"));
+        return event;
     }
 
-    @SuppressWarnings("unchecked")
-    private boolean parseResendFlag(String metadataJson) {
-        if (metadataJson == null || metadataJson.isBlank()) {
-            return false;
-        }
-        try {
-            Map<String, Object> metadata = objectMapper.readValue(metadataJson, Map.class);
-            Object resend = metadata.get("resend");
-            return Boolean.TRUE.equals(resend) || "true".equalsIgnoreCase(String.valueOf(resend));
-        } catch (Exception e) {
-            log.warn("Failed to parse metadata JSON, treating as no resend: {}", e.getMessage());
-            return false;
-        }
+    @Override
+    protected boolean existsByMessageId(String messageId) {
+        return EvtUnitEvent.existsByMessageId(messageId);
     }
 
-    private String getString(Map<String, Object> payload, String key) {
-        Object value = payload.get(key);
-        return value != null ? value.toString() : null;
+    @Override
+    protected int deleteByMessageId(String messageId) {
+        return EvtUnitEvent.deleteByMessageId(messageId);
     }
 
-    private Timestamp parseTimestamp(Map<String, Object> payload, String key) {
-        Object value = payload.get(key);
-        if (value == null) {
-            return null;
-        }
-        try {
-            Instant instant = Instant.parse(value.toString());
-            return Timestamp.from(instant);
-        } catch (DateTimeParseException e) {
-            log.warn("Could not parse timestamp for key={}, value={}: {}", key, value, e.getMessage());
-            return null;
-        }
+    @Override
+    protected String processorName() {
+        return "unit event";
     }
-
-    private BigDecimal parseBigDecimal(Map<String, Object> payload, String key) {
-        Object value = payload.get(key);
-        if (value == null) {
-            return null;
-        }
-        try {
-            return new BigDecimal(value.toString());
-        } catch (NumberFormatException e) {
-            log.warn("Could not parse BigDecimal for key={}, value={}: {}", key, value, e.getMessage());
-            return null;
-        }
-    }
-
 }

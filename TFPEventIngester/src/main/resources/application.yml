@@ -24,13 +24,25 @@ management:
         include: health,info,metrics
   endpoint:
     health:
-      show-details: always
+      show-details: when-authorized
 
 # BERLink API Configuration
 berlink:
   api:
     base-url: http://backend-new:8080
     api-key: 0e5cfec5-ad39-45c6-b3af-92e9c77dfcf8
+    connect-timeout-ms: 5000
+    read-timeout-ms: 10000
+
+# Stream Configuration
+stream:
+  unit-events:
+    key: tfp-unit-events-stream
+    consumer-group: tfp-event-ingester-group
+  unit-positions:
+    key: tfp-unit-positions-stream
+    consumer-group: tfp-event-ingester-group
+  poll-timeout-seconds: 1
 
 # Logging Configuration
 logging:

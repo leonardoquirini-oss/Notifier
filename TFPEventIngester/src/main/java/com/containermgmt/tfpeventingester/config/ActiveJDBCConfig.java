@@ -6,10 +6,12 @@ import org.springframework.context.annotation.Configuration;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 @Configuration
 @Slf4j
+@Getter
 public class ActiveJDBCConfig {
 
     @Value("${spring.datasource.url}")
@@ -41,22 +43,6 @@ public class ActiveJDBCConfig {
             Base.close();
             log.debug("ActiveJDBC database connection closed");
         }
-    }
-
-    public String getDbUrl() {
-        return dbUrl;
-    }
-
-    public String getDbUsername() {
-        return dbUsername;
-    }
-
-    public String getDbPassword() {
-        return dbPassword;
-    }
-
-    public String getDriverClassName() {
-        return driverClassName;
     }
 
 }
