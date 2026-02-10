@@ -1,6 +1,5 @@
 package com.containermgmt.tfpeventingester.stream;
 
-import com.containermgmt.tfpeventingester.config.ActiveJDBCConfig;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
@@ -14,6 +13,7 @@ import org.springframework.data.redis.stream.StreamMessageListenerContainer;
 import org.springframework.data.redis.stream.Subscription;
 import org.springframework.stereotype.Component;
 
+import javax.sql.DataSource;
 import java.net.InetAddress;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -32,7 +32,7 @@ public class StreamListenerOrchestrator {
     private final List<StreamProcessor> processors;
     private final RedisConnectionFactory connectionFactory;
     private final RedisTemplate<String, String> redisTemplate;
-    private final ActiveJDBCConfig activeJDBCConfig;
+    private final DataSource dataSource;
     private final int pollTimeoutSeconds;
 
     private final List<StreamMessageListenerContainer<String, MapRecord<String, String, String>>> containers = new ArrayList<>();
@@ -41,12 +41,12 @@ public class StreamListenerOrchestrator {
     public StreamListenerOrchestrator(List<StreamProcessor> processors,
                                       RedisConnectionFactory connectionFactory,
                                       RedisTemplate<String, String> redisTemplate,
-                                      ActiveJDBCConfig activeJDBCConfig,
+                                      DataSource dataSource,
                                       @Value("${stream.poll-timeout-seconds:1}") int pollTimeoutSeconds) {
         this.processors = processors;
         this.connectionFactory = connectionFactory;
         this.redisTemplate = redisTemplate;
-        this.activeJDBCConfig = activeJDBCConfig;
+        this.dataSource = dataSource;
         this.pollTimeoutSeconds = pollTimeoutSeconds;
     }
 
@@ -108,10 +108,7 @@ public class StreamListenerOrchestrator {
         boolean connectionOpened = false;
         try {
             if (!Base.hasConnection()) {
-                Base.open(activeJDBCConfig.getDriverClassName(),
-                        activeJDBCConfig.getDbUrl(),
-                        activeJDBCConfig.getDbUsername(),
-                        activeJDBCConfig.getDbPassword());
+                Base.open(dataSource);
                 connectionOpened = true;
             }
 

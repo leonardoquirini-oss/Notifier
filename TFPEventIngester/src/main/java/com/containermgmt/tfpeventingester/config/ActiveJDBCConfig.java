@@ -1,37 +1,32 @@
 package com.containermgmt.tfpeventingester.config;
 
 import org.javalite.activejdbc.Base;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 
+import javax.sql.DataSource;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
-import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 @Configuration
 @Slf4j
-@Getter
 public class ActiveJDBCConfig {
 
-    @Value("${spring.datasource.url}")
-    private String dbUrl;
+    private final DataSource dataSource;
 
-    @Value("${spring.datasource.username}")
-    private String dbUsername;
+    public ActiveJDBCConfig(DataSource dataSource) {
+        this.dataSource = dataSource;
+    }
 
-    @Value("${spring.datasource.password}")
-    private String dbPassword;
-
-    @Value("${spring.datasource.driver-class-name}")
-    private String driverClassName;
+    public DataSource getDataSource() {
+        return dataSource;
+    }
 
     @PostConstruct
     public void init() {
         try {
-            Class.forName(driverClassName);
-            Base.open(driverClassName, dbUrl, dbUsername, dbPassword);
-            log.debug("ActiveJDBC database connection established successfully");
+            Base.open(dataSource);
+            log.debug("ActiveJDBC connection opened via pooled DataSource");
         } catch (Exception e) {
             throw new RuntimeException("Failed to initialize ActiveJDBC database connection", e);
         }
@@ -41,8 +36,7 @@ public class ActiveJDBCConfig {
     public void cleanup() {
         if (Base.hasConnection()) {
             Base.close();
-            log.debug("ActiveJDBC database connection closed");
+            log.debug("ActiveJDBC connection returned to pool");
         }
     }
-
 }

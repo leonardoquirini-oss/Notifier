@@ -6,7 +6,9 @@
       "WebFetch(domain:github.com)",
       "WebFetch(domain:central.sonatype.com)",
       "WebFetch(domain:mvnrepository.com)",
-      "Bash(mvn clean compile:*)"
+      "Bash(mvn clean compile:*)",
+      "Bash(find:*)",
+      "Bash(grep:*)"
     ]
   }
 }

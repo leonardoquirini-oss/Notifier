@@ -217,5 +217,5 @@ File coinvolti:
 
 ### Mese 2
 - [x] R4 - No acknowledge su errore (PEL) _(completato 2026-02-09)_
-- [ ] R8 - Connection pooling
+- [x] R8 - Connection pooling HikariCP _(completato 2026-02-10)_
 - [x] R12 - Upgrade Spring Boot 3.1.5 → 3.4.3 _(completato 2026-02-09)_

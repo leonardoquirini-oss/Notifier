@@ -10,6 +10,7 @@ import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -79,28 +80,40 @@ public abstract class AbstractStreamProcessor implements StreamProcessor {
             return;
         }
 
-        Model model = buildModel(messageId, eventType, payload);
-        if (model == null) {
+        List<Model> models = buildModels(messageId, eventType, payload);
+        if (models.isEmpty()) {
             return;
         }
 
-        // BERLink lookup
+        // BERLink lookup (once per message)
         String unitNumber = getString(payload, "unitNumber");
         String unitTypeCode = getString(payload, "unitTypeCode");
         LookupResult lookup = berlinkLookupService.lookupUnit(unitNumber, unitTypeCode);
-        if (lookup.hasData()) {
-            model.set("container_number", lookup.containerNumber());
-            model.set("id_trailer", lookup.idTrailer());
-            model.set("id_vehicle", lookup.idVehicle());
-        }
 
-        model.saveIt();
-        log.info("Persisted {}: message_id={}, unit_number={}", processorName(), messageId, unitNumber);
+        for (Model model : models) {
+            if (lookup.hasData()) {
+                model.set("container_number", lookup.containerNumber());
+                model.set("id_trailer", lookup.idTrailer());
+                model.set("id_vehicle", lookup.idVehicle());
+            }
+            model.saveIt();
+        }
+        log.info("Persisted {} {} record(s): message_id={}, unit_number={}",
+                models.size(), processorName(), messageId, unitNumber);
     }
 
     // --- Abstract methods for subclasses ---
 
     protected abstract Model buildModel(String messageId, String eventType, Map<String, Object> payload);
+
+    /**
+     * Hook for processors that need to produce multiple models from a single message.
+     * Default wraps buildModel() in a single-element list (backward-compatible).
+     */
+    protected List<Model> buildModels(String messageId, String eventType, Map<String, Object> payload) {
+        Model model = buildModel(messageId, eventType, payload);
+        return model != null ? List.of(model) : List.of();
+    }
 
     protected abstract boolean existsByMessageId(String messageId);
 

@@ -3,24 +3,23 @@ CREATE SEQUENCE IF NOT EXISTS s_evt_unit_events START WITH 1 INCREMENT BY 1;
 
 -- Table: evt_unit_events
 CREATE TABLE IF NOT EXISTS evt_unit_events (
-    id_unit_event   BIGINT DEFAULT nextval('s_evt_unit_events') PRIMARY KEY,
-    message_id      VARCHAR(255) NOT NULL,
-    message_type    VARCHAR(100),
-    id              VARCHAR(255),
-    type            VARCHAR(100),
-    event_time      TIMESTAMP,
-    create_time     TIMESTAMP,
-    latitude        NUMERIC,
-    longitude       NUMERIC,
-    severity        VARCHAR(50),
-    unit_number     VARCHAR(100),
-    unit_type_code  VARCHAR(50),
-    damage_type     VARCHAR(100),
-    report_notes    TEXT,
-    container_number VARCHAR(50),
+    id_unit_event    BIGINT DEFAULT nextval('s_evt_unit_events') PRIMARY KEY,
+    message_id       VARCHAR(255) NOT NULL,
+    message_type     VARCHAR(100),
+    id               VARCHAR(255),
+    type             VARCHAR(100),
+    create_time      TIMESTAMP,
+    event_time       TIMESTAMP,
+    latitude         NUMERIC,
+    longitude        NUMERIC,
+    severity         VARCHAR(50),
+    unit_number      VARCHAR(100),
+    unit_type_code   VARCHAR(50),
+    damage_type      VARCHAR(100),
+    report_notes     TEXT,
     id_trailer       INTEGER,
     id_vehicle       INTEGER,
-    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    container_number VARCHAR(50)
 );
 
 -- Index on message_id for deduplication lookups

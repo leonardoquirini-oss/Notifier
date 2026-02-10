@@ -8,6 +8,7 @@ import org.javalite.activejdbc.Model;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -27,34 +28,39 @@ public class UnitPositionStreamProcessor extends AbstractStreamProcessor {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     protected Model buildModel(String messageId, String eventType, Map<String, Object> payload) {
+        // Not used — buildModels() is overridden instead
+        return null;
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    protected List<Model> buildModels(String messageId, String eventType, Map<String, Object> payload) {
         List<Map<String, Object>> unitPositions = (List<Map<String, Object>>) payload.get("unitPositions");
         if (unitPositions == null || unitPositions.isEmpty()) {
             log.warn("No unitPositions array in payload for message_id={}, skipping", messageId);
-            return null;
+            return List.of();
         }
-        Map<String, Object> position = unitPositions.get(0);
 
-        EvtUnitPosition evt = new EvtUnitPosition();
-        evt.set("message_id", messageId);
-        evt.set("message_type", eventType);
-
-        // Top-level fields
-        evt.set("unit_id", getInteger(payload, "unitId"));
-        evt.set("unit_number", getString(payload, "unitNumber"));
-        evt.set("unit_type_code", getString(payload, "unitTypeCode"));
-        evt.set("vehicle_plate", getString(payload, "vehiclePlate"));
-        evt.set("unique_unit", getBoolean(payload, "uniqueUnit"));
-        evt.set("unique_vehicle", getBoolean(payload, "uniqueVehicle"));
-
-        // Position fields (from first element)
-        evt.set("latitude", parseBigDecimal(position, "latitude"));
-        evt.set("longitude", parseBigDecimal(position, "longitude"));
-        evt.set("position_time", parseTimestamp(position, "positionTime"));
-        evt.set("create_time", parseTimestamp(position, "createTime"));
-
-        return evt;
+        List<Model> models = new ArrayList<>(unitPositions.size());
+        for (int i = 0; i < unitPositions.size(); i++) {
+            Map<String, Object> position = unitPositions.get(i);
+            EvtUnitPosition evt = new EvtUnitPosition();
+            evt.set("message_id", messageId);
+            evt.set("pos_index", i + 1);
+            evt.set("message_type", eventType);
+            evt.set("unit_number", getString(payload, "unitNumber"));
+            evt.set("unit_type_code", getString(payload, "unitTypeCode"));
+            evt.set("vehicle_plate", getString(payload, "vehiclePlate"));
+            evt.set("unique_unit", getBoolean(payload, "uniqueUnit"));
+            evt.set("unique_vehicle", getBoolean(payload, "uniqueVehicle"));
+            evt.set("latitude", parseBigDecimal(position, "latitude"));
+            evt.set("longitude", parseBigDecimal(position, "longitude"));
+            evt.set("position_time", parseTimestamp(position, "positionTime"));
+            evt.set("create_time", parseTimestamp(position, "createTime"));
+            models.add(evt);
+        }
+        return models;
     }
 
     @Override

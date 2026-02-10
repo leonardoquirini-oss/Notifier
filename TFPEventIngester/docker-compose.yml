@@ -6,6 +6,8 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: tfp-event-ingester
+    ports:
+      - "8095:8080"   # Web Console    
     networks:
       - berlink-network
     restart: unless-stopped

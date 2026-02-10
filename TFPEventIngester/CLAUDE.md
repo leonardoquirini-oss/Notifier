@@ -7,7 +7,7 @@ Spring Boot application che consuma eventi da Valkey Streams e li persiste su Po
 - **Framework**: Spring Boot 3.4.3
 - **Messaging**: Valkey Streams (via Spring Data Redis + Lettuce)
 - **ORM**: JavaLite ActiveJDBC 3.0
-- **Database**: PostgreSQL
+- **Database**: PostgreSQL (HikariCP connection pool)
 - **Java**: 17
 - **Deployment**: Docker
 
@@ -18,7 +18,7 @@ TFPEventIngester/
 ├── src/main/java/com/containermgmt/tfpeventingester/
 │   ├── TfpEventIngesterApplication.java
 │   ├── config/
-│   │   ├── ActiveJDBCConfig.java          # Connessione DB ActiveJDBC
+│   │   ├── ActiveJDBCConfig.java          # DataSource injection + ActiveJDBC lifecycle
 │   │   ├── ValkeyConfig.java              # Lettuce connection factory
 │   │   ├── JacksonConfig.java             # ObjectMapper config
 │   │   └── BerlinkApiConfig.java          # RestTemplate + BERLink API config
@@ -71,7 +71,7 @@ Valkey Streams                      TFPEventIngester
 
 - **StreamProcessor**: Strategy interface con `streamKey()`, `consumerGroup()`, `process(fields)`
 - **AbstractStreamProcessor**: Template Method base class. Il metodo `process()` (final) gestisce: validazione message_id, dedup/resend, parsing JSON, chiamata a `buildModel()`, BERLink lookup + enrichment, save. I subclass implementano solo `buildModel()`, `existsByMessageId()`, `deleteByMessageId()`, `processorName()`. Include helper comuni (`getString`, `parseTimestamp`, `parseBigDecimal`, `parseResendFlag`, `getBoolean`, `getInteger`). Stream key e consumer group sono iniettati nel costruttore via `@Value`.
-- **StreamListenerOrchestrator**: Inietta `List<StreamProcessor>`, crea consumer group e listener per ciascuno. Gestisce connessione ActiveJDBC per-thread e acknowledge. Poll timeout configurabile via `stream.poll-timeout-seconds`. I messaggi falliti restano nel PEL (non vengono acknowledged su errore).
+- **StreamListenerOrchestrator**: Inietta `List<StreamProcessor>` e `DataSource` (HikariCP pool), crea consumer group e listener per ciascuno. Per ogni messaggio: `Base.open(dataSource)` prende una connessione dal pool, `Base.close()` la restituisce. Poll timeout configurabile via `stream.poll-timeout-seconds`. I messaggi falliti restano nel PEL (non vengono acknowledged su errore).
 - **UnitEventStreamProcessor**: Implementa `buildModel()` per mappare payload su `EvtUnitEvent`. Stream key da `stream.unit-events.key`.
 - **UnitPositionStreamProcessor**: Implementa `buildModel()` per estrarre primo elemento di `unitPositions[]` e mappare su `EvtUnitPosition`. Stream key da `stream.unit-positions.key`.
 
@@ -103,6 +103,9 @@ Valkey Streams                      TFPEventIngester
 | `stream.unit-positions.key` | tfp-unit-positions-stream | Stream key per unit positions |
 | `stream.unit-positions.consumer-group` | tfp-event-ingester-group | Consumer group per unit positions |
 | `stream.poll-timeout-seconds` | 1 | Poll timeout del listener (secondi) |
+| `spring.datasource.hikari.maximum-pool-size` | 5 | Connessioni max nel pool HikariCP |
+| `spring.datasource.hikari.minimum-idle` | 2 | Connessioni idle minime nel pool |
+| `spring.datasource.hikari.connection-timeout` | 5000 | Timeout per ottenere connessione dal pool (ms) |
 
 ### Stream Consumati
 
@@ -212,6 +215,11 @@ redis-cli XADD tfp-unit-positions-stream "*" \
 
 # Verifica inserimento posizione
 psql -h localhost -U berlink berlinkdb -c "SELECT * FROM evt_unit_positions WHERE message_id = 'test-pos-001'"
+
+# Metriche connection pool HikariCP
+curl http://localhost:8080/actuator/metrics/hikaricp.connections.active
+curl http://localhost:8080/actuator/metrics/hikaricp.connections.idle
+curl http://localhost:8080/actuator/metrics/hikaricp.connections.max
 ```
 
 ---

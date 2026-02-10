@@ -1,7 +1,6 @@
 package com.containermgmt.tfpeventingester.service;
 
 import com.containermgmt.tfpeventingester.config.BerlinkApiConfig;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpMethod;
@@ -48,62 +47,43 @@ public class BerlinkLookupService {
             return unitNumber;
         }
 
-        String formatted = tryFormatWithPrefix(unitNumber, "GBTU", ".");
-        if (formatted != null) return formatted;
-
-        formatted = tryFormatWithPrefix(unitNumber, "BRND", "-");
-        if (formatted != null) return formatted;
-
-        return unitNumber;
-    }
-
-    private String tryFormatWithPrefix(String unitNumber, String prefix, String separator) {
-        if (!unitNumber.startsWith(prefix)) {
-            return null;
-        }
-        String digits = unitNumber.substring(prefix.length());
-        if (digits.length() < 2 || !digits.chars().allMatch(Character::isDigit)) {
-            return null;
-        }
-        // Already formatted: penultimate char is the separator
-        if (unitNumber.charAt(unitNumber.length() - 2) == separator.charAt(0)) {
+        String formatted;
+        if (unitNumber.startsWith("GBTU")) {
+            formatted = formatGbtuNumber(unitNumber);
+        } else if (unitNumber.startsWith("BRND")) {
+            formatted = formatBrndNumber(unitNumber);
+        } else {
             return unitNumber;
         }
-        return unitNumber.substring(0, unitNumber.length() - 1) + separator + unitNumber.charAt(unitNumber.length() - 1);
+
+        log.debug("Formatted search number: {} → {}", unitNumber, formatted);
+        return formatted;
     }
 
-    /**
-     * Formato compatto GBTU: "GBTU 1234.5" (spazio, no leading zeros, punto prima dell'ultimo digit).
-     */
-    String formatGbtuFallback(String unitNumber) {
-        if (unitNumber == null || !unitNumber.startsWith("GBTU")) {
-            return null;
-        }
+    private String formatGbtuNumber(String unitNumber) {
         String digits = unitNumber.substring(4);
         if (digits.length() < 2 || !digits.chars().allMatch(Character::isDigit)) {
-            return null;
+            return unitNumber;
         }
-        // Rimuovi leading zeros, mantieni almeno 2 cifre
         String stripped = digits.replaceFirst("^0+", "");
         if (stripped.length() < 2) {
             stripped = digits.substring(digits.length() - 2);
         }
-        // Inserisci "." prima dell'ultima cifra
-        return "GBTU " + stripped.substring(0, stripped.length() - 1) + "." + stripped.charAt(stripped.length() - 1);
+        return "GBTU*" + stripped.substring(0, stripped.length() - 1) + "." + stripped.charAt(stripped.length() - 1);
+    }
+
+    private String formatBrndNumber(String unitNumber) {
+        String digits = unitNumber.substring(4);
+        if (digits.isEmpty() || !digits.chars().allMatch(Character::isDigit)) {
+            return unitNumber;
+        }
+        String stripped = digits.replaceFirst("^0+", "");
+        return "BRND*" + (stripped.isEmpty() ? "0" : stripped);
     }
 
     private LookupResult lookupContainer(String unitNumber) {
         String searchNumber = formatContainerNumberForSearch(unitNumber);
         List<Map<String, Object>> results = searchUnits(searchNumber, false);
-
-        // Fallback GBTU: retry con formato compatto senza leading zeros
-        if ((results == null || results.isEmpty()) && unitNumber.startsWith("GBTU")) {
-            String fallback = formatGbtuFallback(unitNumber);
-            if (fallback != null && !fallback.equals(searchNumber)) {
-                log.debug("GBTU fallback search: {} → {}", searchNumber, fallback);
-                results = searchUnits(fallback, false);
-            }
-        }
 
         if (results == null || results.isEmpty()) {
             log.debug("No container found for unitNumber={}", unitNumber);
