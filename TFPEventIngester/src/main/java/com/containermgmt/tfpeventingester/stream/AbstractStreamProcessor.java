@@ -86,8 +86,8 @@ public abstract class AbstractStreamProcessor implements StreamProcessor {
         }
 
         // BERLink lookup (once per message)
-        String unitNumber = getString(payload, "unitNumber");
-        String unitTypeCode = getString(payload, "unitTypeCode");
+        String unitNumber = getUnitNumberFromPayload(payload);
+        String unitTypeCode = getUnitTypeCodeFromPayload(payload);
         LookupResult lookup = berlinkLookupService.lookupUnit(unitNumber, unitTypeCode);
 
         for (Model model : models) {
@@ -100,6 +100,16 @@ public abstract class AbstractStreamProcessor implements StreamProcessor {
         }
         log.info("Persisted {} {} record(s): message_id={}, unit_number={}",
                 models.size(), processorName(), messageId, unitNumber);
+    }
+
+    // --- Hooks for BERLink lookup (overridable by subclasses) ---
+
+    protected String getUnitNumberFromPayload(Map<String, Object> payload) {
+        return getString(payload, "unitNumber");
+    }
+
+    protected String getUnitTypeCodeFromPayload(Map<String, Object> payload) {
+        return getString(payload, "unitTypeCode");
     }
 
     // --- Abstract methods for subclasses ---
@@ -179,6 +189,22 @@ public abstract class AbstractStreamProcessor implements StreamProcessor {
             return (Boolean) value;
         }
         return Boolean.parseBoolean(value.toString());
+    }
+
+    protected Long getLong(Map<String, Object> payload, String key) {
+        Object value = payload.get(key);
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number) {
+            return ((Number) value).longValue();
+        }
+        try {
+            return Long.parseLong(value.toString());
+        } catch (NumberFormatException e) {
+            log.warn("Could not parse Long for key={}, value={}: {}", key, value, e.getMessage());
+            return null;
+        }
     }
 
     protected Integer getInteger(Map<String, Object> payload, String key) {

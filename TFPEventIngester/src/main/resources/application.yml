@@ -49,6 +49,9 @@ stream:
   unit-positions:
     key: tfp-unit-positions-stream
     consumer-group: tfp-event-ingester-group
+  asset-damages:
+    key: tfp-asset-damages-stream
+    consumer-group: tfp-event-ingester-group
   poll-timeout-seconds: 1
 
 # Logging Configuration

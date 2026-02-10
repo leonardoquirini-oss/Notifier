@@ -29,15 +29,20 @@ TFPEventIngester/
 │   │   ├── AbstractStreamProcessor.java   # Base class con helper comuni
 │   │   ├── StreamListenerOrchestrator.java # Auto-discovery + listener infra
 │   │   ├── UnitEventStreamProcessor.java  # Impl per tfp-unit-events-stream
-│   │   └── UnitPositionStreamProcessor.java # Impl per tfp-unit-positions-stream
+│   │   ├── UnitPositionStreamProcessor.java # Impl per tfp-unit-positions-stream
+│   │   └── AssetDamageStreamProcessor.java # Impl per tfp-asset-damages-stream
 │   └── model/
 │       ├── EvtUnitEvent.java              # ActiveJDBC model → evt_unit_events
-│       └── EvtUnitPosition.java           # ActiveJDBC model → evt_unit_positions
+│       ├── EvtUnitPosition.java           # ActiveJDBC model → evt_unit_positions
+│       ├── EvtAssetDamage.java            # ActiveJDBC model → evt_asset_damages
+│       ├── EvtVehicleDamageLabel.java     # ActiveJDBC model → evt_vehicle_damage_labels
+│       └── EvtUnitDamageLabel.java        # ActiveJDBC model → evt_unit_damage_labels
 ├── src/main/resources/
 │   ├── application.yml
 │   └── db/
 │       ├── 01_evt_unit_events.sql
-│       └── 02_evt_unit_positions.sql
+│       ├── 02_evt_unit_positions.sql
+│       └── 03_evt_asset_damages.sql
 ├── Dockerfile
 ├── docker-compose.yml
 └── pom.xml
@@ -50,30 +55,33 @@ Valkey Streams                      TFPEventIngester
 ┌──────────────────────────────┐    ┌─────────────────────────────────┐
 │ tfp-unit-events-stream       │──> │ StreamListenerOrchestrator      │
 │ tfp-unit-positions-stream    │──> │   auto-discovers StreamProcessor│
-└──────────────────────────────┘    │   beans via component scan      │
-                                    └──────────┬──────────────────────┘
+│ tfp-asset-damages-stream     │──> │   beans via component scan      │
+└──────────────────────────────┘    └──────────┬──────────────────────┘
                                                │
-                              ┌────────────────┴────────────────┐
-                              │                                 │
-                   ┌──────────▼──────────────┐      ┌──────────▼───────────────────┐
-                   │ UnitEventStreamProcessor │      │ UnitPositionStreamProcessor  │
-                   │  → EvtUnitEvent          │      │  → EvtUnitPosition           │
-                   │  dedup by message_id     │      │  dedup by message_id         │
-                   └──────────┬───────────────┘      └──────────┬──────────────────┘
-                              │                                 │
-                   ┌──────────▼───────────────┐      ┌──────────▼──────────────────┐
-                   │ PostgreSQL:              │      │ PostgreSQL:                 │
-                   │ evt_unit_events          │      │ evt_unit_positions          │
-                   └──────────────────────────┘      │ (partitioned by            │
-                                                     │  position_time)            │
-                                                     └────────────────────────────┘
+              ┌────────────────────────────────┬┴──────────────────────┐
+              │                                │                       │
+   ┌──────────▼──────────────┐  ┌──────────────▼────────────────┐  ┌──▼──────────────────────────┐
+   │ UnitEventStreamProcessor│  │ UnitPositionStreamProcessor   │  │ AssetDamageStreamProcessor  │
+   │  → EvtUnitEvent         │  │  → EvtUnitPosition            │  │  → EvtAssetDamage           │
+   │  dedup by message_id    │  │  dedup by message_id          │  │  → EvtVehicleDamageLabel    │
+   └──────────┬──────────────┘  └──────────────┬────────────────┘  │  → EvtUnitDamageLabel       │
+              │                                │                   │  dedup by message_id        │
+   ┌──────────▼──────────────┐  ┌──────────────▼────────────────┐  └──┬──────────────────────────┘
+   │ PostgreSQL:             │  │ PostgreSQL:                   │     │
+   │ evt_unit_events         │  │ evt_unit_positions            │  ┌──▼──────────────────────────┐
+   └─────────────────────────┘  │ (partitioned by              │  │ PostgreSQL:                 │
+                                │  position_time)              │  │ evt_asset_damages           │
+                                └───────────────────────────────┘  │ evt_vehicle_damage_labels   │
+                                                                   │ evt_unit_damage_labels      │
+                                                                   └─────────────────────────────┘
 ```
 
 - **StreamProcessor**: Strategy interface con `streamKey()`, `consumerGroup()`, `process(fields)`
-- **AbstractStreamProcessor**: Template Method base class. Il metodo `process()` (final) gestisce: validazione message_id, dedup/resend, parsing JSON, chiamata a `buildModel()`, BERLink lookup + enrichment, save. I subclass implementano solo `buildModel()`, `existsByMessageId()`, `deleteByMessageId()`, `processorName()`. Include helper comuni (`getString`, `parseTimestamp`, `parseBigDecimal`, `parseResendFlag`, `getBoolean`, `getInteger`). Stream key e consumer group sono iniettati nel costruttore via `@Value`.
+- **AbstractStreamProcessor**: Template Method base class. Il metodo `process()` (final) gestisce: validazione message_id, dedup/resend, parsing JSON, chiamata a `buildModel()`, BERLink lookup + enrichment, save. I subclass implementano solo `buildModel()`, `existsByMessageId()`, `deleteByMessageId()`, `processorName()`. Include helper comuni (`getString`, `parseTimestamp`, `parseBigDecimal`, `parseResendFlag`, `getBoolean`, `getInteger`, `getLong`). Stream key e consumer group sono iniettati nel costruttore via `@Value`. Hook methods `getUnitNumberFromPayload()` e `getUnitTypeCodeFromPayload()` per customizzare i campi passati al BERLink lookup (default: `unitNumber`/`unitTypeCode`).
 - **StreamListenerOrchestrator**: Inietta `List<StreamProcessor>` e `DataSource` (HikariCP pool), crea consumer group e listener per ciascuno. Per ogni messaggio: `Base.open(dataSource)` prende una connessione dal pool, `Base.close()` la restituisce. Poll timeout configurabile via `stream.poll-timeout-seconds`. I messaggi falliti restano nel PEL (non vengono acknowledged su errore).
 - **UnitEventStreamProcessor**: Implementa `buildModel()` per mappare payload su `EvtUnitEvent`. Stream key da `stream.unit-events.key`.
 - **UnitPositionStreamProcessor**: Implementa `buildModel()` per estrarre primo elemento di `unitPositions[]` e mappare su `EvtUnitPosition`. Stream key da `stream.unit-positions.key`.
+- **AssetDamageStreamProcessor**: Consuma `tfp-asset-damages-stream` (stream key da `stream.asset-damages.key`). Override di `buildModels()` per produrre `EvtAssetDamage` + label model (`EvtVehicleDamageLabel` o `EvtUnitDamageLabel` a seconda di `assetType`). Override di `getUnitNumberFromPayload()` → `assetIdentifier` e `getUnitTypeCodeFromPayload()` → mappa `UNIT` → `CONTAINER`. Cascade delete su resend (cancella label associate prima del record principale). I tag in `assetDamageLabels[]` vengono pivotati in colonne booleane sulla tabella label appropriata.
 
 ## Configurazione
 
@@ -102,6 +110,8 @@ Valkey Streams                      TFPEventIngester
 | `stream.unit-events.consumer-group` | tfp-event-ingester-group | Consumer group per unit events |
 | `stream.unit-positions.key` | tfp-unit-positions-stream | Stream key per unit positions |
 | `stream.unit-positions.consumer-group` | tfp-event-ingester-group | Consumer group per unit positions |
+| `stream.asset-damages.key` | tfp-asset-damages-stream | Stream key per asset damages |
+| `stream.asset-damages.consumer-group` | tfp-event-ingester-group | Consumer group per asset damages |
 | `stream.poll-timeout-seconds` | 1 | Poll timeout del listener (secondi) |
 | `spring.datasource.hikari.maximum-pool-size` | 5 | Connessioni max nel pool HikariCP |
 | `spring.datasource.hikari.minimum-idle` | 2 | Connessioni idle minime nel pool |
@@ -113,6 +123,7 @@ Valkey Streams                      TFPEventIngester
 |------------|---------------|-----------|----------------|
 | `tfp-unit-events-stream` | `tfp-event-ingester-group` | `UnitEventStreamProcessor` | `evt_unit_events` |
 | `tfp-unit-positions-stream` | `tfp-event-ingester-group` | `UnitPositionStreamProcessor` | `evt_unit_positions` |
+| `tfp-asset-damages-stream` | `tfp-event-ingester-group` | `AssetDamageStreamProcessor` | `evt_asset_damages` + `evt_vehicle_damage_labels` / `evt_unit_damage_labels` |
 
 ## Aggiungere un Nuovo Stream
 
@@ -165,7 +176,7 @@ I messaggi sullo stream Valkey hanno questi campi (pubblicati da TFPGateway):
 
 ## BERLink Lookup
 
-Quando un evento viene processato, `UnitEventStreamProcessor` e `UnitPositionStreamProcessor` chiamano `BerlinkLookupService` per arricchire l'evento con `container_number`, `id_trailer` o `id_vehicle` dal backend BERLink.
+Quando un evento viene processato, tutti i processor chiamano `BerlinkLookupService` per arricchire l'evento con `container_number`, `id_trailer` o `id_vehicle` dal backend BERLink. I campi passati al lookup sono configurabili via hook methods in `AbstractStreamProcessor` (`getUnitNumberFromPayload()`, `getUnitTypeCodeFromPayload()`). `AssetDamageStreamProcessor` usa `assetIdentifier` come unitNumber e mappa `UNIT` → `CONTAINER` per il unitTypeCode.
 
 **Logica:**
 - `unit_type_code == "CONTAINER"` → `GET /api/units/search?q={unit_number}&limit=1` → salva `cassa` in `container_number`
@@ -177,8 +188,8 @@ Quando un evento viene processato, `UnitEventStreamProcessor` e `UnitPositionStr
 ## Deduplication e Error Handling
 
 La dedup avviene tramite `message_id` nel template method `AbstractStreamProcessor.process()`:
-- Indice UNIQUE su `evt_unit_events.message_id` e `evt_unit_positions.message_id`
-- Check `existsByMessageId()` prima di ogni insert (sia `EvtUnitEvent` che `EvtUnitPosition`)
+- Indice UNIQUE su `evt_unit_events.message_id`, `evt_unit_positions.message_id` e `evt_asset_damages.message_id`
+- Check `existsByMessageId()` prima di ogni insert
 - Messaggi duplicati vengono acknowledged e skippati silenziosamente
 - Supporto resend: se il campo `metadata.resend=true`, il record esistente viene cancellato e re-inserito
 
@@ -215,6 +226,17 @@ redis-cli XADD tfp-unit-positions-stream "*" \
 
 # Verifica inserimento posizione
 psql -h localhost -U berlink berlinkdb -c "SELECT * FROM evt_unit_positions WHERE message_id = 'test-pos-001'"
+
+# Test manuale: pubblica messaggio asset damage su stream
+redis-cli XADD tfp-asset-damages-stream "*" \
+  message_id "test-dmg-001" \
+  event_type "BERNARDINI_ASSET_DAMAGES" \
+  event_time "2026-02-10T10:00:00Z" \
+  payload '{"id":99001,"type":"STANDARD","status":"OPEN","assetId":123,"editTime":null,"severity":"MEDIUM","assetType":"VEHICLE","assetOwner":null,"editUserId":null,"reportTime":"2026-02-10T10:00:00Z","closingTime":null,"description":"Test damage","reportNotes":"Brake issue","closingUserId":null,"assetIdentifier":"AB123CD","assetDamageLabels":[{"assetDamageLabel":"DMG_BRACKING"},{"assetDamageLabel":"DMG_TYRES"}]}'
+
+# Verifica inserimento asset damage
+psql -h localhost -U berlink berlinkdb -c "SELECT * FROM evt_asset_damages WHERE message_id = 'test-dmg-001'"
+psql -h localhost -U berlink berlinkdb -c "SELECT * FROM evt_vehicle_damage_labels WHERE id_asset_damage = 99001"
 
 # Metriche connection pool HikariCP
 curl http://localhost:8080/actuator/metrics/hikaricp.connections.active
