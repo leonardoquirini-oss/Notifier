@@ -9,6 +9,7 @@
         .table th, .table td { vertical-align: middle; font-size: 0.85rem; }
         .msgid-cell { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .unit-cell  { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .desc-cell, .notes-cell { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     </style>
 </head>
 <body class="bg-light">
@@ -30,6 +31,12 @@
                 Unit Positions
             </button>
         </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" th:classappend="${activeTab == 'damages'} ? ' active'" id="damages-tab"
+                    data-bs-toggle="tab" data-bs-target="#damages-pane" type="button" role="tab">
+                Asset Damages
+            </button>
+        </li>
     </ul>
 
     <div class="tab-content">
@@ -47,6 +54,15 @@
                 <input type="hidden" name="posDateTo" th:value="${posDateTo}">
                 <input type="hidden" name="posUnlinkedOnly" th:value="${posUnlinkedOnly}">
                 <input type="hidden" name="posPage" th:value="${posCurrentPage}">
+                <!-- Preserve damages tab state -->
+                <input type="hidden" name="dmgAssetIdentifier" th:value="${dmgAssetIdentifier}">
+                <input type="hidden" name="dmgAssetType" th:value="${dmgAssetType}">
+                <input type="hidden" name="dmgSeverity" th:value="${dmgSeverity}">
+                <input type="hidden" name="dmgStatus" th:value="${dmgStatus}">
+                <input type="hidden" name="dmgDateFrom" th:value="${dmgDateFrom}">
+                <input type="hidden" name="dmgDateTo" th:value="${dmgDateTo}">
+                <input type="hidden" name="dmgUnlinkedOnly" th:value="${dmgUnlinkedOnly}">
+                <input type="hidden" name="dmgPage" th:value="${dmgCurrentPage}">
 
                 <div class="row g-2 align-items-end">
                     <div class="col-auto">
@@ -96,43 +112,28 @@
                     <tr>
                         <th>ID</th>
                         <th>Message ID</th>
-                        <th>Type</th>
-                        <th>Unit Number</th>
                         <th>Unit Type</th>
+                        <th>Unit Number</th>
+                        <th>Type</th>
                         <th>Event Time</th>
                         <th>Severity</th>
-                        <th>Container #</th>
-                        <th>Trailer</th>
-                        <th>Vehicle</th>
                         <th>Create Time</th>
                     </tr>
                     </thead>
                     <tbody>
-                    <tr th:each="evt : ${unitEvents}"
-                        th:classappend="${evt['container_number'] == null and evt['id_trailer'] == null and evt['id_vehicle'] == null} ? 'table-warning'">
+                    <tr th:each="evt : ${unitEvents}">
                         <td th:text="${evt['id_unit_event']}"></td>
                         <td class="msgid-cell" th:title="${evt['message_id']}" th:text="${evt['message_id']}"></td>
-                        <td th:text="${evt['type']}"></td>
-                        <td class="unit-cell" th:title="${evt['unit_number']}" th:text="${evt['unit_number']}"></td>
                         <td th:text="${evt['unit_type_code']}"></td>
+                        <td class="unit-cell" th:title="${evt['unit_number']}" th:text="${evt['unit_number']}"
+                            th:classappend="${evt['container_number'] == null and evt['id_trailer'] == null and evt['id_vehicle'] == null} ? 'table-danger'"></td>
+                        <td th:text="${evt['type']}"></td>
                         <td th:text="${evt['event_time']}"></td>
                         <td th:text="${evt['severity']}"></td>
-                        <td>
-                            <span th:if="${evt['container_number'] != null}" th:text="${evt['container_number']}"></span>
-                            <span th:if="${evt['container_number'] == null}" class="badge bg-danger">&mdash;</span>
-                        </td>
-                        <td>
-                            <span th:if="${evt['id_trailer'] != null}" th:text="${evt['id_trailer']}"></span>
-                            <span th:if="${evt['id_trailer'] == null}" class="badge bg-danger">&mdash;</span>
-                        </td>
-                        <td>
-                            <span th:if="${evt['id_vehicle'] != null}" th:text="${evt['id_vehicle']}"></span>
-                            <span th:if="${evt['id_vehicle'] == null}" class="badge bg-danger">&mdash;</span>
-                        </td>
                         <td th:text="${evt['create_time']}"></td>
                     </tr>
                     <tr th:if="${#lists.isEmpty(unitEvents)}">
-                        <td colspan="11" class="text-center text-muted py-4">No events found.</td>
+                        <td colspan="8" class="text-center text-muted py-4">No events found.</td>
                     </tr>
                     </tbody>
                 </table>
@@ -149,7 +150,11 @@
                                evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage - 1},
                                posUnitNumber=${posUnitNumber}, posUnitTypeCode=${posUnitTypeCode},
                                posDateFrom=${posDateFrom}, posDateTo=${posDateTo},
-                               posUnlinkedOnly=${posUnlinkedOnly}, posPage=${posCurrentPage})}">&laquo;</a>
+                               posUnlinkedOnly=${posUnlinkedOnly}, posPage=${posCurrentPage},
+                               dmgAssetIdentifier=${dmgAssetIdentifier}, dmgAssetType=${dmgAssetType},
+                               dmgSeverity=${dmgSeverity}, dmgStatus=${dmgStatus},
+                               dmgDateFrom=${dmgDateFrom}, dmgDateTo=${dmgDateTo},
+                               dmgUnlinkedOnly=${dmgUnlinkedOnly}, dmgPage=${dmgCurrentPage})}">&laquo;</a>
                     </li>
                     <th:block th:each="p : ${#numbers.sequence(0, evtTotalPages - 1)}">
                         <li class="page-item" th:classappend="${p == evtCurrentPage} ? 'active'"
@@ -161,7 +166,11 @@
                                    evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${p},
                                    posUnitNumber=${posUnitNumber}, posUnitTypeCode=${posUnitTypeCode},
                                    posDateFrom=${posDateFrom}, posDateTo=${posDateTo},
-                                   posUnlinkedOnly=${posUnlinkedOnly}, posPage=${posCurrentPage})}"
+                                   posUnlinkedOnly=${posUnlinkedOnly}, posPage=${posCurrentPage},
+                                   dmgAssetIdentifier=${dmgAssetIdentifier}, dmgAssetType=${dmgAssetType},
+                                   dmgSeverity=${dmgSeverity}, dmgStatus=${dmgStatus},
+                                   dmgDateFrom=${dmgDateFrom}, dmgDateTo=${dmgDateTo},
+                                   dmgUnlinkedOnly=${dmgUnlinkedOnly}, dmgPage=${dmgCurrentPage})}"
                                th:text="${p + 1}"></a>
                         </li>
                     </th:block>
@@ -173,7 +182,11 @@
                                evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage + 1},
                                posUnitNumber=${posUnitNumber}, posUnitTypeCode=${posUnitTypeCode},
                                posDateFrom=${posDateFrom}, posDateTo=${posDateTo},
-                               posUnlinkedOnly=${posUnlinkedOnly}, posPage=${posCurrentPage})}">&raquo;</a>
+                               posUnlinkedOnly=${posUnlinkedOnly}, posPage=${posCurrentPage},
+                               dmgAssetIdentifier=${dmgAssetIdentifier}, dmgAssetType=${dmgAssetType},
+                               dmgSeverity=${dmgSeverity}, dmgStatus=${dmgStatus},
+                               dmgDateFrom=${dmgDateFrom}, dmgDateTo=${dmgDateTo},
+                               dmgUnlinkedOnly=${dmgUnlinkedOnly}, dmgPage=${dmgCurrentPage})}">&raquo;</a>
                     </li>
                 </ul>
             </nav>
@@ -192,6 +205,15 @@
                 <input type="hidden" name="evtDateTo" th:value="${evtDateTo}">
                 <input type="hidden" name="evtUnlinkedOnly" th:value="${evtUnlinkedOnly}">
                 <input type="hidden" name="evtPage" th:value="${evtCurrentPage}">
+                <!-- Preserve damages tab state -->
+                <input type="hidden" name="dmgAssetIdentifier" th:value="${dmgAssetIdentifier}">
+                <input type="hidden" name="dmgAssetType" th:value="${dmgAssetType}">
+                <input type="hidden" name="dmgSeverity" th:value="${dmgSeverity}">
+                <input type="hidden" name="dmgStatus" th:value="${dmgStatus}">
+                <input type="hidden" name="dmgDateFrom" th:value="${dmgDateFrom}">
+                <input type="hidden" name="dmgDateTo" th:value="${dmgDateTo}">
+                <input type="hidden" name="dmgUnlinkedOnly" th:value="${dmgUnlinkedOnly}">
+                <input type="hidden" name="dmgPage" th:value="${dmgCurrentPage}">
 
                 <div class="row g-2 align-items-end">
                     <div class="col-auto">
@@ -241,43 +263,28 @@
                     <tr>
                         <th>ID</th>
                         <th>Message ID</th>
-                        <th>Unit Number</th>
                         <th>Unit Type</th>
+                        <th>Unit Number</th>
                         <th>Lat</th>
                         <th>Lon</th>
                         <th>Position Time</th>
-                        <th>Container #</th>
-                        <th>Trailer</th>
-                        <th>Vehicle</th>
                         <th>Create Time</th>
                     </tr>
                     </thead>
                     <tbody>
-                    <tr th:each="pos : ${unitPositions}"
-                        th:classappend="${pos['container_number'] == null and pos['id_trailer'] == null and pos['id_vehicle'] == null} ? 'table-warning'">
+                    <tr th:each="pos : ${unitPositions}">
                         <td th:text="${pos['id_unit_position']}"></td>
                         <td class="msgid-cell" th:title="${pos['message_id']}" th:text="${pos['message_id']}"></td>
-                        <td class="unit-cell" th:title="${pos['unit_number']}" th:text="${pos['unit_number']}"></td>
                         <td th:text="${pos['unit_type_code']}"></td>
+                        <td class="unit-cell" th:title="${pos['unit_number']}" th:text="${pos['unit_number']}"
+                            th:classappend="${pos['container_number'] == null and pos['id_trailer'] == null and pos['id_vehicle'] == null} ? 'table-danger'"></td>
                         <td th:text="${pos['latitude']}"></td>
                         <td th:text="${pos['longitude']}"></td>
                         <td th:text="${pos['position_time']}"></td>
-                        <td>
-                            <span th:if="${pos['container_number'] != null}" th:text="${pos['container_number']}"></span>
-                            <span th:if="${pos['container_number'] == null}" class="badge bg-danger">&mdash;</span>
-                        </td>
-                        <td>
-                            <span th:if="${pos['id_trailer'] != null}" th:text="${pos['id_trailer']}"></span>
-                            <span th:if="${pos['id_trailer'] == null}" class="badge bg-danger">&mdash;</span>
-                        </td>
-                        <td>
-                            <span th:if="${pos['id_vehicle'] != null}" th:text="${pos['id_vehicle']}"></span>
-                            <span th:if="${pos['id_vehicle'] == null}" class="badge bg-danger">&mdash;</span>
-                        </td>
                         <td th:text="${pos['create_time']}"></td>
                     </tr>
                     <tr th:if="${#lists.isEmpty(unitPositions)}">
-                        <td colspan="11" class="text-center text-muted py-4">No positions found.</td>
+                        <td colspan="8" class="text-center text-muted py-4">No positions found.</td>
                     </tr>
                     </tbody>
                 </table>
@@ -294,7 +301,11 @@
                                posUnlinkedOnly=${posUnlinkedOnly}, posPage=${posCurrentPage - 1},
                                evtUnitNumber=${evtUnitNumber}, evtUnitTypeCode=${evtUnitTypeCode},
                                evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
-                               evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage})}">&laquo;</a>
+                               evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage},
+                               dmgAssetIdentifier=${dmgAssetIdentifier}, dmgAssetType=${dmgAssetType},
+                               dmgSeverity=${dmgSeverity}, dmgStatus=${dmgStatus},
+                               dmgDateFrom=${dmgDateFrom}, dmgDateTo=${dmgDateTo},
+                               dmgUnlinkedOnly=${dmgUnlinkedOnly}, dmgPage=${dmgCurrentPage})}">&laquo;</a>
                     </li>
                     <th:block th:each="p : ${#numbers.sequence(0, posTotalPages - 1)}">
                         <li class="page-item" th:classappend="${p == posCurrentPage} ? 'active'"
@@ -306,7 +317,11 @@
                                    posUnlinkedOnly=${posUnlinkedOnly}, posPage=${p},
                                    evtUnitNumber=${evtUnitNumber}, evtUnitTypeCode=${evtUnitTypeCode},
                                    evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
-                                   evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage})}"
+                                   evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage},
+                                   dmgAssetIdentifier=${dmgAssetIdentifier}, dmgAssetType=${dmgAssetType},
+                                   dmgSeverity=${dmgSeverity}, dmgStatus=${dmgStatus},
+                                   dmgDateFrom=${dmgDateFrom}, dmgDateTo=${dmgDateTo},
+                                   dmgUnlinkedOnly=${dmgUnlinkedOnly}, dmgPage=${dmgCurrentPage})}"
                                th:text="${p + 1}"></a>
                         </li>
                     </th:block>
@@ -318,7 +333,191 @@
                                posUnlinkedOnly=${posUnlinkedOnly}, posPage=${posCurrentPage + 1},
                                evtUnitNumber=${evtUnitNumber}, evtUnitTypeCode=${evtUnitTypeCode},
                                evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
-                               evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage})}">&raquo;</a>
+                               evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage},
+                               dmgAssetIdentifier=${dmgAssetIdentifier}, dmgAssetType=${dmgAssetType},
+                               dmgSeverity=${dmgSeverity}, dmgStatus=${dmgStatus},
+                               dmgDateFrom=${dmgDateFrom}, dmgDateTo=${dmgDateTo},
+                               dmgUnlinkedOnly=${dmgUnlinkedOnly}, dmgPage=${dmgCurrentPage})}">&raquo;</a>
+                    </li>
+                </ul>
+            </nav>
+        </div>
+
+        <!-- ==================== TAB: Asset Damages ==================== -->
+        <div class="tab-pane fade" th:classappend="${activeTab == 'damages'} ? ' show active'" id="damages-pane" role="tabpanel">
+
+            <!-- Filter bar -->
+            <form th:action="@{/events}" method="get" class="card card-body mb-3">
+                <input type="hidden" name="tab" value="damages">
+                <!-- Preserve events tab state -->
+                <input type="hidden" name="evtUnitNumber" th:value="${evtUnitNumber}">
+                <input type="hidden" name="evtUnitTypeCode" th:value="${evtUnitTypeCode}">
+                <input type="hidden" name="evtDateFrom" th:value="${evtDateFrom}">
+                <input type="hidden" name="evtDateTo" th:value="${evtDateTo}">
+                <input type="hidden" name="evtUnlinkedOnly" th:value="${evtUnlinkedOnly}">
+                <input type="hidden" name="evtPage" th:value="${evtCurrentPage}">
+                <!-- Preserve positions tab state -->
+                <input type="hidden" name="posUnitNumber" th:value="${posUnitNumber}">
+                <input type="hidden" name="posUnitTypeCode" th:value="${posUnitTypeCode}">
+                <input type="hidden" name="posDateFrom" th:value="${posDateFrom}">
+                <input type="hidden" name="posDateTo" th:value="${posDateTo}">
+                <input type="hidden" name="posUnlinkedOnly" th:value="${posUnlinkedOnly}">
+                <input type="hidden" name="posPage" th:value="${posCurrentPage}">
+
+                <div class="row g-2 align-items-end">
+                    <div class="col-auto">
+                        <label class="form-label form-label-sm mb-0">Asset Identifier</label>
+                        <input type="text" name="dmgAssetIdentifier" class="form-control form-control-sm"
+                               placeholder="Search..." th:value="${dmgAssetIdentifier}">
+                    </div>
+                    <div class="col-auto">
+                        <label class="form-label form-label-sm mb-0">Asset Type</label>
+                        <select name="dmgAssetType" class="form-select form-select-sm">
+                            <option value="">All</option>
+                            <option th:each="at : ${dmgAssetTypes}"
+                                    th:value="${at}" th:text="${at}"
+                                    th:selected="${at == dmgAssetType}">
+                            </option>
+                        </select>
+                    </div>
+                    <div class="col-auto">
+                        <label class="form-label form-label-sm mb-0">Severity</label>
+                        <select name="dmgSeverity" class="form-select form-select-sm">
+                            <option value="">All</option>
+                            <option th:each="sev : ${dmgSeverities}"
+                                    th:value="${sev}" th:text="${sev}"
+                                    th:selected="${sev == dmgSeverity}">
+                            </option>
+                        </select>
+                    </div>
+                    <div class="col-auto">
+                        <label class="form-label form-label-sm mb-0">Status</label>
+                        <select name="dmgStatus" class="form-select form-select-sm">
+                            <option value="">All</option>
+                            <option th:each="st : ${dmgStatuses}"
+                                    th:value="${st}" th:text="${st}"
+                                    th:selected="${st == dmgStatus}">
+                            </option>
+                        </select>
+                    </div>
+                    <div class="col-auto">
+                        <label class="form-label form-label-sm mb-0">From</label>
+                        <input type="date" name="dmgDateFrom" class="form-control form-control-sm"
+                               th:value="${dmgDateFrom}">
+                    </div>
+                    <div class="col-auto">
+                        <label class="form-label form-label-sm mb-0">To</label>
+                        <input type="date" name="dmgDateTo" class="form-control form-control-sm"
+                               th:value="${dmgDateTo}">
+                    </div>
+                    <div class="col-auto">
+                        <div class="form-check mt-3">
+                            <input class="form-check-input" type="checkbox" name="dmgUnlinkedOnly"
+                                   value="true" id="dmgUnlinkedOnly" th:checked="${dmgUnlinkedOnly}">
+                            <label class="form-check-label" for="dmgUnlinkedOnly">Unlinked Only</label>
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <button type="submit" class="btn btn-primary btn-sm">Search</button>
+                    </div>
+                    <div class="col-auto ms-auto text-muted small"
+                         th:text="'Total: ' + ${dmgTotalCount} + ' damages'"></div>
+                </div>
+            </form>
+
+            <!-- Damages table -->
+            <div class="table-responsive">
+                <table class="table table-striped table-hover table-sm damages-table">
+                    <thead class="table-dark">
+                    <tr>
+                        <th>ID</th>
+                        <th>Message ID</th>
+                        <th>Unit Type</th>
+                        <th>Unit Number</th>
+                        <th>Severity</th>
+                        <th>Status</th>
+                        <th>Type</th>
+                        <th>Report Time</th>
+                        <th>Description</th>
+                        <th>Notes</th>
+                        <th>Checklist</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="dmg : ${assetDamages}">
+                        <td th:text="${dmg['id_asset_damage']}"></td>
+                        <td class="msgid-cell" th:title="${dmg['message_id']}" th:text="${dmg['message_id']}"></td>
+                        <td th:text="${dmg['asset_type']}"></td>
+                        <td class="unit-cell" th:title="${dmg['asset_identifier']}" th:text="${dmg['asset_identifier']}"
+                            th:classappend="${dmg['container_number'] == null and dmg['id_trailer'] == null and dmg['id_vehicle'] == null} ? 'table-danger'"></td>
+                        <td th:text="${dmg['severity']}"></td>
+                        <td th:text="${dmg['status']}"></td>
+                        <td th:text="${dmg['type']}"></td>
+                        <td th:text="${dmg['report_time']}"></td>
+                        <td class="desc-cell" th:title="${dmg['description']}" th:text="${dmg['description']}"></td>
+                        <td class="notes-cell" th:title="${dmg['report_notes']}" th:text="${dmg['report_notes']}"></td>
+                        <td>
+                            <span th:each="label : ${dmg['activeLabels']}"
+                                  class="badge rounded-pill me-1"
+                                  th:classappend="${dmg['severity'] == 'HIGH'} ? 'bg-danger' : (${dmg['severity'] == 'MEDIUM'} ? 'bg-warning text-dark' : 'bg-success')"
+                                  th:text="${label}"></span>
+                        </td>
+                    </tr>
+                    <tr th:if="${#lists.isEmpty(assetDamages)}">
+                        <td colspan="11" class="text-center text-muted py-4">No asset damages found.</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            <nav th:if="${dmgTotalPages > 1}">
+                <ul class="pagination pagination-sm justify-content-center">
+                    <li class="page-item" th:classappend="${dmgCurrentPage == 0} ? 'disabled'">
+                        <a class="page-link"
+                           th:href="@{/events(tab='damages',
+                               dmgAssetIdentifier=${dmgAssetIdentifier}, dmgAssetType=${dmgAssetType},
+                               dmgSeverity=${dmgSeverity}, dmgStatus=${dmgStatus},
+                               dmgDateFrom=${dmgDateFrom}, dmgDateTo=${dmgDateTo},
+                               dmgUnlinkedOnly=${dmgUnlinkedOnly}, dmgPage=${dmgCurrentPage - 1},
+                               evtUnitNumber=${evtUnitNumber}, evtUnitTypeCode=${evtUnitTypeCode},
+                               evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
+                               evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage},
+                               posUnitNumber=${posUnitNumber}, posUnitTypeCode=${posUnitTypeCode},
+                               posDateFrom=${posDateFrom}, posDateTo=${posDateTo},
+                               posUnlinkedOnly=${posUnlinkedOnly}, posPage=${posCurrentPage})}">&laquo;</a>
+                    </li>
+                    <th:block th:each="p : ${#numbers.sequence(0, dmgTotalPages - 1)}">
+                        <li class="page-item" th:classappend="${p == dmgCurrentPage} ? 'active'"
+                            th:if="${p == 0 or p == dmgTotalPages - 1 or (p >= dmgCurrentPage - 2 and p <= dmgCurrentPage + 2)}">
+                            <a class="page-link"
+                               th:href="@{/events(tab='damages',
+                                   dmgAssetIdentifier=${dmgAssetIdentifier}, dmgAssetType=${dmgAssetType},
+                                   dmgSeverity=${dmgSeverity}, dmgStatus=${dmgStatus},
+                                   dmgDateFrom=${dmgDateFrom}, dmgDateTo=${dmgDateTo},
+                                   dmgUnlinkedOnly=${dmgUnlinkedOnly}, dmgPage=${p},
+                                   evtUnitNumber=${evtUnitNumber}, evtUnitTypeCode=${evtUnitTypeCode},
+                                   evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
+                                   evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage},
+                                   posUnitNumber=${posUnitNumber}, posUnitTypeCode=${posUnitTypeCode},
+                                   posDateFrom=${posDateFrom}, posDateTo=${posDateTo},
+                                   posUnlinkedOnly=${posUnlinkedOnly}, posPage=${posCurrentPage})}"
+                               th:text="${p + 1}"></a>
+                        </li>
+                    </th:block>
+                    <li class="page-item" th:classappend="${dmgCurrentPage == dmgTotalPages - 1} ? 'disabled'">
+                        <a class="page-link"
+                           th:href="@{/events(tab='damages',
+                               dmgAssetIdentifier=${dmgAssetIdentifier}, dmgAssetType=${dmgAssetType},
+                               dmgSeverity=${dmgSeverity}, dmgStatus=${dmgStatus},
+                               dmgDateFrom=${dmgDateFrom}, dmgDateTo=${dmgDateTo},
+                               dmgUnlinkedOnly=${dmgUnlinkedOnly}, dmgPage=${dmgCurrentPage + 1},
+                               evtUnitNumber=${evtUnitNumber}, evtUnitTypeCode=${evtUnitTypeCode},
+                               evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
+                               evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage},
+                               posUnitNumber=${posUnitNumber}, posUnitTypeCode=${posUnitTypeCode},
+                               posDateFrom=${posDateFrom}, posDateTo=${posDateTo},
+                               posUnlinkedOnly=${posUnlinkedOnly}, posPage=${posCurrentPage})}">&raquo;</a>
                     </li>
                 </ul>
             </nav>

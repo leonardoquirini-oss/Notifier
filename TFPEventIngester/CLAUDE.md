@@ -36,13 +36,15 @@ TFPEventIngester/
 │       ├── EvtUnitPosition.java           # ActiveJDBC model → evt_unit_positions
 │       ├── EvtAssetDamage.java            # ActiveJDBC model → evt_asset_damages
 │       ├── EvtVehicleDamageLabel.java     # ActiveJDBC model → evt_vehicle_damage_labels
-│       └── EvtUnitDamageLabel.java        # ActiveJDBC model → evt_unit_damage_labels
+│       ├── EvtUnitDamageLabel.java        # ActiveJDBC model → evt_unit_damage_labels
+│       └── EvtErrorIngestion.java         # ActiveJDBC model → evt_error_ingestion
 ├── src/main/resources/
 │   ├── application.yml
 │   └── db/
 │       ├── 01_evt_unit_events.sql
 │       ├── 02_evt_unit_positions.sql
-│       └── 03_evt_asset_damages.sql
+│       ├── 03_evt_asset_damages.sql
+│       └── 04_evt_error_ingestion.sql
 ├── Dockerfile
 ├── docker-compose.yml
 └── pom.xml
@@ -74,11 +76,17 @@ Valkey Streams                      TFPEventIngester
                                 └───────────────────────────────┘  │ evt_vehicle_damage_labels   │
                                                                    │ evt_unit_damage_labels      │
                                                                    └─────────────────────────────┘
+
+                                    ┌─────────────────────────────────┐
+                                    │ StreamListenerOrchestrator      │
+                                    │  on error → EvtErrorIngestion   │──> PostgreSQL: evt_error_ingestion
+                                    │  on resend success → cleanup    │
+                                    └─────────────────────────────────┘
 ```
 
 - **StreamProcessor**: Strategy interface con `streamKey()`, `consumerGroup()`, `process(fields)`
-- **AbstractStreamProcessor**: Template Method base class. Il metodo `process()` (final) gestisce: validazione message_id, dedup/resend, parsing JSON, chiamata a `buildModel()`, BERLink lookup + enrichment, save. I subclass implementano solo `buildModel()`, `existsByMessageId()`, `deleteByMessageId()`, `processorName()`. Include helper comuni (`getString`, `parseTimestamp`, `parseBigDecimal`, `parseResendFlag`, `getBoolean`, `getInteger`, `getLong`). Stream key e consumer group sono iniettati nel costruttore via `@Value`. Hook methods `getUnitNumberFromPayload()` e `getUnitTypeCodeFromPayload()` per customizzare i campi passati al BERLink lookup (default: `unitNumber`/`unitTypeCode`).
-- **StreamListenerOrchestrator**: Inietta `List<StreamProcessor>` e `DataSource` (HikariCP pool), crea consumer group e listener per ciascuno. Per ogni messaggio: `Base.open(dataSource)` prende una connessione dal pool, `Base.close()` la restituisce. Poll timeout configurabile via `stream.poll-timeout-seconds`. I messaggi falliti restano nel PEL (non vengono acknowledged su errore).
+- **AbstractStreamProcessor**: Template Method base class. Il metodo `process()` (final) gestisce: validazione message_id, dedup/resend, parsing JSON, chiamata a `buildModel()`, BERLink lookup + enrichment, save. Su resend riuscito, cancella i record da `evt_error_ingestion` per quel `message_id`. I subclass implementano solo `buildModel()`, `existsByMessageId()`, `deleteByMessageId()`, `processorName()`. Include helper comuni (`getString`, `parseTimestamp`, `parseBigDecimal`, `parseResendFlag`, `getBoolean`, `getInteger`, `getLong`). Stream key e consumer group sono iniettati nel costruttore via `@Value`. Hook methods `getUnitNumberFromPayload()` e `getUnitTypeCodeFromPayload()` per customizzare i campi passati al BERLink lookup (default: `unitNumber`/`unitTypeCode`).
+- **StreamListenerOrchestrator**: Inietta `List<StreamProcessor>` e `DataSource` (HikariCP pool), crea consumer group e listener per ciascuno. Per ogni messaggio: `Base.open(dataSource)` prende una connessione dal pool, `Base.close()` la restituisce. Poll timeout configurabile via `stream.poll-timeout-seconds`. I messaggi falliti restano nel PEL (non vengono acknowledged su errore). Su errore, salva un record in `evt_error_ingestion` con `message_id`, timestamp e messaggio d'errore (troncato a 4000 char). Il salvataggio errore e' wrappato in try-catch per non mascherare l'eccezione originale.
 - **UnitEventStreamProcessor**: Implementa `buildModel()` per mappare payload su `EvtUnitEvent`. Stream key da `stream.unit-events.key`.
 - **UnitPositionStreamProcessor**: Implementa `buildModel()` per estrarre primo elemento di `unitPositions[]` e mappare su `EvtUnitPosition`. Stream key da `stream.unit-positions.key`.
 - **AssetDamageStreamProcessor**: Consuma `tfp-asset-damages-stream` (stream key da `stream.asset-damages.key`). Override di `buildModels()` per produrre `EvtAssetDamage` + label model (`EvtVehicleDamageLabel` o `EvtUnitDamageLabel` a seconda di `assetType`). Override di `getUnitNumberFromPayload()` → `assetIdentifier` e `getUnitTypeCodeFromPayload()` → mappa `UNIT` → `CONTAINER`. Cascade delete su resend (cancella label associate prima del record principale). I tag in `assetDamageLabels[]` vengono pivotati in colonne booleane sulla tabella label appropriata.
@@ -195,6 +203,8 @@ La dedup avviene tramite `message_id` nel template method `AbstractStreamProcess
 
 **Error handling:** I messaggi che falliscono durante il processing NON vengono acknowledged. Restano nel PEL (Pending Entries List) di Valkey per ispezione via `XPENDING` e reprocessing manuale.
 
+**Error ingestion tracking:** Quando il processing di un messaggio fallisce, `StreamListenerOrchestrator` salva un record in `evt_error_ingestion` (model `EvtErrorIngestion`) con `message_id`, `ingestion_time` e `error_message`. Quando un messaggio viene re-inviato con `metadata.resend=true` e il save va a buon fine, `AbstractStreamProcessor` cancella i record errore correlati da `evt_error_ingestion` tramite `EvtErrorIngestion.deleteByMessageId()`.
+
 ## Comandi Utili
 
 ```bash
@@ -232,7 +242,7 @@ redis-cli XADD tfp-asset-damages-stream "*" \
   message_id "test-dmg-001" \
   event_type "BERNARDINI_ASSET_DAMAGES" \
   event_time "2026-02-10T10:00:00Z" \
-  payload '{"id":99001,"type":"STANDARD","status":"OPEN","assetId":123,"editTime":null,"severity":"MEDIUM","assetType":"VEHICLE","assetOwner":null,"editUserId":null,"reportTime":"2026-02-10T10:00:00Z","closingTime":null,"description":"Test damage","reportNotes":"Brake issue","closingUserId":null,"assetIdentifier":"AB123CD","assetDamageLabels":[{"assetDamageLabel":"DMG_BRACKING"},{"assetDamageLabel":"DMG_TYRES"}]}'
+  payload '{"id":99001,"type":"STANDARD","status":"OPEN","assetId":123,"editTime":null,"severity":"MEDIUM","assetType":"VEHICLE","assetOwner":null,"editUserId":null,"reportTime":"2026-02-10T10:00:00Z","closingTime":null,"description":"Test damage","reportNotes":"Brake issue","closingUserId":null,"assetIdentifier":"AB123CD","assetDamageLabels":[{"tag":"DMG_BRACKING","value":"true","valueFormat":"BOOLEAN","assetDamageId":99001},{"tag":"DMG_TYRES","value":"true","valueFormat":"BOOLEAN","assetDamageId":99001},{"tag":"DMG_OTHER","value":"false","valueFormat":"BOOLEAN","assetDamageId":99001}]}'
 
 # Verifica inserimento asset damage
 psql -h localhost -U berlink berlinkdb -c "SELECT * FROM evt_asset_damages WHERE message_id = 'test-dmg-001'"

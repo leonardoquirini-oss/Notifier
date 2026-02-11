@@ -13,16 +13,18 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.HexFormat;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Event Listener
  *
  * Processes incoming JMS messages from Apache Artemis multicast addresses.
- * Listeners are registered programmatically by ArtemisConfig;
+ * Listeners are registered programmatically by GatewayLifecycleManager;
  * the address name is passed as a parameter and used as event_type.
  *
- * Messages are consumed normally (JMS commit on success, rollback on failure).
- * Durable subscription queues ensure messages are retained when processor is offline.
+ * Retry parameters are held in Atomic fields so that the configuration
+ * page can update them at runtime without a restart.
  */
 @Component
 @Slf4j
@@ -30,19 +32,28 @@ public class EventListener {
 
     private final EventProcessorService eventProcessorService;
 
-    @Value("${gateway.retry-attempts:3}")
-    private int maxRetries;
+    private final AtomicInteger maxRetries;
+    private final AtomicLong retryDelay;
 
-    @Value("${gateway.retry-delay-ms:5000}")
-    private long retryDelay;
-
-    public EventListener(EventProcessorService eventProcessorService) {
+    public EventListener(EventProcessorService eventProcessorService,
+                         @Value("${gateway.retry-attempts:3}") int maxRetries,
+                         @Value("${gateway.retry-delay-ms:5000}") long retryDelay) {
         this.eventProcessorService = eventProcessorService;
+        this.maxRetries = new AtomicInteger(maxRetries);
+        this.retryDelay = new AtomicLong(retryDelay);
+    }
+
+    public void setMaxRetries(int value) {
+        maxRetries.set(value);
+    }
+
+    public void setRetryDelay(long value) {
+        retryDelay.set(value);
     }
 
     /**
      * Processes a JMS message from the given multicast address.
-     * Called by the programmatic listener registered in ArtemisConfig.
+     * Called by the programmatic listener registered in GatewayLifecycleManager.
      *
      * @param addressName the Artemis multicast address the message came from (used as eventType)
      * @param message     the raw JMS message
@@ -80,11 +91,13 @@ public class EventListener {
      * Processes an event with retry logic.
      */
     private void processWithRetry(EventMessage eventMessage) {
+        int maxAttempts = maxRetries.get();
+        long delay = retryDelay.get();
         int attempts = 0;
         boolean success = false;
         Exception lastException = null;
 
-        while (attempts < maxRetries && !success) {
+        while (attempts < maxAttempts && !success) {
             try {
                 eventProcessorService.processEvent(eventMessage);
                 success = true;
@@ -94,17 +107,17 @@ public class EventListener {
                 log.warn("Processing attempt {} failed for event type={}: {}",
                     attempts, eventMessage.getEventType(), e.getMessage());
 
-                if (attempts < maxRetries) {
-                    sleep(retryDelay);
+                if (attempts < maxAttempts) {
+                    sleep(delay);
                 }
             }
         }
 
         if (!success) {
             log.error("Max retries ({}) reached for event type={}",
-                maxRetries, eventMessage.getEventType());
+                maxAttempts, eventMessage.getEventType());
             throw new RuntimeException(
-                "Failed to process event after " + maxRetries + " attempts: type=" +
+                "Failed to process event after " + maxAttempts + " attempts: type=" +
                 eventMessage.getEventType(), lastException);
         }
     }

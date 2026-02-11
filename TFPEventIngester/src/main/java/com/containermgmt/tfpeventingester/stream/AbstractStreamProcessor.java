@@ -1,5 +1,6 @@
 package com.containermgmt.tfpeventingester.stream;
 
+import com.containermgmt.tfpeventingester.model.EvtErrorIngestion;
 import com.containermgmt.tfpeventingester.service.BerlinkLookupService;
 import com.containermgmt.tfpeventingester.service.BerlinkLookupService.LookupResult;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -90,19 +91,32 @@ public abstract class AbstractStreamProcessor implements StreamProcessor {
         String unitTypeCode = getUnitTypeCodeFromPayload(payload);
         LookupResult lookup = berlinkLookupService.lookupUnit(unitNumber, unitTypeCode);
 
+        saveModels(models, lookup);
+
+        if (resend) {
+            EvtErrorIngestion.deleteByMessageId(messageId);
+        }
+
+        log.info("Persisted {} {} record(s): message_id={}, unit_number={}",
+                models.size(), processorName(), messageId, unitNumber);
+    }
+
+    // --- Hooks for save and BERLink lookup (overridable by subclasses) ---
+
+    protected void saveModels(List<Model> models, LookupResult lookup) {
         for (Model model : models) {
-            if (lookup.hasData()) {
+            if (lookup.hasData() && shouldApplyLookup(model)) {
                 model.set("container_number", lookup.containerNumber());
                 model.set("id_trailer", lookup.idTrailer());
                 model.set("id_vehicle", lookup.idVehicle());
             }
             model.saveIt();
         }
-        log.info("Persisted {} {} record(s): message_id={}, unit_number={}",
-                models.size(), processorName(), messageId, unitNumber);
     }
 
-    // --- Hooks for BERLink lookup (overridable by subclasses) ---
+    protected boolean shouldApplyLookup(Model model) {
+        return true;
+    }
 
     protected String getUnitNumberFromPayload(Map<String, Object> payload) {
         return getString(payload, "unitNumber");

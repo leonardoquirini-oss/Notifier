@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>TFP Gateway - Configuration</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+          rel="stylesheet">
+    <style>
+        .status-badge { font-size: 1rem; }
+    </style>
+</head>
+<body class="bg-light">
+<div class="container-fluid py-3">
+
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0">TFP Gateway &mdash; Configuration</h4>
+        <div class="dropdown">
+            <button class="btn btn-outline-secondary btn-sm" type="button"
+                    data-bs-toggle="dropdown" title="Menu">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
+                    <path fill-rule="evenodd" d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5"/>
+                </svg>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+                <li><a class="dropdown-item" href="/events">Event Browser</a></li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Flash messages -->
+    <div th:if="${successMessage}" class="alert alert-success alert-dismissible fade show" role="alert">
+        <span th:text="${successMessage}"></span>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    <div th:if="${errorMessage}" class="alert alert-danger alert-dismissible fade show" role="alert">
+        <span th:text="${errorMessage}"></span>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+
+    <!-- ===== STATUS SECTION ===== -->
+    <div class="card mb-3" id="statusCard">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span>
+                Gateway Status:
+                <span id="statusBadge" class="badge status-badge"
+                      th:classappend="${status.state == 'RUNNING'} ? 'bg-success' : (${status.state == 'STOPPED'} ? 'bg-danger' : 'bg-warning')"
+                      th:text="${status.state}">UNKNOWN</span>
+            </span>
+            <span class="text-muted small" th:text="'Broker: ' + ${status.brokerUrl}" id="statusBroker"></span>
+        </div>
+        <div class="card-body p-0">
+            <table class="table table-sm table-striped mb-0" id="listenersTable">
+                <thead class="table-light">
+                <tr>
+                    <th>Address</th>
+                    <th>Destination</th>
+                    <th>Running</th>
+                    <th>Active Consumers</th>
+                </tr>
+                </thead>
+                <tbody id="listenersBody">
+                <tr th:each="l : ${status.listeners}">
+                    <td th:text="${l.address}"></td>
+                    <td><code th:text="${l.destination}"></code></td>
+                    <td>
+                        <span class="badge" th:classappend="${l.running} ? 'bg-success' : 'bg-secondary'"
+                              th:text="${l.running} ? 'Yes' : 'No'"></span>
+                    </td>
+                    <td th:text="${l.activeConsumers}"></td>
+                </tr>
+                <tr th:if="${#lists.isEmpty(status.listeners)}">
+                    <td colspan="4" class="text-center text-muted py-2">No listeners registered.</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="card-footer">
+            <button type="button" class="btn btn-danger btn-sm" id="btnStop" onclick="doLifecycle('stop')">Stop</button>
+            <button type="button" class="btn btn-success btn-sm" id="btnStart" onclick="doLifecycle('start')">Start</button>
+        </div>
+    </div>
+
+    <!-- ===== CONFIGURATION FORM ===== -->
+    <form th:action="@{/gateway/apply}" method="post">
+        <div class="card mb-3">
+            <div class="card-header fw-bold">Artemis Broker</div>
+            <div class="card-body">
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <label class="form-label form-label-sm">Broker URL</label>
+                        <input type="text" class="form-control form-control-sm" name="brokerUrl"
+                               th:value="${config.brokerUrl}">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label form-label-sm">User</label>
+                        <input type="text" class="form-control form-control-sm" name="artemisUser"
+                               th:value="${config.artemisUser}">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label form-label-sm">Password</label>
+                        <input type="password" class="form-control form-control-sm" name="artemisPassword"
+                               th:value="${config.artemisPassword}">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header fw-bold">Gateway</div>
+            <div class="card-body">
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <label class="form-label form-label-sm">Addresses <small class="text-muted">(comma-separated)</small></label>
+                        <textarea class="form-control form-control-sm" name="addresses" rows="2"
+                                  th:text="${config.addresses}"></textarea>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label form-label-sm">Subscriber Name</label>
+                        <input type="text" class="form-control form-control-sm" name="subscriberName"
+                               th:value="${config.subscriberName}" placeholder="(empty = direct mode)">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label form-label-sm">Concurrency</label>
+                        <input type="text" class="form-control form-control-sm" name="concurrency"
+                               th:value="${config.concurrency}" placeholder="3-10">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header fw-bold">Retry</div>
+            <div class="card-body">
+                <div class="row g-2">
+                    <div class="col-md-3">
+                        <label class="form-label form-label-sm">Retry Attempts</label>
+                        <input type="number" class="form-control form-control-sm" name="retryAttempts"
+                               th:value="${config.retryAttempts}">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label form-label-sm">Retry Delay (ms)</label>
+                        <input type="number" class="form-control form-control-sm" name="retryDelayMs"
+                               th:value="${config.retryDelayMs}">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header fw-bold">Artemis Reconnection</div>
+            <div class="card-body">
+                <div class="row g-2">
+                    <div class="col-md-2">
+                        <label class="form-label form-label-sm">Retry Interval (ms)</label>
+                        <input type="number" class="form-control form-control-sm" name="retryInterval"
+                               th:value="${config.retryInterval}">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label form-label-sm">Multiplier</label>
+                        <input type="number" step="0.1" class="form-control form-control-sm" name="retryIntervalMultiplier"
+                               th:value="${config.retryIntervalMultiplier}">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label form-label-sm">Max Retry Interval (ms)</label>
+                        <input type="number" class="form-control form-control-sm" name="maxRetryInterval"
+                               th:value="${config.maxRetryInterval}">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label form-label-sm">Reconnect Attempts</label>
+                        <input type="number" class="form-control form-control-sm" name="reconnectAttempts"
+                               th:value="${config.reconnectAttempts}">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label form-label-sm">Failure Check (ms)</label>
+                        <input type="number" class="form-control form-control-sm" name="clientFailureCheckPeriod"
+                               th:value="${config.clientFailureCheckPeriod}">
+                    </div>
+                    <div class="col-md-1">
+                        <label class="form-label form-label-sm">Conn TTL (ms)</label>
+                        <input type="number" class="form-control form-control-sm" name="connectionTtl"
+                               th:value="${config.connectionTtl}">
+                    </div>
+                    <div class="col-md-1">
+                        <label class="form-label form-label-sm">Recovery (ms)</label>
+                        <input type="number" class="form-control form-control-sm" name="recoveryInterval"
+                               th:value="${config.recoveryInterval}">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header fw-bold">Stream Mapping <small class="text-muted">(ADDRESS=stream-key, one per line)</small></div>
+            <div class="card-body">
+                <textarea class="form-control form-control-sm font-monospace" name="streamMappingText" rows="4"
+                          th:text="${config.streamMappingText}"></textarea>
+            </div>
+        </div>
+
+        <div class="mb-3">
+            <button type="submit" class="btn btn-primary">Save &amp; Restart</button>
+            <small class="text-muted ms-2">Changes are in-memory only (active until next app restart).</small>
+        </div>
+    </form>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    function doLifecycle(action) {
+        var btn = document.getElementById(action === 'stop' ? 'btnStop' : 'btnStart');
+        btn.disabled = true;
+        btn.textContent = action === 'stop' ? 'Stopping...' : 'Starting...';
+
+        fetch('/gateway/' + action, { method: 'POST' })
+            .then(function(resp) {
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                return resp.json();
+            })
+            .then(function(status) {
+                updateStatus(status);
+            })
+            .catch(function(err) {
+                alert('Error: ' + err.message);
+            })
+            .finally(function() {
+                btn.disabled = false;
+                btn.textContent = action === 'stop' ? 'Stop' : 'Start';
+            });
+    }
+
+    function updateStatus(status) {
+        // Update badge
+        var badge = document.getElementById('statusBadge');
+        badge.textContent = status.state;
+        badge.className = 'badge status-badge ' +
+            (status.state === 'RUNNING' ? 'bg-success' :
+             status.state === 'STOPPED' ? 'bg-danger' : 'bg-warning');
+
+        // Update broker URL
+        document.getElementById('statusBroker').textContent = 'Broker: ' + (status.brokerUrl || '');
+
+        // Update listeners table
+        var tbody = document.getElementById('listenersBody');
+        tbody.innerHTML = '';
+        if (!status.listeners || status.listeners.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-2">No listeners registered.</td></tr>';
+            return;
+        }
+        status.listeners.forEach(function(l) {
+            var tr = document.createElement('tr');
+            tr.innerHTML =
+                '<td>' + escHtml(l.address) + '</td>' +
+                '<td><code>' + escHtml(l.destination) + '</code></td>' +
+                '<td><span class="badge ' + (l.running ? 'bg-success' : 'bg-secondary') + '">' +
+                    (l.running ? 'Yes' : 'No') + '</span></td>' +
+                '<td>' + l.activeConsumers + '</td>';
+            tbody.appendChild(tr);
+        });
+    }
+
+    function escHtml(s) {
+        var d = document.createElement('div');
+        d.textContent = s || '';
+        return d.innerHTML;
+    }
+</script>
+</body>
+</html>

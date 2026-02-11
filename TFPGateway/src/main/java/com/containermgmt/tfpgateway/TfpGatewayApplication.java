@@ -9,11 +9,12 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * Consumes events from Apache Artemis queues and persists them to PostgreSQL
  * using ActiveJDBC ORM.
  */
-@SpringBootApplication
+@SpringBootApplication(exclude = {
+    org.springframework.boot.autoconfigure.jms.artemis.ArtemisAutoConfiguration.class
+})
 public class TfpGatewayApplication {
 
     public static void main(String[] args) {
         SpringApplication.run(TfpGatewayApplication.class, args);
     }
-
 }

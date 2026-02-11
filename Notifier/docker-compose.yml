@@ -19,8 +19,8 @@ services:
     restart: unless-stopped
     networks:
       - berlink-network
-
+      
 networks:
   berlink-network:
-    name:   berlink-dev_berlink-network
     external: true
+    name: berlink-dev_berlink-network

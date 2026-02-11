@@ -13,6 +13,8 @@ import org.springframework.data.redis.stream.StreamMessageListenerContainer;
 import org.springframework.data.redis.stream.Subscription;
 import org.springframework.stereotype.Component;
 
+import com.containermgmt.tfpeventingester.model.EvtErrorIngestion;
+
 import javax.sql.DataSource;
 import java.net.InetAddress;
 import java.time.Duration;
@@ -106,6 +108,7 @@ public class StreamListenerOrchestrator {
         log.debug("Received message: stream={}, messageId={}", processor.streamKey(), messageId);
 
         boolean connectionOpened = false;
+        String businessMessageId = null;
         try {
             if (!Base.hasConnection()) {
                 Base.open(dataSource);
@@ -113,6 +116,7 @@ public class StreamListenerOrchestrator {
             }
 
             Map<String, String> fields = cleanJsonValues(message.getValue());
+            businessMessageId = fields.get("message_id");
             processor.process(fields);
 
             redisTemplate.opsForStream().acknowledge(processor.streamKey(), processor.consumerGroup(), messageId);
@@ -122,11 +126,34 @@ public class StreamListenerOrchestrator {
             log.error("Error processing message: stream={}, messageId={}, error={}",
                     processor.streamKey(), messageId, e.getMessage(), e);
             // Message stays in PEL for inspection via XPENDING / manual reprocessing
+            persistErrorRecord(businessMessageId, e);
         } finally {
             if (connectionOpened && Base.hasConnection()) {
                 Base.close();
             }
         }
+    }
+
+    private void persistErrorRecord(String businessMessageId, Exception e) {
+        try {
+            if (businessMessageId != null && Base.hasConnection()) {
+                EvtErrorIngestion err = new EvtErrorIngestion();
+                err.set("message_id", businessMessageId);
+                err.set("ingestion_time", new java.sql.Timestamp(System.currentTimeMillis()));
+                err.set("error_message", truncate(e.getMessage(), 4000));
+                err.saveIt();
+            }
+        } catch (Exception saveErr) {
+            log.error("Failed to persist error ingestion record for message_id={}: {}",
+                    businessMessageId, saveErr.getMessage());
+        }
+    }
+
+    private static String truncate(String value, int maxLength) {
+        if (value == null || value.length() <= maxLength) {
+            return value;
+        }
+        return value.substring(0, maxLength);
     }
 
     private Map<String, String> cleanJsonValues(Map<String, String> rawPayload) {

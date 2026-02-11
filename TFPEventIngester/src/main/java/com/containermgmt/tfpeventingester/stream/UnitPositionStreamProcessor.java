@@ -42,6 +42,15 @@ public class UnitPositionStreamProcessor extends AbstractStreamProcessor {
             return List.of();
         }
 
+        String unitNumber = getString(payload, "unitNumber");
+        String unitTypeCode = getString(payload, "unitTypeCode");
+        String vehiclePlate = getString(payload, "vehiclePlate");
+
+        // Infer VEHICLE when unitTypeCode is null but vehiclePlate is present
+        if (unitTypeCode == null && vehiclePlate != null) {
+            unitTypeCode = "VEHICLE";
+        }
+
         List<Model> models = new ArrayList<>(unitPositions.size());
         for (int i = 0; i < unitPositions.size(); i++) {
             Map<String, Object> position = unitPositions.get(i);
@@ -49,9 +58,9 @@ public class UnitPositionStreamProcessor extends AbstractStreamProcessor {
             evt.set("message_id", messageId);
             evt.set("pos_index", i + 1);
             evt.set("message_type", eventType);
-            evt.set("unit_number", getString(payload, "unitNumber"));
-            evt.set("unit_type_code", getString(payload, "unitTypeCode"));
-            evt.set("vehicle_plate", getString(payload, "vehiclePlate"));
+            evt.set("unit_number", unitNumber);
+            evt.set("unit_type_code", unitTypeCode);
+            evt.set("vehicle_plate", vehiclePlate);
             evt.set("unique_unit", getBoolean(payload, "uniqueUnit"));
             evt.set("unique_vehicle", getBoolean(payload, "uniqueVehicle"));
             evt.set("latitude", parseBigDecimal(position, "latitude"));
@@ -61,6 +70,24 @@ public class UnitPositionStreamProcessor extends AbstractStreamProcessor {
             models.add(evt);
         }
         return models;
+    }
+
+    @Override
+    protected String getUnitTypeCodeFromPayload(Map<String, Object> payload) {
+        String unitTypeCode = getString(payload, "unitTypeCode");
+        if (unitTypeCode == null && getString(payload, "vehiclePlate") != null) {
+            return "VEHICLE";
+        }
+        return unitTypeCode;
+    }
+
+    @Override
+    protected String getUnitNumberFromPayload(Map<String, Object> payload) {
+        String unitNumber = getString(payload, "unitNumber");
+        if (unitNumber == null && getString(payload, "vehiclePlate") != null) {
+            return getString(payload, "vehiclePlate");
+        }
+        return unitNumber;
     }
 
     @Override

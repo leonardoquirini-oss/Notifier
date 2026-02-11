@@ -20,4 +20,5 @@ services:
 
 networks:
   berlink-network:
-    driver: bridge
+    external: true
+    name: berlink-dev_berlink-network

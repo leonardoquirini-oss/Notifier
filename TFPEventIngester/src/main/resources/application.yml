@@ -54,6 +54,38 @@ stream:
     consumer-group: tfp-event-ingester-group
   poll-timeout-seconds: 1
 
+# Damage Labels Display Names
+damage-labels:
+  vehicle:
+    dmg_braking: "Imp. frenante"
+    dmg_tyres: "Pneumatici danneggiati/usurati"
+    dmg_iso_air: "Imp. aria freni/ giunto ISO aria"
+    dmg_light: "Imp. illuminazione"
+    dmg_twist: "Twist Lock danneggiato"
+    dmg_other: "Altro"
+    dmg_piston: "Pistone non funzioannte"
+    dmg_stabilizers: "Stabilizzatori non funzionanti"
+    dmg_control: "Telecomando / leve danneggiate"
+    dmg_roller: "Rete protezione rotocella assente / danneggiata"
+    dmg_worn_hose: "Manichetta usurata"
+  unit:
+    dmg_floor: "Pianale rotto"
+    dmg_side_shot: "Colpo laterale"
+    dmg_door_handles: "Maniglie porte rotte/piegate"
+    dmg_zippers: "Cerniere rotte"
+    dmg_roof_slats: "Stecche tetto assenti/dissaldate"
+    dmg_hooks: "Ganci mancanti"
+    dmg_hatches: "Botole rovinate"
+    dmg_roof: "Tetto bucato/piegato/arruginito"
+    dmg_handrail: "Corrimano danneggiato/assente"
+    dmg_letterbox: "Letterbox con ruggine/danneggiato"
+    dmg_security: "Sicurezza danneggiata"
+    dmg_other: "Altro"  
+    dmg_structure: "Struttura"
+    dmg_doors: "Porte"
+    dmg_walls: "Pareti"
+    dmg_twist_lock: "Twist Lock"
+
 # Logging Configuration
 logging:
   level:

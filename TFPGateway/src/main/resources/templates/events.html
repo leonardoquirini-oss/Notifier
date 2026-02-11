@@ -22,7 +22,20 @@
 <body class="bg-light">
 <div class="container-fluid py-3">
 
-    <h4 class="mb-3">TFP Gateway &mdash; Event Browser</h4>
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0">TFP Gateway &mdash; Event Browser</h4>
+        <div class="dropdown">
+            <button class="btn btn-outline-secondary btn-sm" type="button"
+                    data-bs-toggle="dropdown" title="Menu">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
+                    <path fill-rule="evenodd" d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5"/>
+                </svg>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+                <li><a class="dropdown-item" href="/gateway">Configurazione Gateway</a></li>
+            </ul>
+        </div>
+    </div>
 
     <!-- Flash messages -->
     <div th:if="${successMessage}" class="alert alert-success alert-dismissible fade show" role="alert">
@@ -254,8 +267,8 @@
         div.innerHTML = '<span>' + message + '</span>' +
             '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
         var container = document.querySelector('.container-fluid');
-        var h4 = container.querySelector('h4');
-        h4.insertAdjacentElement('afterend', div);
+        var header = container.querySelector('.d-flex');
+        header.insertAdjacentElement('afterend', div);
     }
 
     function doResend(ids, forceMessageId) {

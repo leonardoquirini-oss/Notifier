@@ -9,7 +9,9 @@
       "Bash(mvn clean compile:*)",
       "Bash(find:*)",
       "Bash(grep:*)",
-      "Bash(mvn package:*)"
+      "Bash(mvn package:*)",
+      "Bash(ls:*)",
+      "Bash(psql:*)"
     ]
   }
 }
