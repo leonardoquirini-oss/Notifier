@@ -102,11 +102,13 @@ public class GatewayLifecycleManager {
                 log.info("Mode: FQQN multicast (subscriber-name: {})", subscriberName);
             }
 
+            boolean fqqnMode = subscriberName != null && !subscriberName.isBlank();
+
             for (String address : addresses) {
                 String addressName = address.trim();
                 if (addressName.isEmpty()) continue;
                 String destination = resolveDestination(addressName, subscriberName);
-                startContainer(addressName, destination);
+                startContainer(addressName, destination, fqqnMode);
             }
 
             log.info("Started {} listener container(s).", containers.size());
@@ -208,10 +210,11 @@ public class GatewayLifecycleManager {
         }
     }
 
-    private void startContainer(String addressName, String destination) {
+    private void startContainer(String addressName, String destination, boolean multicast) {
         DefaultMessageListenerContainer container = new DefaultMessageListenerContainer();
         container.setConnectionFactory(connectionFactory);
         container.setDestinationName(destination);
+        container.setPubSubDomain(multicast);
         container.setConcurrency(props.getConcurrency());
         container.setSessionTransacted(true);
         container.setRecoveryInterval(props.getArtemis().getRecoveryInterval());

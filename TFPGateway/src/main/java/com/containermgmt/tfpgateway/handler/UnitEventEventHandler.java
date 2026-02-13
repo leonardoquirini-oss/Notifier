@@ -31,7 +31,7 @@ public class UnitEventEventHandler implements EventTypeHandler {
 
     @Override
     public void handle(EventMessage eventMessage) {
-        log.info("Handling {} event: messageId={}", SUPPORTED_TYPE, eventMessage.getMessageId());
+        log.trace(" -- Handling {} event: messageId={}", SUPPORTED_TYPE, eventMessage.getMessageId());
         // TODO: implement asset-damage specific logic
     }
 }

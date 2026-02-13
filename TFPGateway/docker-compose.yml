@@ -26,7 +26,7 @@ services:
       - berlink-network
 
     volumes:
-      - /opt/berlink/tfp-gateway/data/application.yaml:/app/application.yaml
+      - /opt/berlink/tfp-gateway/data/application.yml:/app/application.yml
 
     restart: unless-stopped
     healthcheck:

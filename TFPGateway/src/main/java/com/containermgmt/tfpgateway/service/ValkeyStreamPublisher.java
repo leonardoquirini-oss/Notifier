@@ -63,7 +63,7 @@ public class ValkeyStreamPublisher {
             redisTemplate.opsForStream()
                     .add(StreamRecords.string(fields).withStreamKey(streamKey));
 
-            log.info("Published to Valkey stream={}, messageId={}", streamKey, eventMessage.getMessageId());
+            log.info(" -- Published to Valkey stream={}, messageId={}", streamKey, eventMessage.getMessageId());
         } catch (Exception e) {
             log.warn("Failed to publish to Valkey stream={}, messageId={}: {}",
                     streamKey, eventMessage.getMessageId(), e.getMessage());

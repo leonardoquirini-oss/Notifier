@@ -7,6 +7,7 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -47,6 +48,11 @@ public class EventBrowserController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dmgDateTo,
             @RequestParam(defaultValue = "false") boolean dmgUnlinkedOnly,
             @RequestParam(defaultValue = "0") int dmgPage,
+            // Ingestion Errors filters
+            @RequestParam(required = false) String errMessageId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate errDateFrom,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate errDateTo,
+            @RequestParam(defaultValue = "0") int errPage,
             Model model) {
 
         int pageSize = eventBrowserService.getPageSize();
@@ -122,9 +128,32 @@ public class EventBrowserController {
         model.addAttribute("dmgDateTo", dmgDateTo);
         model.addAttribute("dmgUnlinkedOnly", dmgUnlinkedOnly);
 
+        // --- Ingestion Errors ---
+        List<Map<String, Object>> ingestionErrors = eventBrowserService.searchErrors(
+                errMessageId, errDateFrom, errDateTo, errPage);
+        long errTotalCount = eventBrowserService.countErrors(errMessageId, errDateFrom, errDateTo);
+        int errTotalPages = (int) Math.ceil((double) errTotalCount / pageSize);
+
+        model.addAttribute("ingestionErrors", ingestionErrors);
+        model.addAttribute("errTotalCount", errTotalCount);
+        model.addAttribute("errTotalPages", errTotalPages);
+        model.addAttribute("errCurrentPage", errPage);
+
+        // Repopulate error filters
+        model.addAttribute("errMessageId", errMessageId);
+        model.addAttribute("errDateFrom", errDateFrom);
+        model.addAttribute("errDateTo", errDateTo);
+
         // Active tab
         model.addAttribute("activeTab", tab);
 
         return "events";
+    }
+
+    @GetMapping("/events/error-payload")
+    @ResponseBody
+    public String getErrorPayload(@RequestParam String messageId) {
+        String payload = eventBrowserService.getErrorPayload(messageId);
+        return payload != null ? payload : "";
     }
 }

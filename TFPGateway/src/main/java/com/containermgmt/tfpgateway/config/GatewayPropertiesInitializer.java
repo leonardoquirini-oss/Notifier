@@ -25,6 +25,9 @@ public class GatewayPropertiesInitializer {
     @Value("${spring.artemis.password:admin}")
     private String artemisPassword;
 
+    @Value("${spring.application.name:tfp-gateway}")
+    private String appName;
+
     public GatewayPropertiesInitializer(GatewayProperties props) {
         this.props = props;
     }
@@ -35,6 +38,15 @@ public class GatewayPropertiesInitializer {
         props.setArtemisUser(artemisUser);
         props.setArtemisPassword(artemisPassword);
 
-        log.info("GatewayProperties initialised: brokerUrl={}, user={}", brokerUrl, artemisUser);
+        // Ensure FQQN mode: if subscriber-name is not explicitly configured,
+        // default to the application name so that Artemis creates durable queues
+        // that persist messages while the gateway is stopped.
+        if (props.getSubscriberName() == null || props.getSubscriberName().isBlank()) {
+            props.setSubscriberName(appName);
+            log.info("subscriber-name was empty, defaulting to application name: {}", appName);
+        }
+
+        log.info("GatewayProperties initialised: brokerUrl={}, user={}, subscriber-name={} (FQQN mode)",
+                brokerUrl, artemisUser, props.getSubscriberName());
     }
 }

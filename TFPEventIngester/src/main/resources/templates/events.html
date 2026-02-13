@@ -37,6 +37,12 @@
                 Asset Damages
             </button>
         </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" th:classappend="${activeTab == 'errors'} ? ' active'" id="errors-tab"
+                    data-bs-toggle="tab" data-bs-target="#errors-pane" type="button" role="tab">
+                Errors <span class="badge bg-danger ms-1" th:text="${errTotalCount}" th:if="${errTotalCount > 0}"></span>
+            </button>
+        </li>
     </ul>
 
     <div class="tab-content">
@@ -63,6 +69,11 @@
                 <input type="hidden" name="dmgDateTo" th:value="${dmgDateTo}">
                 <input type="hidden" name="dmgUnlinkedOnly" th:value="${dmgUnlinkedOnly}">
                 <input type="hidden" name="dmgPage" th:value="${dmgCurrentPage}">
+                <!-- Preserve errors tab state -->
+                <input type="hidden" name="errMessageId" th:value="${errMessageId}">
+                <input type="hidden" name="errDateFrom" th:value="${errDateFrom}">
+                <input type="hidden" name="errDateTo" th:value="${errDateTo}">
+                <input type="hidden" name="errPage" th:value="${errCurrentPage}">
 
                 <div class="row g-2 align-items-end">
                     <div class="col-auto">
@@ -154,7 +165,9 @@
                                dmgAssetIdentifier=${dmgAssetIdentifier}, dmgAssetType=${dmgAssetType},
                                dmgSeverity=${dmgSeverity}, dmgStatus=${dmgStatus},
                                dmgDateFrom=${dmgDateFrom}, dmgDateTo=${dmgDateTo},
-                               dmgUnlinkedOnly=${dmgUnlinkedOnly}, dmgPage=${dmgCurrentPage})}">&laquo;</a>
+                               dmgUnlinkedOnly=${dmgUnlinkedOnly}, dmgPage=${dmgCurrentPage},
+                               errMessageId=${errMessageId}, errDateFrom=${errDateFrom},
+                               errDateTo=${errDateTo}, errPage=${errCurrentPage})}">&laquo;</a>
                     </li>
                     <th:block th:each="p : ${#numbers.sequence(0, evtTotalPages - 1)}">
                         <li class="page-item" th:classappend="${p == evtCurrentPage} ? 'active'"
@@ -170,7 +183,9 @@
                                    dmgAssetIdentifier=${dmgAssetIdentifier}, dmgAssetType=${dmgAssetType},
                                    dmgSeverity=${dmgSeverity}, dmgStatus=${dmgStatus},
                                    dmgDateFrom=${dmgDateFrom}, dmgDateTo=${dmgDateTo},
-                                   dmgUnlinkedOnly=${dmgUnlinkedOnly}, dmgPage=${dmgCurrentPage})}"
+                                   dmgUnlinkedOnly=${dmgUnlinkedOnly}, dmgPage=${dmgCurrentPage},
+                                   errMessageId=${errMessageId}, errDateFrom=${errDateFrom},
+                                   errDateTo=${errDateTo}, errPage=${errCurrentPage})}"
                                th:text="${p + 1}"></a>
                         </li>
                     </th:block>
@@ -186,7 +201,9 @@
                                dmgAssetIdentifier=${dmgAssetIdentifier}, dmgAssetType=${dmgAssetType},
                                dmgSeverity=${dmgSeverity}, dmgStatus=${dmgStatus},
                                dmgDateFrom=${dmgDateFrom}, dmgDateTo=${dmgDateTo},
-                               dmgUnlinkedOnly=${dmgUnlinkedOnly}, dmgPage=${dmgCurrentPage})}">&raquo;</a>
+                               dmgUnlinkedOnly=${dmgUnlinkedOnly}, dmgPage=${dmgCurrentPage},
+                               errMessageId=${errMessageId}, errDateFrom=${errDateFrom},
+                               errDateTo=${errDateTo}, errPage=${errCurrentPage})}">&raquo;</a>
                     </li>
                 </ul>
             </nav>
@@ -214,6 +231,11 @@
                 <input type="hidden" name="dmgDateTo" th:value="${dmgDateTo}">
                 <input type="hidden" name="dmgUnlinkedOnly" th:value="${dmgUnlinkedOnly}">
                 <input type="hidden" name="dmgPage" th:value="${dmgCurrentPage}">
+                <!-- Preserve errors tab state -->
+                <input type="hidden" name="errMessageId" th:value="${errMessageId}">
+                <input type="hidden" name="errDateFrom" th:value="${errDateFrom}">
+                <input type="hidden" name="errDateTo" th:value="${errDateTo}">
+                <input type="hidden" name="errPage" th:value="${errCurrentPage}">
 
                 <div class="row g-2 align-items-end">
                     <div class="col-auto">
@@ -305,7 +327,9 @@
                                dmgAssetIdentifier=${dmgAssetIdentifier}, dmgAssetType=${dmgAssetType},
                                dmgSeverity=${dmgSeverity}, dmgStatus=${dmgStatus},
                                dmgDateFrom=${dmgDateFrom}, dmgDateTo=${dmgDateTo},
-                               dmgUnlinkedOnly=${dmgUnlinkedOnly}, dmgPage=${dmgCurrentPage})}">&laquo;</a>
+                               dmgUnlinkedOnly=${dmgUnlinkedOnly}, dmgPage=${dmgCurrentPage},
+                               errMessageId=${errMessageId}, errDateFrom=${errDateFrom},
+                               errDateTo=${errDateTo}, errPage=${errCurrentPage})}">&laquo;</a>
                     </li>
                     <th:block th:each="p : ${#numbers.sequence(0, posTotalPages - 1)}">
                         <li class="page-item" th:classappend="${p == posCurrentPage} ? 'active'"
@@ -321,7 +345,9 @@
                                    dmgAssetIdentifier=${dmgAssetIdentifier}, dmgAssetType=${dmgAssetType},
                                    dmgSeverity=${dmgSeverity}, dmgStatus=${dmgStatus},
                                    dmgDateFrom=${dmgDateFrom}, dmgDateTo=${dmgDateTo},
-                                   dmgUnlinkedOnly=${dmgUnlinkedOnly}, dmgPage=${dmgCurrentPage})}"
+                                   dmgUnlinkedOnly=${dmgUnlinkedOnly}, dmgPage=${dmgCurrentPage},
+                                   errMessageId=${errMessageId}, errDateFrom=${errDateFrom},
+                                   errDateTo=${errDateTo}, errPage=${errCurrentPage})}"
                                th:text="${p + 1}"></a>
                         </li>
                     </th:block>
@@ -337,7 +363,9 @@
                                dmgAssetIdentifier=${dmgAssetIdentifier}, dmgAssetType=${dmgAssetType},
                                dmgSeverity=${dmgSeverity}, dmgStatus=${dmgStatus},
                                dmgDateFrom=${dmgDateFrom}, dmgDateTo=${dmgDateTo},
-                               dmgUnlinkedOnly=${dmgUnlinkedOnly}, dmgPage=${dmgCurrentPage})}">&raquo;</a>
+                               dmgUnlinkedOnly=${dmgUnlinkedOnly}, dmgPage=${dmgCurrentPage},
+                               errMessageId=${errMessageId}, errDateFrom=${errDateFrom},
+                               errDateTo=${errDateTo}, errPage=${errCurrentPage})}">&raquo;</a>
                     </li>
                 </ul>
             </nav>
@@ -363,6 +391,11 @@
                 <input type="hidden" name="posDateTo" th:value="${posDateTo}">
                 <input type="hidden" name="posUnlinkedOnly" th:value="${posUnlinkedOnly}">
                 <input type="hidden" name="posPage" th:value="${posCurrentPage}">
+                <!-- Preserve errors tab state -->
+                <input type="hidden" name="errMessageId" th:value="${errMessageId}">
+                <input type="hidden" name="errDateFrom" th:value="${errDateFrom}">
+                <input type="hidden" name="errDateTo" th:value="${errDateTo}">
+                <input type="hidden" name="errPage" th:value="${errCurrentPage}">
 
                 <div class="row g-2 align-items-end">
                     <div class="col-auto">
@@ -485,7 +518,9 @@
                                evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage},
                                posUnitNumber=${posUnitNumber}, posUnitTypeCode=${posUnitTypeCode},
                                posDateFrom=${posDateFrom}, posDateTo=${posDateTo},
-                               posUnlinkedOnly=${posUnlinkedOnly}, posPage=${posCurrentPage})}">&laquo;</a>
+                               posUnlinkedOnly=${posUnlinkedOnly}, posPage=${posCurrentPage},
+                               errMessageId=${errMessageId}, errDateFrom=${errDateFrom},
+                               errDateTo=${errDateTo}, errPage=${errCurrentPage})}">&laquo;</a>
                     </li>
                     <th:block th:each="p : ${#numbers.sequence(0, dmgTotalPages - 1)}">
                         <li class="page-item" th:classappend="${p == dmgCurrentPage} ? 'active'"
@@ -501,7 +536,9 @@
                                    evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage},
                                    posUnitNumber=${posUnitNumber}, posUnitTypeCode=${posUnitTypeCode},
                                    posDateFrom=${posDateFrom}, posDateTo=${posDateTo},
-                                   posUnlinkedOnly=${posUnlinkedOnly}, posPage=${posCurrentPage})}"
+                                   posUnlinkedOnly=${posUnlinkedOnly}, posPage=${posCurrentPage},
+                                   errMessageId=${errMessageId}, errDateFrom=${errDateFrom},
+                                   errDateTo=${errDateTo}, errPage=${errCurrentPage})}"
                                th:text="${p + 1}"></a>
                         </li>
                     </th:block>
@@ -517,7 +554,155 @@
                                evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage},
                                posUnitNumber=${posUnitNumber}, posUnitTypeCode=${posUnitTypeCode},
                                posDateFrom=${posDateFrom}, posDateTo=${posDateTo},
-                               posUnlinkedOnly=${posUnlinkedOnly}, posPage=${posCurrentPage})}">&raquo;</a>
+                               posUnlinkedOnly=${posUnlinkedOnly}, posPage=${posCurrentPage},
+                               errMessageId=${errMessageId}, errDateFrom=${errDateFrom},
+                               errDateTo=${errDateTo}, errPage=${errCurrentPage})}">&raquo;</a>
+                    </li>
+                </ul>
+            </nav>
+        </div>
+
+        <!-- ==================== TAB: Ingestion Errors ==================== -->
+        <div class="tab-pane fade" th:classappend="${activeTab == 'errors'} ? ' show active'" id="errors-pane" role="tabpanel">
+
+            <!-- Filter bar -->
+            <form th:action="@{/events}" method="get" class="card card-body mb-3">
+                <input type="hidden" name="tab" value="errors">
+                <!-- Preserve events tab state -->
+                <input type="hidden" name="evtUnitNumber" th:value="${evtUnitNumber}">
+                <input type="hidden" name="evtUnitTypeCode" th:value="${evtUnitTypeCode}">
+                <input type="hidden" name="evtDateFrom" th:value="${evtDateFrom}">
+                <input type="hidden" name="evtDateTo" th:value="${evtDateTo}">
+                <input type="hidden" name="evtUnlinkedOnly" th:value="${evtUnlinkedOnly}">
+                <input type="hidden" name="evtPage" th:value="${evtCurrentPage}">
+                <!-- Preserve positions tab state -->
+                <input type="hidden" name="posUnitNumber" th:value="${posUnitNumber}">
+                <input type="hidden" name="posUnitTypeCode" th:value="${posUnitTypeCode}">
+                <input type="hidden" name="posDateFrom" th:value="${posDateFrom}">
+                <input type="hidden" name="posDateTo" th:value="${posDateTo}">
+                <input type="hidden" name="posUnlinkedOnly" th:value="${posUnlinkedOnly}">
+                <input type="hidden" name="posPage" th:value="${posCurrentPage}">
+                <!-- Preserve damages tab state -->
+                <input type="hidden" name="dmgAssetIdentifier" th:value="${dmgAssetIdentifier}">
+                <input type="hidden" name="dmgAssetType" th:value="${dmgAssetType}">
+                <input type="hidden" name="dmgSeverity" th:value="${dmgSeverity}">
+                <input type="hidden" name="dmgStatus" th:value="${dmgStatus}">
+                <input type="hidden" name="dmgDateFrom" th:value="${dmgDateFrom}">
+                <input type="hidden" name="dmgDateTo" th:value="${dmgDateTo}">
+                <input type="hidden" name="dmgUnlinkedOnly" th:value="${dmgUnlinkedOnly}">
+                <input type="hidden" name="dmgPage" th:value="${dmgCurrentPage}">
+
+                <div class="row g-2 align-items-end">
+                    <div class="col-auto">
+                        <label class="form-label form-label-sm mb-0">Message ID</label>
+                        <input type="text" name="errMessageId" class="form-control form-control-sm"
+                               placeholder="Search..." th:value="${errMessageId}">
+                    </div>
+                    <div class="col-auto">
+                        <label class="form-label form-label-sm mb-0">From</label>
+                        <input type="date" name="errDateFrom" class="form-control form-control-sm"
+                               th:value="${errDateFrom}">
+                    </div>
+                    <div class="col-auto">
+                        <label class="form-label form-label-sm mb-0">To</label>
+                        <input type="date" name="errDateTo" class="form-control form-control-sm"
+                               th:value="${errDateTo}">
+                    </div>
+                    <div class="col-auto">
+                        <button type="submit" class="btn btn-primary btn-sm">Search</button>
+                    </div>
+                    <div class="col-auto ms-auto text-muted small"
+                         th:text="'Total: ' + ${errTotalCount} + ' errors'"></div>
+                </div>
+            </form>
+
+            <!-- Errors table -->
+            <div class="table-responsive">
+                <table class="table table-striped table-hover table-sm">
+                    <thead class="table-dark">
+                    <tr>
+                        <th>ID</th>
+                        <th>Message ID</th>
+                        <th>Event Type</th>
+                        <th>Ingestion Time</th>
+                        <th>Error Message</th>
+                        <th>Payload</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="err : ${ingestionErrors}">
+                        <td th:text="${err['id_error_ingestion']}"></td>
+                        <td class="msgid-cell" th:title="${err['message_id']}" th:text="${err['message_id']}"></td>
+                        <td th:text="${err['event_type']}"></td>
+                        <td th:text="${err['ingestion_time']}"></td>
+                        <td class="desc-cell" th:title="${err['error_message']}" th:text="${err['error_message']}"></td>
+                        <td>
+                            <button th:if="${err['has_payload']}" type="button"
+                                    class="btn btn-outline-secondary btn-sm view-payload-btn"
+                                    th:data-message-id="${err['message_id']}">View</button>
+                        </td>
+                    </tr>
+                    <tr th:if="${#lists.isEmpty(ingestionErrors)}">
+                        <td colspan="6" class="text-center text-muted py-4">No ingestion errors found.</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            <nav th:if="${errTotalPages > 1}">
+                <ul class="pagination pagination-sm justify-content-center">
+                    <li class="page-item" th:classappend="${errCurrentPage == 0} ? 'disabled'">
+                        <a class="page-link"
+                           th:href="@{/events(tab='errors',
+                               errMessageId=${errMessageId}, errDateFrom=${errDateFrom},
+                               errDateTo=${errDateTo}, errPage=${errCurrentPage - 1},
+                               evtUnitNumber=${evtUnitNumber}, evtUnitTypeCode=${evtUnitTypeCode},
+                               evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
+                               evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage},
+                               posUnitNumber=${posUnitNumber}, posUnitTypeCode=${posUnitTypeCode},
+                               posDateFrom=${posDateFrom}, posDateTo=${posDateTo},
+                               posUnlinkedOnly=${posUnlinkedOnly}, posPage=${posCurrentPage},
+                               dmgAssetIdentifier=${dmgAssetIdentifier}, dmgAssetType=${dmgAssetType},
+                               dmgSeverity=${dmgSeverity}, dmgStatus=${dmgStatus},
+                               dmgDateFrom=${dmgDateFrom}, dmgDateTo=${dmgDateTo},
+                               dmgUnlinkedOnly=${dmgUnlinkedOnly}, dmgPage=${dmgCurrentPage})}">&laquo;</a>
+                    </li>
+                    <th:block th:each="p : ${#numbers.sequence(0, errTotalPages - 1)}">
+                        <li class="page-item" th:classappend="${p == errCurrentPage} ? 'active'"
+                            th:if="${p == 0 or p == errTotalPages - 1 or (p >= errCurrentPage - 2 and p <= errCurrentPage + 2)}">
+                            <a class="page-link"
+                               th:href="@{/events(tab='errors',
+                                   errMessageId=${errMessageId}, errDateFrom=${errDateFrom},
+                                   errDateTo=${errDateTo}, errPage=${p},
+                                   evtUnitNumber=${evtUnitNumber}, evtUnitTypeCode=${evtUnitTypeCode},
+                                   evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
+                                   evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage},
+                                   posUnitNumber=${posUnitNumber}, posUnitTypeCode=${posUnitTypeCode},
+                                   posDateFrom=${posDateFrom}, posDateTo=${posDateTo},
+                                   posUnlinkedOnly=${posUnlinkedOnly}, posPage=${posCurrentPage},
+                                   dmgAssetIdentifier=${dmgAssetIdentifier}, dmgAssetType=${dmgAssetType},
+                                   dmgSeverity=${dmgSeverity}, dmgStatus=${dmgStatus},
+                                   dmgDateFrom=${dmgDateFrom}, dmgDateTo=${dmgDateTo},
+                                   dmgUnlinkedOnly=${dmgUnlinkedOnly}, dmgPage=${dmgCurrentPage})}"
+                               th:text="${p + 1}"></a>
+                        </li>
+                    </th:block>
+                    <li class="page-item" th:classappend="${errCurrentPage == errTotalPages - 1} ? 'disabled'">
+                        <a class="page-link"
+                           th:href="@{/events(tab='errors',
+                               errMessageId=${errMessageId}, errDateFrom=${errDateFrom},
+                               errDateTo=${errDateTo}, errPage=${errCurrentPage + 1},
+                               evtUnitNumber=${evtUnitNumber}, evtUnitTypeCode=${evtUnitTypeCode},
+                               evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
+                               evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage},
+                               posUnitNumber=${posUnitNumber}, posUnitTypeCode=${posUnitTypeCode},
+                               posDateFrom=${posDateFrom}, posDateTo=${posDateTo},
+                               posUnlinkedOnly=${posUnlinkedOnly}, posPage=${posCurrentPage},
+                               dmgAssetIdentifier=${dmgAssetIdentifier}, dmgAssetType=${dmgAssetType},
+                               dmgSeverity=${dmgSeverity}, dmgStatus=${dmgStatus},
+                               dmgDateFrom=${dmgDateFrom}, dmgDateTo=${dmgDateTo},
+                               dmgUnlinkedOnly=${dmgUnlinkedOnly}, dmgPage=${dmgCurrentPage})}">&raquo;</a>
                     </li>
                 </ul>
             </nav>
@@ -526,6 +711,44 @@
     </div>
 </div>
 
+<!-- Payload Modal -->
+<div class="modal fade" id="payloadModal" tabindex="-1" aria-labelledby="payloadModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="payloadModalLabel">Event Payload</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <pre><code id="payloadContent"></code></pre>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+document.querySelectorAll('.view-payload-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        var messageId = this.getAttribute('data-message-id');
+        var codeEl = document.getElementById('payloadContent');
+        codeEl.textContent = 'Loading...';
+        var modal = new bootstrap.Modal(document.getElementById('payloadModal'));
+        modal.show();
+        fetch('/events/error-payload?messageId=' + encodeURIComponent(messageId))
+            .then(function(resp) { return resp.text(); })
+            .then(function(text) {
+                try {
+                    codeEl.textContent = JSON.stringify(JSON.parse(text), null, 2);
+                } catch(e) {
+                    codeEl.textContent = text;
+                }
+            })
+            .catch(function(err) {
+                codeEl.textContent = 'Error loading payload: ' + err;
+            });
+    });
+});
+</script>
 </body>
 </html>

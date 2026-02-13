@@ -230,6 +230,60 @@ public class EventBrowserService {
         }
     }
 
+    // --- Ingestion Errors ---
+
+    public List<Map<String, Object>> searchErrors(String messageId,
+                                                    LocalDate dateFrom, LocalDate dateTo, int page) {
+        try {
+            Base.open(dataSource);
+
+            StringBuilder sql = new StringBuilder(
+                    "SELECT e.id_error_ingestion, e.message_id, e.ingestion_time, e.error_message, " +
+                    "r.event_type, r.payload IS NOT NULL AS has_payload " +
+                    "FROM evt_error_ingestion e " +
+                    "LEFT JOIN evt_raw_events r ON r.message_id = e.message_id");
+            List<Object> params = new ArrayList<>();
+
+            appendErrorsWhere(sql, params, messageId, dateFrom, dateTo);
+
+            sql.append(" ORDER BY e.ingestion_time DESC LIMIT ? OFFSET ?");
+            params.add(PAGE_SIZE);
+            params.add(page * PAGE_SIZE);
+
+            return Base.findAll(sql.toString(), params.toArray());
+        } finally {
+            Base.close();
+        }
+    }
+
+    public long countErrors(String messageId, LocalDate dateFrom, LocalDate dateTo) {
+        try {
+            Base.open(dataSource);
+
+            StringBuilder sql = new StringBuilder("SELECT COUNT(*) AS cnt FROM evt_error_ingestion e");
+            List<Object> params = new ArrayList<>();
+
+            appendErrorsWhere(sql, params, messageId, dateFrom, dateTo);
+
+            Object result = Base.firstCell(sql.toString(), params.toArray());
+            return result != null ? ((Number) result).longValue() : 0;
+        } finally {
+            Base.close();
+        }
+    }
+
+    public String getErrorPayload(String messageId) {
+        try {
+            Base.open(dataSource);
+
+            Object result = Base.firstCell(
+                    "SELECT r.payload::text FROM evt_raw_events r WHERE r.message_id = ?", messageId);
+            return result != null ? result.toString() : null;
+        } finally {
+            Base.close();
+        }
+    }
+
     // --- Where clause builders ---
 
     private void appendUnitEventsWhere(StringBuilder sql, List<Object> params,
@@ -324,6 +378,28 @@ public class EventBrowserService {
         }
         if (unlinkedOnly) {
             conditions.add("d.container_number IS NULL AND d.id_trailer IS NULL AND d.id_vehicle IS NULL");
+        }
+
+        if (!conditions.isEmpty()) {
+            sql.append(" WHERE ").append(String.join(" AND ", conditions));
+        }
+    }
+
+    private void appendErrorsWhere(StringBuilder sql, List<Object> params,
+                                    String messageId, LocalDate dateFrom, LocalDate dateTo) {
+        List<String> conditions = new ArrayList<>();
+
+        if (messageId != null && !messageId.isBlank()) {
+            conditions.add("e.message_id ILIKE ?");
+            params.add("%" + messageId.trim() + "%");
+        }
+        if (dateFrom != null) {
+            conditions.add("e.ingestion_time >= ?::timestamp");
+            params.add(dateFrom.toString());
+        }
+        if (dateTo != null) {
+            conditions.add("e.ingestion_time < (?::date + interval '1 day')");
+            params.add(dateTo.toString());
         }
 
         if (!conditions.isEmpty()) {

@@ -63,8 +63,9 @@ public class EventListener {
             log.debug("Ignoring non-text message from address {}: {}", addressName, message.getClass().getSimpleName());
             return;
         }
+        String jmsMessageId = null;
         try {
-            String jmsMessageId = message.getJMSMessageID();
+            jmsMessageId = message.getJMSMessageID();
             String messageJson = ((jakarta.jms.TextMessage) message).getText();
 
             if (jmsMessageId == null || jmsMessageId.isBlank()) {
@@ -78,11 +79,11 @@ public class EventListener {
                     .eventTime(Instant.now())
                     .rawPayload(messageJson)
                     .build();
-            log.debug("Received event: address={}, type={}, eventTime={}", addressName, eventMessage.getEventType(), eventMessage.getEventTime());
+            log.debug("Received event: messageId={}, address={}, type={}, eventTime={}", jmsMessageId, addressName, eventMessage.getEventType(), eventMessage.getEventTime());
             processWithRetry(eventMessage);
 
         } catch (Exception e) {
-            log.error("Failed to process message from address {}: {}", addressName, e.getMessage());
+            log.error("Failed to process message from address {}, messageId={}: {}", addressName, jmsMessageId, e.getMessage());
             throw new RuntimeException("Failed to process event message", e);
         }
     }
@@ -104,8 +105,8 @@ public class EventListener {
             } catch (Exception e) {
                 attempts++;
                 lastException = e;
-                log.warn("Processing attempt {} failed for event type={}: {}",
-                    attempts, eventMessage.getEventType(), e.getMessage());
+                log.warn("Processing attempt {} failed for event type={}, messageId={}: {}",
+                    attempts, eventMessage.getEventType(), eventMessage.getMessageId(), e.getMessage());
 
                 if (attempts < maxAttempts) {
                     sleep(delay);
@@ -114,8 +115,8 @@ public class EventListener {
         }
 
         if (!success) {
-            log.error("Max retries ({}) reached for event type={}",
-                maxAttempts, eventMessage.getEventType());
+            log.error("Max retries ({}) reached for event type={}, messageId={}",
+                maxAttempts, eventMessage.getEventType(), eventMessage.getMessageId());
             throw new RuntimeException(
                 "Failed to process event after " + maxAttempts + " attempts: type=" +
                 eventMessage.getEventType(), lastException);

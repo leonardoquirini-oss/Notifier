@@ -10,8 +10,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.javalite.activejdbc.Base;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.HexFormat;
 
 /**
  * Event Processor Service
@@ -25,12 +29,13 @@ import java.time.Instant;
 public class EventProcessorService {
 
     private static final String UPSERT_SQL =
-            "INSERT INTO evt_raw_events (id_event, message_id, event_type, event_time, payload, processed_at) " +
-            "VALUES (nextval('s_evt_raw_events'), ?, ?, ?, CAST(? AS jsonb), ?) " +
+            "INSERT INTO evt_raw_events (id_event, message_id, event_type, event_time, payload, checksum, processed_at) " +
+            "VALUES (nextval('s_evt_raw_events'), ?, ?, ?, CAST(? AS jsonb), ?, ?) " +
             "ON CONFLICT (message_id) DO UPDATE SET " +
             "  event_type  = EXCLUDED.event_type, " +
             "  event_time  = EXCLUDED.event_time, " +
             "  payload     = EXCLUDED.payload, " +
+            "  checksum    = EXCLUDED.checksum, " +
             "  processed_at = EXCLUDED.processed_at";
 
     private final ActiveJDBCConfig activeJDBCConfig;
@@ -49,7 +54,7 @@ public class EventProcessorService {
      * Processes an event message: upsert raw event, then dispatch to handler.
      */
     public void processEvent(EventMessage eventMessage) {
-        log.info("Processing event: type={}, messageId={}", eventMessage.getEventType(), eventMessage.getMessageId());
+        log.trace(" -- Processing event: type={}, messageId={}", eventMessage.getEventType(), eventMessage.getMessageId());
 
         try {
             activeJDBCConfig.openConnection();
@@ -75,21 +80,33 @@ public class EventProcessorService {
                 ? Timestamp.from(eventMessage.getEventTime())
                 : null;
         Timestamp processedAt = Timestamp.from(Instant.now());
+        String checksum = md5Hex(eventMessage.getRawPayload());
 
         Base.exec(UPSERT_SQL,
                 eventMessage.getMessageId(),
                 eventMessage.getEventType(),
                 eventTime,
                 eventMessage.getRawPayload(),
+                checksum,
                 processedAt);
 
-        log.info("Upserted raw event: messageId={}, type={}",
+        log.trace(" -- Upserted raw event: messageId={}, type={}",
                 eventMessage.getMessageId(), eventMessage.getEventType());
+    }
+
+    private static String md5Hex(String input) {
+        try {
+            byte[] hash = MessageDigest.getInstance("MD5")
+                    .digest(input.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hash);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("MD5 not available", e);
+        }
     }
 
     private void dispatchToHandler(EventMessage eventMessage) {
         EventTypeHandler handler = handlerRegistry.getHandler(eventMessage.getEventType());
-        log.debug("Dispatching to handler: {} for eventType={}",
+        log.trace(" -- Dispatching to handler: {} for eventType={}",
                 handler.getClass().getSimpleName(), eventMessage.getEventType());
         handler.handle(eventMessage);
     }

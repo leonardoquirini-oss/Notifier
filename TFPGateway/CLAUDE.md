@@ -20,25 +20,42 @@ TFPGateway/
 │   ├── config/
 │   │   ├── ActiveJDBCConfig.java
 │   │   ├── ArtemisConfig.java
-│   │   └── JacksonConfig.java
+│   │   ├── GatewayProperties.java          # @ConfigurationProperties per gateway.*
+│   │   ├── GatewayPropertiesInitializer.java
+│   │   ├── JacksonConfig.java
+│   │   └── ValkeyConfig.java
+│   ├── controller/
+│   │   ├── EventBrowserController.java     # UI browse eventi
+│   │   └── GatewayConfigController.java    # Runtime config / status
 │   ├── listener/
 │   │   └── EventListener.java
 │   ├── service/
-│   │   └── EventProcessorService.java
+│   │   ├── EventProcessorService.java      # Upsert raw event + dispatch
+│   │   ├── EventBrowserService.java
+│   │   ├── GatewayLifecycleManager.java
+│   │   └── ValkeyStreamPublisher.java      # Publish su Valkey stream
 │   ├── handler/
-│   │   ├── EventTypeHandler.java          # Strategy interface
-│   │   ├── EventHandlerRegistry.java      # Dispatcher
-│   │   ├── DefaultEventTypeHandler.java   # Catch-all fallback
-│   │   └── AssetDamageEventHandler.java   # BERNARDINI_ASSET_DAMAGES
+│   │   ├── EventTypeHandler.java           # Strategy interface
+│   │   ├── EventHandlerRegistry.java       # Dispatcher (O(1) HashMap)
+│   │   ├── DefaultEventTypeHandler.java    # Catch-all fallback
+│   │   ├── AssetDamageEventHandler.java    # BERNARDINI_ASSET_DAMAGES
+│   │   ├── UnitEventEventHandler.java      # BERNARDINI_UNIT_EVENTS
+│   │   └── UnitPositionEventHandler.java   # BERNARDINI_UNIT_POSITIONS_MESSAGE
 │   ├── model/
 │   │   └── RawEvent.java
 │   ├── dto/
-│   │   └── EventMessage.java
+│   │   ├── EventMessage.java
+│   │   ├── GatewayRuntimeConfig.java
+│   │   └── GatewayStatusInfo.java
 │   └── exception/
 │       └── EventProcessingException.java
 ├── src/main/resources/
 │   ├── application.yml
-│   └── application-docker.yml
+│   ├── db/
+│   │   └── 01_setup.sql                   # Schema evt_raw_events
+│   └── templates/
+│       ├── events.html
+│       └── gateway.html
 ├── artemis-config/
 │   └── broker.xml              # Broker config (multicast addresses)
 ├── Dockerfile
@@ -75,6 +92,18 @@ gateway:
 ```
 
 Le addresses devono essere definite come **multicast** in `artemis-config/broker.xml`.
+
+## Raw Event Pipeline
+
+Ogni evento ricevuto da Artemis viene persistito in `evt_raw_events` tramite upsert idempotente su `message_id` (`EventProcessorService.upsertRawEvent()`).
+
+**Colonne principali:**
+- `message_id` — chiave di deduplicazione (UNIQUE)
+- `payload` — JSON originale (JSONB)
+- `checksum` — MD5 hex del payload JSON (32 char), calcolato lato applicazione prima dell'upsert. Utile per verificare integrità e confrontare payload senza parsing JSONB
+- `processed_at` — timestamp di elaborazione
+
+Dopo l'upsert, l'evento viene dispatchato all'handler specifico e pubblicato su Valkey stream.
 
 ## Aggiungere Nuove Addresses
 

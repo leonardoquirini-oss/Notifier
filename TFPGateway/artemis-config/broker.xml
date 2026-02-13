@@ -77,6 +77,11 @@
             <auto-delete-queues>false</auto-delete-queues>
             <auto-delete-addresses>false</auto-delete-addresses>
             <default-purge-on-no-consumers>false</default-purge-on-no-consumers>
+            <!-- Force auto-created queues to be multicast (Artemis 2.18+).
+                 Without this, session.createQueue() (pubSubDomain=false) creates
+                 anycast queues, causing only one subscriber to receive messages. -->
+            <default-address-routing-type>MULTICAST</default-address-routing-type>
+            <default-queue-routing-type>MULTICAST</default-queue-routing-type>
          </address-setting>
 
          <!-- Catch-all for system addresses (DLQ, ExpiryQueue, etc.) -->
@@ -108,15 +113,30 @@
             </anycast>
          </address>
 
-         <!-- TFP event addresses (multicast = topic semantics) -->
+         <!-- TFP event addresses (multicast = topic semantics).
+              Subscription queues are pre-defined to guarantee multicast routing type.
+              Without explicit queue definitions, session.createQueue() via FQQN may
+              auto-create anycast queues, causing only one subscriber to receive messages.
+              NOTE: If existing anycast queues are present on the broker, they must be
+              deleted manually from the Artemis console before restart so they get
+              re-created with multicast routing type. -->
          <address name="BERNARDINI_UNIT_POSITIONS_MESSAGE">
-            <multicast />
+            <multicast>
+               <queue name="tfp-gateway-dev-01.BERNARDINI_UNIT_POSITIONS_MESSAGE" />
+               <queue name="tfp-gateway-dev-02.BERNARDINI_UNIT_POSITIONS_MESSAGE" />
+            </multicast>
          </address>
          <address name="BERNARDINI_ASSET_DAMAGES">
-            <multicast />
+            <multicast>
+               <queue name="tfp-gateway-dev-01.BERNARDINI_ASSET_DAMAGES" />
+               <queue name="tfp-gateway-dev-02.BERNARDINI_ASSET_DAMAGES" />
+            </multicast>
          </address>
          <address name="BERNARDINI_UNIT_EVENTS">
-            <multicast />
+            <multicast>
+               <queue name="tfp-gateway-dev-01.BERNARDINI_UNIT_EVENTS" />
+               <queue name="tfp-gateway-dev-02.BERNARDINI_UNIT_EVENTS" />
+            </multicast>
          </address>
       </addresses>
 

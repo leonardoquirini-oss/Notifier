@@ -31,7 +31,7 @@ public class AssetDamageEventHandler implements EventTypeHandler {
 
     @Override
     public void handle(EventMessage eventMessage) {
-        log.info("Handling BERNARDINI_ASSET_DAMAGES event: messageId={}", eventMessage.getMessageId());
+        log.trace(" -- Handling BERNARDINI_ASSET_DAMAGES event: messageId={}", eventMessage.getMessageId());
         // TODO: implement asset-damage specific logic
     }
 }
