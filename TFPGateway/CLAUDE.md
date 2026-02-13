@@ -1,11 +1,11 @@
 # TFP Gateway - Claude Code Reference
 
-Spring Boot application che consuma eventi da multicast addresses Apache Artemis (durable subscriptions via FQQN) e li persiste su PostgreSQL usando ActiveJDBC ORM.
+Spring Boot application che consuma eventi da Apache Artemis e li persiste su PostgreSQL usando ActiveJDBC ORM. Supporta due modalita' di consumo: **FQQN multicast** (durable subscriptions, Kafka-like consumer groups) e **DIRECT anycast** (competing consumers, round-robin).
 
 ## Tech Stack
 
 - **Framework**: Spring Boot 3.1.5
-- **Messaging**: Apache Artemis 2.31.2 (multicast/FQQN, Kafka-like consumer groups)
+- **Messaging**: Apache Artemis 2.31.2 (dual-mode: FQQN multicast o DIRECT anycast)
 - **ORM**: JavaLite ActiveJDBC 3.0
 - **Database**: PostgreSQL
 - **Java**: 17
@@ -70,7 +70,7 @@ TFPGateway/
 
 | Variable | Default | Descrizione |
 |----------|---------|-------------|
-| `SUBSCRIBER_NAME` | tfp-processor | Nome subscriber (consumer group ID) |
+| `SUBSCRIBER_NAME` | _(vuoto)_ | Nome subscriber. Se valorizzato attiva FQQN multicast; se vuoto/assente attiva DIRECT anycast |
 | `ARTEMIS_HOST` | localhost | Host del broker Artemis |
 | `ARTEMIS_PORT` | 61616 | Porta del broker Artemis |
 | `ARTEMIS_USER` | admin | Username Artemis |
@@ -81,17 +81,26 @@ TFPGateway/
 | `DB_USER` | berlink | Username database |
 | `DB_PASSWORD` | berlink | Password database |
 
-### Multicast Addresses (Artemis)
+### Addresses e Modalita' di Consumo (Artemis)
 
 Le addresses da ascoltare sono configurabili in `application.yml`:
 
 ```yaml
 gateway:
   addresses: BERNARDINI_UNIT_POSITIONS_MESSAGE, BERNARDINI_ASSET_DAMAGES
-  subscriber-name: ${SUBSCRIBER_NAME:tfp-processor}
+  subscriber-name: ${SUBSCRIBER_NAME:}   # vuoto = DIRECT anycast
 ```
 
-Le addresses devono essere definite come **multicast** in `artemis-config/broker.xml`.
+La modalita' di consumo e' determinata da `subscriber-name`:
+
+| `subscriber-name` | Modalita' | `pubSubDomain` | Comportamento |
+|---|---|---|---|
+| valorizzato (es. `tfp-gateway-dev-01`) | **FQQN multicast** | `true` | Durable subscription, ogni consumer group riceve tutti i messaggi (Kafka-like) |
+| vuoto / assente | **DIRECT anycast** | `false` | Competing consumers, round-robin tra le istanze |
+
+La logica e' gestita in `GatewayLifecycleManager.startAll()` e `GatewayPropertiesInitializer.init()`.
+
+Le addresses devono essere definite in `artemis-config/broker.xml` con il routing-type corrispondente alla modalita' scelta.
 
 ## Raw Event Pipeline
 

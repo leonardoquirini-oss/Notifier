@@ -44,7 +44,7 @@ gateway:
   # Subscriber name (consumer group ID):
   #   - Set: FQQN multicast mode (ADDRESS::subscriber.ADDRESS) for local broker
   #   - Empty/absent: direct anycast mode for external brokers
-  subscriber-name: tfp-gateway-dev-01
+  #subscriber-name: tfp-gateway-dev-01
 
   # JMS concurrency (min-max format)
   concurrency: 3-10
