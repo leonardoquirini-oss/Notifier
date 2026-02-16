@@ -1,14 +1,17 @@
 package com.containermgmt.tfpeventingester.service;
 
 import com.containermgmt.tfpeventingester.config.BerlinkApiConfig;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -16,12 +19,19 @@ import java.util.Map;
 @Slf4j
 public class BerlinkLookupService {
 
+    private static final String CACHE_KEY_PREFIX = "unit:lookup:";
+
     private final RestTemplate restTemplate;
     private final BerlinkApiConfig config;
+    private final RedisTemplate<String, String> redisTemplate;
+    private final ObjectMapper objectMapper;
 
-    public BerlinkLookupService(RestTemplate berlinkRestTemplate, BerlinkApiConfig config) {
+    public BerlinkLookupService(RestTemplate berlinkRestTemplate, BerlinkApiConfig config,
+                                RedisTemplate<String, String> redisTemplate, ObjectMapper objectMapper) {
         this.restTemplate = berlinkRestTemplate;
         this.config = config;
+        this.redisTemplate = redisTemplate;
+        this.objectMapper = objectMapper;
     }
 
     public LookupResult lookupUnit(String unitNumber, String unitTypeCode) {
@@ -29,12 +39,31 @@ public class BerlinkLookupService {
             return LookupResult.empty();
         }
 
-        try {
-            if ("CONTAINER".equalsIgnoreCase(unitTypeCode)) {
-                return lookupContainer(unitNumber);
-            } else {
-                return lookupNonContainer(unitNumber);
+        String cacheKey = buildCacheKey(unitNumber, unitTypeCode);
+
+        if (config.isCacheEnabled()) {
+            LookupResult cached = readFromCache(cacheKey);
+            if (cached != null) {
+                log.debug("Cache HIT for key={}", cacheKey);
+                return cached;
             }
+            log.debug("Cache MISS for key={}", cacheKey);
+        }
+
+        try {
+            LookupResult result;
+            if ("CONTAINER".equalsIgnoreCase(unitTypeCode)) {
+                result = lookupContainer(unitNumber);
+            } else {
+                result = lookupNonContainer(unitNumber);
+            }
+
+            if (config.isCacheEnabled()) {
+                long ttl = result.hasData() ? config.getCacheTtlMinutes() : config.getCacheNegativeTtlMinutes();
+                writeToCache(cacheKey, result, ttl);
+            }
+
+            return result;
         } catch (Exception e) {
             log.warn("BERLink lookup failed for unitNumber={}, unitTypeCode={}: {}",
                     unitNumber, unitTypeCode, e.getMessage());
@@ -179,6 +208,35 @@ public class BerlinkLookupService {
         }
 
         return LookupResult.empty();
+    }
+
+    private String buildCacheKey(String unitNumber, String unitTypeCode) {
+        String normalizedUnit = unitNumber.trim().toUpperCase();
+        String normalizedType = (unitTypeCode != null) ? unitTypeCode.trim().toUpperCase() : "UNKNOWN";
+        return CACHE_KEY_PREFIX + normalizedType + ":" + normalizedUnit;
+    }
+
+    private LookupResult readFromCache(String key) {
+        try {
+            String json = redisTemplate.opsForValue().get(key);
+            if (json == null) {
+                return null;
+            }
+            return objectMapper.readValue(json, LookupResult.class);
+        } catch (Exception e) {
+            log.warn("Cache read failed for key={}: {}", key, e.getMessage());
+            return null;
+        }
+    }
+
+    private void writeToCache(String key, LookupResult result, long ttlMinutes) {
+        try {
+            String json = objectMapper.writeValueAsString(result);
+            redisTemplate.opsForValue().set(key, json, Duration.ofMinutes(ttlMinutes));
+            log.debug("Cache write for key={}, ttl={}min", key, ttlMinutes);
+        } catch (Exception e) {
+            log.warn("Cache write failed for key={}: {}", key, e.getMessage());
+        }
     }
 
     private String getStringValue(Map<String, Object> map, String key) {

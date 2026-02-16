@@ -36,10 +36,13 @@ management:
 # BERLink API Configuration
 berlink:
   api:
-    base-url: http://backend-new:8080
+    base-url: http://backend:8080
     api-key: 0e5cfec5-ad39-45c6-b3af-92e9c77dfcf8
     connect-timeout-ms: 5000
     read-timeout-ms: 10000
+    cache-enabled: true
+    cache-ttl-minutes: 60
+    cache-negative-ttl-minutes: 15
 
 # Stream Configuration
 stream:

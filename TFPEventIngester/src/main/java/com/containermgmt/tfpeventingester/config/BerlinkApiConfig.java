@@ -21,6 +21,9 @@ public class BerlinkApiConfig {
     private String apiKey;
     private int connectTimeoutMs = 5000;
     private int readTimeoutMs = 10000;
+    private boolean cacheEnabled = true;
+    private long cacheTtlMinutes = 60;
+    private long cacheNegativeTtlMinutes = 15;
 
     @Bean
     public RestTemplate berlinkRestTemplate() {

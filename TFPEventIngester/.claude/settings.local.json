@@ -11,7 +11,8 @@
       "Bash(grep:*)",
       "Bash(mvn package:*)",
       "Bash(ls:*)",
-      "Bash(psql:*)"
+      "Bash(psql:*)",
+      "Bash(task ing:*)"
     ]
   }
 }

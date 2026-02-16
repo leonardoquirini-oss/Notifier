@@ -105,7 +105,7 @@ Valkey Streams                      TFPEventIngester
 | `VALKEY_HOST` | valkey-service | Host Valkey |
 | `VALKEY_PORT` | 6379 | Porta Valkey |
 | `VALKEY_PASSWORD` | (vuoto) | Password Valkey |
-| `BERLINK_API_URL` | http://backend_new:8081 | URL base BERLink API |
+| `BERLINK_API_URL` | http://backend:8081 | URL base BERLink API |
 | `BERLINK_API_KEY` | (vuoto) | API Key per autenticazione BERLink |
 
 ### Proprieta' applicative (application.yml)
@@ -114,6 +114,9 @@ Valkey Streams                      TFPEventIngester
 |------------|---------|-------------|
 | `berlink.api.connect-timeout-ms` | 5000 | Timeout connessione BERLink API (ms) |
 | `berlink.api.read-timeout-ms` | 10000 | Timeout lettura BERLink API (ms) |
+| `berlink.api.cache-enabled` | true | Abilita/disabilita cache Valkey per lookup |
+| `berlink.api.cache-ttl-minutes` | 60 | TTL cache per risultati positivi (minuti) |
+| `berlink.api.cache-negative-ttl-minutes` | 15 | TTL cache per risultati "not found" (minuti) |
 | `stream.unit-events.key` | tfp-unit-events-stream | Stream key per unit events |
 | `stream.unit-events.consumer-group` | tfp-event-ingester-group | Consumer group per unit events |
 | `stream.unit-positions.key` | tfp-unit-positions-stream | Stream key per unit positions |
@@ -192,6 +195,47 @@ Quando un evento viene processato, tutti i processor chiamano `BerlinkLookupServ
 - Fallback per non-container: `GET /api/vehicles/by-plate/{unit_number}` → salva `id_vehicle`
 
 **Gestione errori:** Se BERLink non è raggiungibile, l'evento viene salvato senza i campi di lookup (log warn). Timeout: connect 5s, read 10s.
+
+### Cache Valkey per BERLink Lookup
+
+I risultati di `BerlinkLookupService.lookupUnit()` vengono cachati in Valkey per evitare chiamate API ridondanti. La cache usa `RedisTemplate<String, String>` + `ObjectMapper` (bean gia' disponibili, zero dipendenze aggiuntive).
+
+**Formato chiave:** `unit:lookup:{UNIT_TYPE_CODE}:{UNIT_NUMBER}` (normalizzato uppercase/trimmed)
+
+**Strategia TTL:**
+| Scenario | Cache? | TTL |
+|----------|--------|-----|
+| Lookup riuscito (hasData=true) | Si | 60 min (configurabile) |
+| Lookup senza match (not found) | Si | 15 min (configurabile) |
+| Eccezione API (timeout, 5xx) | No | - |
+| Input null/blank | No | - |
+
+**Proprieta' configurazione:**
+| Proprieta' | Default | Descrizione |
+|------------|---------|-------------|
+| `berlink.api.cache-enabled` | true | Abilita/disabilita cache lookup |
+| `berlink.api.cache-ttl-minutes` | 60 | TTL per risultati positivi (minuti) |
+| `berlink.api.cache-negative-ttl-minutes` | 15 | TTL per risultati "not found" (minuti) |
+
+**Degradazione graceful:** Ogni operazione cache e' wrappata in try-catch. Se Valkey non e' raggiungibile, il lookup prosegue normalmente con chiamata API diretta (log warn).
+
+**Comandi operativi:**
+```bash
+# Verifica cache hit
+redis-cli GET "unit:lookup:CONTAINER:GBTU0281810"
+
+# Verifica TTL
+redis-cli TTL "unit:lookup:CONTAINER:GBTU0281810"
+
+# Conta chiavi cache
+redis-cli KEYS "unit:lookup:*" | wc -l
+
+# Invalida cache per una unit specifica
+redis-cli DEL "unit:lookup:CONTAINER:GBTU0281810"
+
+# Invalida tutta la cache lookup
+redis-cli KEYS "unit:lookup:*" | xargs redis-cli DEL
+```
 
 ## Deduplication e Error Handling
 
