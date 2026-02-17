@@ -22,7 +22,7 @@ public class DefaultEventTypeHandler implements EventTypeHandler {
 
     @Override
     public void handle(EventMessage eventMessage) {
-        log.info(" -- No specific handler for eventType='{}' — raw event persisted, no further processing",
+        log.trace(" -- No specific handler for eventType='{}' — raw event persisted, no further processing",
                 eventMessage.getEventType());
     }
 }

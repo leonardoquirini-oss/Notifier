@@ -929,6 +929,39 @@ kubectl scale deployment email-notifier --replicas=3
 
 ## Troubleshooting
 
+
+### Riprocessare un evento
+
+Prima leggi il messaggio originale per recuperare i campi:
+
+```
+XRANGE <mystream> <id-del-messaggio> <id-del-messaggio>
+```
+
+Ad esempio:
+
+```
+XRANGE <mystream> 1700000000000-0 1700000000000-0
+```
+
+Ti restituirà qualcosa tipo:
+
+```
+1) 1) "1700000000000-0"
+   2) 1) "field1"
+      2) "value1"
+      3) "field2"
+      4) "value2"
+
+```
+
+Poi riaccodalo con XADD copiando i campi a mano:
+
+```
+XADD <mystream> * "field1" "value1" "field2" "value2" ...
+```
+
+
 ### Problema: Email non inviate
 
 **Check 1: Template esiste e è attivo**
