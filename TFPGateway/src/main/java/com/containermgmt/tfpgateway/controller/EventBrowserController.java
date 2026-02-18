@@ -70,4 +70,24 @@ public class EventBrowserController {
 
         return "redirect:/events";
     }
+
+    @PostMapping("/events/resend-all")
+    public String resendAllEvents(
+            @RequestParam(required = false) String eventType,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFrom,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateTo,
+            @RequestParam(required = false, defaultValue = "false") boolean forceMessageId,
+            RedirectAttributes redirectAttributes) {
+
+        int count = eventBrowserService.resendAllByFilter(eventType, dateFrom, dateTo, forceMessageId);
+
+        if (count == 0) {
+            redirectAttributes.addFlashAttribute("errorMessage", "No events matched the filter criteria.");
+        } else {
+            redirectAttributes.addFlashAttribute("successMessage",
+                    count + " event(s) resent successfully to Valkey streams.");
+        }
+
+        return "redirect:/events";
+    }
 }

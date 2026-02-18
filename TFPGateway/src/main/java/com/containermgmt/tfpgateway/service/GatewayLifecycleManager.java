@@ -99,7 +99,7 @@ public class GatewayLifecycleManager {
             if (subscriberName == null || subscriberName.isBlank()) {
                 log.info("Mode: DIRECT (anycast queues, no FQQN)");
             } else {
-                log.info("Mode: FQQN multicast (subscriber-name: {})", subscriberName);
+                log.info("Mode: MULTICAST durable shared subscription (subscriber-name: {})", subscriberName);
             }
 
             boolean fqqnMode = subscriberName != null && !subscriberName.isBlank();
@@ -215,6 +215,11 @@ public class GatewayLifecycleManager {
         container.setConnectionFactory(connectionFactory);
         container.setDestinationName(destination);
         container.setPubSubDomain(multicast);
+        if (multicast) {
+            container.setSubscriptionDurable(true);
+            container.setSubscriptionShared(true);
+            container.setSubscriptionName(props.getSubscriberName() + "." + addressName);
+        }
         container.setConcurrency(props.getConcurrency());
         container.setSessionTransacted(true);
         container.setRecoveryInterval(props.getArtemis().getRecoveryInterval());
@@ -243,9 +248,9 @@ public class GatewayLifecycleManager {
     }
 
     private String resolveDestination(String addressName, String subscriberName) {
-        if (subscriberName == null || subscriberName.isBlank()) {
-            return addressName;
-        }
-        return addressName + "::" + subscriberName + "." + addressName;
+        // Durable subscription handles queue routing via clientId.subscriptionName
+        // In DIRECT mode: plain address name (anycast queue)
+        // In MULTICAST mode: address name (topic), JMS creates subscriber queue
+        return addressName;
     }
 }

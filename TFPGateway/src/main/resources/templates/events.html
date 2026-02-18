@@ -77,6 +77,12 @@
         </div>
     </form>
 
+    <!-- Hidden fields for filter values (used by Resend All) -->
+    <input type="hidden" id="filterEventType" th:value="${selectedEventType}">
+    <input type="hidden" id="filterDateFrom" th:value="${dateFrom}">
+    <input type="hidden" id="filterDateTo" th:value="${dateTo}">
+    <input type="hidden" id="filterTotalCount" th:value="${totalCount}">
+
     <!-- Resend form wraps table -->
     <form id="resendForm" th:action="@{/events/resend}" method="post">
 
@@ -94,6 +100,9 @@
             </div>
             <button type="button" class="btn btn-warning btn-sm" onclick="confirmResend()">
                 Resend Selected
+            </button>
+            <button type="button" class="btn btn-danger btn-sm" onclick="confirmResendAll()">
+                Resend All
             </button>
             <span id="selectedCount" class="text-muted small">0 selected</span>
         </div>
@@ -302,6 +311,49 @@
         if (confirm('Resend ' + ids.length + ' event(s) to Valkey streams?' + meta)) {
             doResend(ids, force);
         }
+    }
+
+    /* --- Resend All --- */
+    function confirmResendAll() {
+        var total = parseInt(document.getElementById('filterTotalCount').value) || 0;
+        if (total === 0) {
+            alert('No events match the current filter.');
+            return;
+        }
+        var force = document.getElementById('forceMessageId').checked;
+        var meta = force ? '\n(metadata {resend:true} will be added)' : '';
+        var warning = total > 100 ? '\n\nWARNING: This is a large batch (' + total + ' events)!' : '';
+        if (confirm('Resend ALL ' + total + ' event(s) matching the current filter to Valkey streams?' + meta + warning)) {
+            doResendAll(force);
+        }
+    }
+
+    function doResendAll(forceMessageId) {
+        var params = new URLSearchParams();
+        var eventType = document.getElementById('filterEventType').value;
+        var dateFrom = document.getElementById('filterDateFrom').value;
+        var dateTo = document.getElementById('filterDateTo').value;
+        if (eventType) params.append('eventType', eventType);
+        if (dateFrom) params.append('dateFrom', dateFrom);
+        if (dateTo) params.append('dateTo', dateTo);
+        if (forceMessageId) params.append('forceMessageId', 'true');
+
+        fetch(/*[[@{/events/resend-all}]]*/ '/events/resend-all', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params.toString()
+        })
+        .then(function(resp) {
+            if (!resp.ok && !resp.redirected) throw new Error('HTTP ' + resp.status);
+            return resp.text();
+        })
+        .then(function() {
+            var total = document.getElementById('filterTotalCount').value;
+            showAlert('success', total + ' event(s) resent successfully.');
+        })
+        .catch(function(err) {
+            showAlert('danger', 'Resend All failed: ' + err.message);
+        });
     }
 
     function confirmModalResend() {

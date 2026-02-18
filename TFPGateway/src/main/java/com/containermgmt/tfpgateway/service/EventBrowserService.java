@@ -159,6 +159,63 @@ public class EventBrowserService {
         return count;
     }
 
+    public int resendAllByFilter(String eventType, LocalDate dateFrom, LocalDate dateTo, boolean forceMessageId) {
+        List<Map<String, Object>> events;
+        try {
+            activeJDBCConfig.openConnection();
+
+            StringBuilder sql = new StringBuilder(
+                    "SELECT id_event, message_id, event_type, event_time, payload::text AS payload FROM evt_raw_events");
+            List<Object> params = new ArrayList<>();
+
+            appendWhereClause(sql, params, eventType, dateFrom, dateTo);
+            sql.append(" ORDER BY event_time DESC");
+
+            events = new ArrayList<>();
+            List<Map<String, Object>> rows = Base.findAll(sql.toString(), params.toArray());
+            for (Map<String, Object> row : rows) {
+                Map<String, Object> event = new HashMap<>();
+                event.put("id_event", row.get("id_event"));
+                event.put("message_id", row.get("message_id"));
+                event.put("event_type", row.get("event_type"));
+                event.put("event_time", row.get("event_time"));
+                event.put("payload", row.get("payload"));
+                events.add(event);
+            }
+        } finally {
+            activeJDBCConfig.closeConnection();
+        }
+
+        Map<String, Object> metadata = forceMessageId ? Map.of("resend", "true") : null;
+
+        int count = 0;
+        for (Map<String, Object> event : events) {
+            try {
+                Object eventTimeObj = event.get("event_time");
+                Instant eventTime = null;
+                if (eventTimeObj instanceof java.sql.Timestamp ts) {
+                    eventTime = ts.toInstant();
+                }
+
+                EventMessage msg = EventMessage.builder()
+                        .messageId((String) event.get("message_id"))
+                        .eventType((String) event.get("event_type"))
+                        .eventTime(eventTime)
+                        .rawPayload((String) event.get("payload"))
+                        .build();
+
+                valkeyStreamPublisher.publish(msg, metadata);
+                count++;
+            } catch (Exception e) {
+                log.warn("Failed to resend event id={}: {}", event.get("id_event"), e.getMessage());
+            }
+        }
+
+        log.info("Resend all by filter: resent {}/{} events (eventType={}, dateFrom={}, dateTo={}, forceMessageId={})",
+                count, events.size(), eventType, dateFrom, dateTo, forceMessageId);
+        return count;
+    }
+
     private void appendWhereClause(StringBuilder sql, List<Object> params,
                                     String eventType, LocalDate dateFrom, LocalDate dateTo) {
         List<String> conditions = new ArrayList<>();

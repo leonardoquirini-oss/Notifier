@@ -47,6 +47,8 @@ services:
     volumes:
       # Custom broker.xml: multicast addresses with durable subscriptions
       - ./artemis-config/broker.xml:/var/lib/artemis-instance/etc-override/broker.xml
+      # Persist journal, bindings, paging and large-messages across restarts
+      - artemis-data:/var/lib/artemis-instance/data
     ports:
       - "61616:61616"  # Artemis Core
       - "8161:8161"    # Web Console
@@ -58,8 +60,12 @@ services:
       timeout: 5s
       retries: 5
 
+volumes:
+  artemis-data:
+    driver: local
+
 networks:
   berlink-network:
     external: true
     name: berlink-dev_berlink-network
-    
+
