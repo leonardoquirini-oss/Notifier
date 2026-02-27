@@ -19,7 +19,8 @@ CREATE TABLE IF NOT EXISTS evt_unit_events (
     report_notes     TEXT,
     id_trailer       INTEGER,
     id_vehicle       INTEGER,
-    container_number VARCHAR(50)
+    container_number VARCHAR(50),
+    payload          JSONB
 );
 
 -- Index on message_id for deduplication lookups

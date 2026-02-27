@@ -2,6 +2,7 @@ package com.containermgmt.tfpeventingester.stream;
 
 import com.containermgmt.tfpeventingester.model.EvtUnitEvent;
 import com.containermgmt.tfpeventingester.service.BerlinkLookupService;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.javalite.activejdbc.Model;
@@ -41,6 +42,11 @@ public class UnitEventStreamProcessor extends AbstractStreamProcessor {
         event.set("unit_type_code", getString(payload, "unitTypeCode"));
         event.set("damage_type", getString(payload, "damageType"));
         event.set("report_notes", getString(payload, "reportNotes"));
+        try {
+            event.set("payload", objectMapper.writeValueAsString(payload));
+        } catch (JsonProcessingException e) {
+            log.warn("Failed to serialize payload JSON for message_id={}: {}", messageId, e.getMessage());
+        }
         return event;
     }
 
