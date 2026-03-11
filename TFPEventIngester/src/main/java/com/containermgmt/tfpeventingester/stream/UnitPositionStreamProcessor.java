@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.javalite.activejdbc.Model;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -17,6 +18,7 @@ import java.util.Map;
  * them to the evt_unit_positions table via ActiveJDBC.
  */
 @Component
+@ConditionalOnProperty("stream.unit-positions.key")
 @Slf4j
 public class UnitPositionStreamProcessor extends AbstractStreamProcessor {
 

@@ -9,6 +9,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.javalite.activejdbc.Model;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -22,6 +23,7 @@ import java.util.Set;
  * evt_asset_damages + evt_vehicle_damage_labels / evt_unit_damage_labels.
  */
 @Component
+@ConditionalOnProperty("stream.asset-damages.key")
 @Slf4j
 public class AssetDamageStreamProcessor extends AbstractStreamProcessor {
 

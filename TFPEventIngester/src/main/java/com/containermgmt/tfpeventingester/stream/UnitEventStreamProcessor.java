@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.javalite.activejdbc.Model;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
@@ -16,6 +17,7 @@ import java.util.Map;
  * them to the evt_unit_events table via ActiveJDBC.
  */
 @Component
+@ConditionalOnProperty("stream.unit-events.key")
 @Slf4j
 public class UnitEventStreamProcessor extends AbstractStreamProcessor {
 
@@ -37,11 +39,8 @@ public class UnitEventStreamProcessor extends AbstractStreamProcessor {
         event.set("create_time", parseTimestamp(payload, "createTime"));
         event.set("latitude", parseBigDecimal(payload, "latitude"));
         event.set("longitude", parseBigDecimal(payload, "longitude"));
-        event.set("severity", getString(payload, "severity"));
         event.set("unit_number", getString(payload, "unitNumber"));
         event.set("unit_type_code", getString(payload, "unitTypeCode"));
-        event.set("damage_type", getString(payload, "damageType"));
-        event.set("report_notes", getString(payload, "reportNotes"));
         try {
             event.set("payload", objectMapper.writeValueAsString(payload));
         } catch (JsonProcessingException e) {

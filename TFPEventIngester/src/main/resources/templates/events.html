@@ -127,7 +127,6 @@
                         <th>Unit Number</th>
                         <th>Type</th>
                         <th>Event Time</th>
-                        <th>Severity</th>
                         <th>Create Time</th>
                     </tr>
                     </thead>
@@ -140,11 +139,10 @@
                             th:classappend="${evt['container_number'] == null and evt['id_trailer'] == null and evt['id_vehicle'] == null} ? 'table-danger'"></td>
                         <td th:text="${evt['type']}"></td>
                         <td th:text="${evt['event_time']}"></td>
-                        <td th:text="${evt['severity']}"></td>
                         <td th:text="${evt['create_time']}"></td>
                     </tr>
                     <tr th:if="${#lists.isEmpty(unitEvents)}">
-                        <td colspan="8" class="text-center text-muted py-4">No events found.</td>
+                        <td colspan="7" class="text-center text-muted py-4">No events found.</td>
                     </tr>
                     </tbody>
                 </table>
