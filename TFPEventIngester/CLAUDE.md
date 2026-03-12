@@ -23,7 +23,8 @@ TFPEventIngester/
 │   │   ├── JacksonConfig.java             # ObjectMapper config
 │   │   └── BerlinkApiConfig.java          # RestTemplate + BERLink API config
 │   ├── service/
-│   │   └── BerlinkLookupService.java      # Lookup container/trailer/vehicle via BERLink API
+│   │   ├── BerlinkLookupService.java      # Lookup container/trailer/vehicle via BERLink API
+│   │   └── BerlinkAttachmentService.java  # Upload/delete allegati su BERLink document repository
 │   ├── stream/
 │   │   ├── StreamProcessor.java           # Strategy interface
 │   │   ├── AbstractStreamProcessor.java   # Base class con helper comuni
@@ -37,6 +38,7 @@ TFPEventIngester/
 │       ├── EvtAssetDamage.java            # ActiveJDBC model → evt_asset_damages
 │       ├── EvtVehicleDamageLabel.java     # ActiveJDBC model → evt_vehicle_damage_labels
 │       ├── EvtUnitDamageLabel.java        # ActiveJDBC model → evt_unit_damage_labels
+│       ├── EvtDamageAttachment.java       # ActiveJDBC model → evt_damage_attachment
 │       └── EvtErrorIngestion.java         # ActiveJDBC model → evt_error_ingestion
 ├── src/main/resources/
 │   ├── application.yml
@@ -89,7 +91,7 @@ Valkey Streams                      TFPEventIngester
 - **StreamListenerOrchestrator**: Inietta `List<StreamProcessor>` e `DataSource` (HikariCP pool), crea consumer group e listener per ciascuno. Per ogni messaggio: `Base.open(dataSource)` prende una connessione dal pool, `Base.close()` la restituisce. Poll timeout configurabile via `stream.poll-timeout-seconds`. I messaggi falliti restano nel PEL (non vengono acknowledged su errore). Su errore, salva un record in `evt_error_ingestion` con `message_id`, timestamp e messaggio d'errore (troncato a 4000 char). Il salvataggio errore e' wrappato in try-catch per non mascherare l'eccezione originale.
 - **UnitEventStreamProcessor**: Implementa `buildModel()` per mappare payload su `EvtUnitEvent`. Salva anche il JSON raw del payload nella colonna `payload` (JSONB). Stream key da `stream.unit-events.key`.
 - **UnitPositionStreamProcessor**: Implementa `buildModel()` per estrarre primo elemento di `unitPositions[]` e mappare su `EvtUnitPosition`. Stream key da `stream.unit-positions.key`.
-- **AssetDamageStreamProcessor**: Consuma `tfp-asset-damages-stream` (stream key da `stream.asset-damages.key`). Override di `buildModels()` per produrre `EvtAssetDamage` + label model (`EvtVehicleDamageLabel` o `EvtUnitDamageLabel` a seconda di `assetType`). Override di `getUnitNumberFromPayload()` → `assetIdentifier` e `getUnitTypeCodeFromPayload()` → mappa `UNIT` → `CONTAINER`. Cascade delete su resend (cancella label associate prima del record principale). I tag in `assetDamageLabels[]` vengono pivotati in colonne booleane sulla tabella label appropriata.
+- **AssetDamageStreamProcessor**: Consuma `tfp-asset-damages-stream` (stream key da `stream.asset-damages.key`). Override di `buildModels()` per produrre `EvtAssetDamage` + label model (`EvtVehicleDamageLabel` o `EvtUnitDamageLabel` a seconda di `assetType`). Override di `getUnitNumberFromPayload()` → `assetIdentifier` e `getUnitTypeCodeFromPayload()` → mappa `UNIT` → `CONTAINER`. Cascade delete su resend: chiama `DELETE /api/attachments/{id}` su BERLink per ogni allegato con `id_document` non-null, poi cancella i record `evt_damage_attachment`, label associate e infine il record principale. Allegati con `id_document = null` (upload precedente fallito) vengono ignorati silenziosamente. I tag in `assetDamageLabels[]` vengono pivotati in colonne booleane sulla tabella label appropriata.
 
 ## Configurazione
 
