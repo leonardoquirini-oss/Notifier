@@ -4,8 +4,8 @@ spring:
 
   # PostgreSQL Database Configuration
   datasource:
-    #url: jdbc:postgresql://postgres-service:5432/berlinkdb
-    url: jdbc:postgresql://192.168.0.14:5532/berlinkdb
+    url: jdbc:postgresql://postgres-service:5432/berlinkdb
+    #url: jdbc:postgresql://192.168.0.14:5532/berlinkdb
     username: berlink
     password: berlink
     driver-class-name: org.postgresql.Driver
@@ -48,15 +48,15 @@ berlink:
 
 # Stream Configuration
 stream:
-  #unit-events:
-  #  key: tfp-unit-events-stream
-  #  consumer-group: tfp-event-ingester-group
-  #unit-positions:
-  #  key: tfp-unit-positions-stream
-  #  consumer-group: tfp-event-ingester-group
-  asset-damages:
-    key: tfp-asset-damages-stream
+  unit-events:
+    key: tfp-unit-events-stream
     consumer-group: tfp-event-ingester-group
+  unit-positions:
+    key: tfp-unit-positions-stream
+    consumer-group: tfp-event-ingester-group
+  #asset-damages:
+  #  key: tfp-asset-damages-stream
+  #  consumer-group: tfp-event-ingester-group
   poll-timeout-seconds: 1
 
 # Damage Labels Display Names

@@ -14,6 +14,10 @@ public class EvtUnitEvent extends Model {
         return count("message_id = ?", messageId) > 0;
     }
 
+    public static EvtUnitEvent findByMessageId(String messageId) {
+        return findFirst("message_id = ?", messageId);
+    }
+
     public static int deleteByMessageId(String messageId) {
         return delete("message_id = ?", messageId);
     }

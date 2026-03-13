@@ -71,6 +71,11 @@
                        th:value="${dateTo}">
             </div>
             <div class="col-auto">
+                <label class="form-label form-label-sm mb-0">Message ID</label>
+                <input type="text" name="messageId" class="form-control form-control-sm"
+                       placeholder="partial match..." th:value="${messageId}" style="width:200px">
+            </div>
+            <div class="col-auto">
                 <button type="submit" class="btn btn-primary btn-sm">Search</button>
             </div>
             <div class="col-auto ms-auto text-muted small" th:text="'Total: ' + ${totalCount} + ' events'"></div>
@@ -81,6 +86,7 @@
     <input type="hidden" id="filterEventType" th:value="${selectedEventType}">
     <input type="hidden" id="filterDateFrom" th:value="${dateFrom}">
     <input type="hidden" id="filterDateTo" th:value="${dateTo}">
+    <input type="hidden" id="filterMessageId" th:value="${messageId}">
     <input type="hidden" id="filterTotalCount" th:value="${totalCount}">
 
     <!-- Resend form wraps table -->
@@ -198,7 +204,7 @@
         <ul class="pagination pagination-sm justify-content-center">
             <li class="page-item" th:classappend="${currentPage == 0} ? 'disabled'">
                 <a class="page-link"
-                   th:href="@{/events(eventType=${selectedEventType}, dateFrom=${dateFrom}, dateTo=${dateTo}, page=${currentPage - 1})}">
+                   th:href="@{/events(eventType=${selectedEventType}, dateFrom=${dateFrom}, dateTo=${dateTo}, messageId=${messageId}, page=${currentPage - 1})}">
                     &laquo;
                 </a>
             </li>
@@ -206,13 +212,13 @@
                 <li class="page-item" th:classappend="${p == currentPage} ? 'active'"
                     th:if="${p == 0 or p == totalPages - 1 or (p >= currentPage - 2 and p <= currentPage + 2)}">
                     <a class="page-link"
-                       th:href="@{/events(eventType=${selectedEventType}, dateFrom=${dateFrom}, dateTo=${dateTo}, page=${p})}"
+                       th:href="@{/events(eventType=${selectedEventType}, dateFrom=${dateFrom}, dateTo=${dateTo}, messageId=${messageId}, page=${p})}"
                        th:text="${p + 1}"></a>
                 </li>
             </th:block>
             <li class="page-item" th:classappend="${currentPage == totalPages - 1} ? 'disabled'">
                 <a class="page-link"
-                   th:href="@{/events(eventType=${selectedEventType}, dateFrom=${dateFrom}, dateTo=${dateTo}, page=${currentPage + 1})}">
+                   th:href="@{/events(eventType=${selectedEventType}, dateFrom=${dateFrom}, dateTo=${dateTo}, messageId=${messageId}, page=${currentPage + 1})}">
                     &raquo;
                 </a>
             </li>
@@ -333,9 +339,11 @@
         var eventType = document.getElementById('filterEventType').value;
         var dateFrom = document.getElementById('filterDateFrom').value;
         var dateTo = document.getElementById('filterDateTo').value;
+        var messageId = document.getElementById('filterMessageId').value;
         if (eventType) params.append('eventType', eventType);
         if (dateFrom) params.append('dateFrom', dateFrom);
         if (dateTo) params.append('dateTo', dateTo);
+        if (messageId) params.append('messageId', messageId);
         if (forceMessageId) params.append('forceMessageId', 'true');
 
         fetch(/*[[@{/events/resend-all}]]*/ '/events/resend-all', {

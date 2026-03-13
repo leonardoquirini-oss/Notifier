@@ -30,11 +30,12 @@ public class EventBrowserController {
             @RequestParam(required = false) String eventType,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFrom,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateTo,
+            @RequestParam(required = false) String messageId,
             @RequestParam(defaultValue = "0") int page,
             Model model) {
 
-        List<Map<String, Object>> events = eventBrowserService.searchEvents(eventType, dateFrom, dateTo, page);
-        long totalCount = eventBrowserService.countEvents(eventType, dateFrom, dateTo);
+        List<Map<String, Object>> events = eventBrowserService.searchEvents(eventType, dateFrom, dateTo, messageId, page);
+        long totalCount = eventBrowserService.countEvents(eventType, dateFrom, dateTo, messageId);
         List<String> eventTypes = eventBrowserService.getDistinctEventTypes();
 
         int totalPages = (int) Math.ceil((double) totalCount / PAGE_SIZE);
@@ -49,6 +50,7 @@ public class EventBrowserController {
         model.addAttribute("selectedEventType", eventType);
         model.addAttribute("dateFrom", dateFrom);
         model.addAttribute("dateTo", dateTo);
+        model.addAttribute("messageId", messageId);
 
         return "events";
     }
@@ -76,10 +78,11 @@ public class EventBrowserController {
             @RequestParam(required = false) String eventType,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFrom,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateTo,
+            @RequestParam(required = false) String messageId,
             @RequestParam(required = false, defaultValue = "false") boolean forceMessageId,
             RedirectAttributes redirectAttributes) {
 
-        int count = eventBrowserService.resendAllByFilter(eventType, dateFrom, dateTo, forceMessageId);
+        int count = eventBrowserService.resendAllByFilter(eventType, dateFrom, dateTo, messageId, forceMessageId);
 
         if (count == 0) {
             redirectAttributes.addFlashAttribute("errorMessage", "No events matched the filter criteria.");
