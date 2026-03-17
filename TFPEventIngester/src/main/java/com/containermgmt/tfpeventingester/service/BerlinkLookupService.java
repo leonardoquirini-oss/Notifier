@@ -20,6 +20,7 @@ import java.util.Map;
 public class BerlinkLookupService {
 
     private static final String CACHE_KEY_PREFIX = "unit:lookup:";
+    private static final List<String> KNOWN_TYPES = List.of("CONTAINER", "SEMITRAILER", "VEHICLE");
 
     private final RestTemplate restTemplate;
     private final BerlinkApiConfig config;
@@ -37,6 +38,16 @@ public class BerlinkLookupService {
     public LookupResult lookupUnit(String unitNumber, String unitTypeCode) {
         if (unitNumber == null || unitNumber.isBlank()) {
             return LookupResult.empty();
+        }
+
+        if (unitTypeCode == null || unitTypeCode.isBlank()) {
+            if (config.isCacheEnabled()) {
+                LookupResult probed = probeCacheForKnownTypes(unitNumber);
+                if (probed != null) {
+                    return probed;
+                }
+            }
+            // fall through: API call via lookupNonContainer (existing behavior)
         }
 
         String cacheKey = buildCacheKey(unitNumber, unitTypeCode);
@@ -208,6 +219,18 @@ public class BerlinkLookupService {
         }
 
         return LookupResult.empty();
+    }
+
+    private LookupResult probeCacheForKnownTypes(String unitNumber) {
+        for (String type : KNOWN_TYPES) {
+            String key = buildCacheKey(unitNumber, type);
+            LookupResult cached = readFromCache(key);
+            if (cached != null && cached.hasData()) {
+                log.debug("Cache HIT (type-probe) key={}", key);
+                return cached;
+            }
+        }
+        return null;
     }
 
     private String buildCacheKey(String unitNumber, String unitTypeCode) {

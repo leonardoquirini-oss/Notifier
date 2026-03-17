@@ -8,6 +8,7 @@ import com.containermgmt.tfpeventingester.service.BerlinkLookupService.LookupRes
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.javalite.activejdbc.Base;
 import org.javalite.activejdbc.Model;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -28,8 +29,10 @@ import java.util.Map;
 public class UnitEventStreamProcessor extends AbstractStreamProcessor {
 
     private record AttachmentUploadContext(EvtEventAttachment model, String base64Content) {}
+    private record LastPositionExtras(String terminalCode, String fullEmpty, String operatorCode) {}
 
     private List<AttachmentUploadContext> pendingAttachments = new ArrayList<>();
+    private LastPositionExtras lastPositionExtras;
     private final BerlinkAttachmentService berlinkAttachmentService;
 
     public UnitEventStreamProcessor(ObjectMapper objectMapper,
@@ -67,6 +70,12 @@ public class UnitEventStreamProcessor extends AbstractStreamProcessor {
             log.warn("Failed to serialize payload JSON for message_id={}: {}", messageId, e.getMessage());
         }
 
+        lastPositionExtras = new LastPositionExtras(
+                getString(payload, "terminalCode"),
+                getString(payload, "fullEmpty"),
+                getString(payload, "operatorCode")
+        );
+
         List<Model> models = new ArrayList<>();
         models.add(event);
 
@@ -90,34 +99,78 @@ public class UnitEventStreamProcessor extends AbstractStreamProcessor {
     @Override
     protected void saveModels(List<Model> models, LookupResult lookup) {
         Model parent = models.get(0); // EvtUnitEvent is always first
-        if (lookup.hasData()) {
-            parent.set("container_number", lookup.containerNumber());
-            parent.set("id_trailer", lookup.idTrailer());
-            parent.set("id_vehicle", lookup.idVehicle());
-        }
-        parent.saveIt();
-        Object actualId = parent.getId();
-        Object eventTime = parent.get("event_time");
-        log.info("Saved parent EvtUnitEvent: generated id_unit_event={}", actualId);
-
-        int attachmentIndex = 0;
-        for (int i = 1; i < models.size(); i++) {
-            Model child = models.get(i);
-            if (child instanceof EvtEventAttachment attachment) {
-                AttachmentUploadContext ctx = pendingAttachments.get(attachmentIndex++);
-                attachment.set("id_unit_event", actualId);
-                attachment.set("event_time", eventTime);
-                Long idDocument = null;
-                String fileContent = ctx.base64Content();
-                if (fileContent != null && !fileContent.isBlank()) {
-                    idDocument = uploadAttachment(attachment, actualId, fileContent);
-                }
-                attachment.set("id_document", idDocument);
+        Base.openTransaction();
+        try {
+            if (lookup.hasData()) {
+                parent.set("container_number", lookup.containerNumber());
+                parent.set("id_trailer", lookup.idTrailer());
+                parent.set("id_vehicle", lookup.idVehicle());
             }
-            child.saveIt();
-        }
+            parent.saveIt();
+            Object actualId = parent.getId();
+            Object eventTime = parent.get("event_time");
+            log.info("Saved parent EvtUnitEvent: generated id_unit_event={}", actualId);
 
-        pendingAttachments = new ArrayList<>();
+            int attachmentIndex = 0;
+            for (int i = 1; i < models.size(); i++) {
+                Model child = models.get(i);
+                if (child instanceof EvtEventAttachment attachment) {
+                    AttachmentUploadContext ctx = pendingAttachments.get(attachmentIndex++);
+                    attachment.set("id_unit_event", actualId);
+                    attachment.set("event_time", eventTime);
+                    Long idDocument = null;
+                    String fileContent = ctx.base64Content();
+                    if (fileContent != null && !fileContent.isBlank()) {
+                        idDocument = uploadAttachment(attachment, actualId, fileContent);
+                    }
+                    attachment.set("id_document", idDocument);
+                }
+                child.saveIt();
+            }
+
+            upsertLastPosition((EvtUnitEvent) parent);
+            Base.commitTransaction();
+        } catch (Exception e) {
+            Base.rollbackTransaction();
+            throw e;
+        } finally {
+            pendingAttachments = new ArrayList<>();
+        }
+    }
+
+    private void upsertLastPosition(EvtUnitEvent parent) {
+        String sql = """
+                INSERT INTO evt_unit_last_position (
+                  unit_number, unit_type_code, message_type, id_unit_event,
+                  event_time, latitude, longitude, container_number,
+                  terminal_code, full_empty, operator_code, event_type, updated_at
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,now())
+                ON CONFLICT (unit_number) DO UPDATE SET
+                  message_type=EXCLUDED.message_type, id_unit_event=EXCLUDED.id_unit_event,
+                  event_time=EXCLUDED.event_time, latitude=EXCLUDED.latitude,
+                  longitude=EXCLUDED.longitude, container_number=EXCLUDED.container_number,
+                  terminal_code=EXCLUDED.terminal_code, full_empty=EXCLUDED.full_empty,
+                  operator_code=EXCLUDED.operator_code, event_type=EXCLUDED.event_type,
+                  updated_at=now()
+                WHERE EXCLUDED.event_time > evt_unit_last_position.event_time
+                """;
+        String terminalCode = lastPositionExtras != null ? lastPositionExtras.terminalCode() : null;
+        String fullEmpty    = lastPositionExtras != null ? lastPositionExtras.fullEmpty()    : null;
+        String operatorCode = lastPositionExtras != null ? lastPositionExtras.operatorCode() : null;
+        Base.exec(sql,
+                parent.get("unit_number"),
+                parent.get("unit_type_code"),
+                parent.get("message_type"),
+                parent.getId(),
+                parent.get("event_time"),
+                parent.get("latitude"),
+                parent.get("longitude"),
+                parent.get("container_number"),
+                terminalCode,
+                fullEmpty,
+                operatorCode,
+                parent.get("type")
+        );
     }
 
     private Long uploadAttachment(EvtEventAttachment attachment, Object parentId, String base64Content) {
