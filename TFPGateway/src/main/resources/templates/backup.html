@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>TFP Gateway - Backup</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+          rel="stylesheet">
+</head>
+<body class="bg-light">
+<div class="container-fluid py-3">
+
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0">TFP Gateway &mdash; Backup</h4>
+        <div class="dropdown">
+            <button class="btn btn-outline-secondary btn-sm" type="button"
+                    data-bs-toggle="dropdown" title="Menu">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
+                    <path fill-rule="evenodd" d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5"/>
+                </svg>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+                <li><a class="dropdown-item" href="/events">Event Browser</a></li>
+                <li><a class="dropdown-item" href="/gateway">Configurazione Gateway</a></li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Flash messages -->
+    <div th:if="${successMessage}" class="alert alert-success alert-dismissible fade show" role="alert">
+        <span th:text="${successMessage}"></span>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    <div th:if="${errorMessage}" class="alert alert-danger alert-dismissible fade show" role="alert">
+        <span th:text="${errorMessage}"></span>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+
+    <div class="row justify-content-center">
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-header fw-bold">Esporta Backup da evt_raw_events</div>
+                <div class="card-body">
+                    <form id="backupForm" th:action="@{/backup/export}" method="post">
+
+                        <!-- Date range -->
+                        <div class="row g-3 mb-3">
+                            <div class="col-6">
+                                <label class="form-label" for="dateFrom">Data Da</label>
+                                <input type="date" id="dateFrom" name="dateFrom" class="form-control"
+                                       th:value="${backupRequest.dateFrom}">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label" for="dateTo">Data A</label>
+                                <input type="date" id="dateTo" name="dateTo" class="form-control"
+                                       th:value="${backupRequest.dateTo}">
+                            </div>
+                        </div>
+
+                        <!-- Format -->
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Formato Export</label>
+                            <div class="d-flex flex-wrap gap-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="format" id="fmtSql" value="SQL" checked>
+                                    <label class="form-check-label" for="fmtSql">
+                                        SQL INSERT
+                                        <small class="text-muted d-block">Re-importabile su PostgreSQL</small>
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="format" id="fmtCsv" value="CSV">
+                                    <label class="form-check-label" for="fmtCsv">
+                                        CSV
+                                        <small class="text-muted d-block">Apribile in Excel/LibreOffice</small>
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="format" id="fmtJson" value="JSON">
+                                    <label class="form-check-label" for="fmtJson">
+                                        JSON Array
+                                        <small class="text-muted d-block">Array JSON strutturato</small>
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="format" id="fmtNdjson" value="NDJSON">
+                                    <label class="form-check-label" for="fmtNdjson">
+                                        NDJSON
+                                        <small class="text-muted d-block">Un oggetto JSON per riga</small>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- SQL commit batch size (visible only for SQL format) -->
+                        <div class="mb-3" id="sqlBatchGroup">
+                            <label class="form-label" for="sqlCommitEvery">COMMIT ogni N record</label>
+                            <input type="number" id="sqlCommitEvery" name="sqlCommitEvery"
+                                   class="form-control" value="1000" min="1" style="max-width:180px">
+                            <div class="form-text">Suddivide il file SQL in batch di N INSERT per evitare lock prolungati durante l'import.</div>
+                        </div>
+
+                        <!-- Delete after backup -->
+                        <div class="mb-4 p-3 border border-danger rounded bg-danger bg-opacity-10">
+                            <div class="form-check">
+                                <input class="form-check-input border-danger" type="checkbox"
+                                       name="deleteAfterBackup" id="deleteAfterBackup" value="true">
+                                <label class="form-check-label fw-bold text-danger" for="deleteAfterBackup">
+                                    CANCELLA DOPO BACKUP
+                                </label>
+                            </div>
+                            <small class="text-danger ms-4">
+                                I record nel range selezionato verranno eliminati (inclusi i relativi record in evt_error_ingestion).
+                                Questa operazione è irreversibile.
+                            </small>
+                        </div>
+
+                        <!-- Submit -->
+                        <div class="d-flex gap-2 align-items-center">
+                            <button type="button" class="btn btn-primary" onclick="handleExport()">
+                                Esporta Backup
+                            </button>
+                            <span id="recordCount" class="text-muted small"></span>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- Confirm delete modal -->
+<div class="modal fade" id="confirmModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">Conferma Cancellazione</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p id="confirmText"></p>
+                <p class="text-danger fw-bold mb-0">Questa operazione è irreversibile.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                <button type="button" class="btn btn-danger" onclick="submitExport()">Conferma ed Esporta</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    function handleExport() {
+        var deleteChecked = document.getElementById('deleteAfterBackup').checked;
+        if (!deleteChecked) {
+            submitExport();
+            return;
+        }
+
+        // AJAX count then show confirm dialog
+        var dateFrom = document.getElementById('dateFrom').value;
+        var dateTo   = document.getElementById('dateTo').value;
+        var params   = new URLSearchParams();
+        if (dateFrom) params.append('dateFrom', dateFrom);
+        if (dateTo)   params.append('dateTo', dateTo);
+
+        fetch('/backup/count?' + params.toString())
+            .then(function(resp) { return resp.json(); })
+            .then(function(data) {
+                var count = data.count || 0;
+                document.getElementById('confirmText').textContent =
+                    'Verranno eliminati ' + count + ' record da evt_raw_events (più i relativi record in evt_error_ingestion). Continuare?';
+                new bootstrap.Modal(document.getElementById('confirmModal')).show();
+            })
+            .catch(function(err) {
+                alert('Errore nel conteggio record: ' + err.message);
+            });
+    }
+
+    function submitExport() {
+        var modal = bootstrap.Modal.getInstance(document.getElementById('confirmModal'));
+        if (modal) modal.hide();
+        document.getElementById('backupForm').submit();
+    }
+
+    // Live count update when dates change
+    function updateCount() {
+        var dateFrom = document.getElementById('dateFrom').value;
+        var dateTo   = document.getElementById('dateTo').value;
+        if (!dateFrom && !dateTo) {
+            document.getElementById('recordCount').textContent = '';
+            return;
+        }
+        var params = new URLSearchParams();
+        if (dateFrom) params.append('dateFrom', dateFrom);
+        if (dateTo)   params.append('dateTo', dateTo);
+
+        fetch('/backup/count?' + params.toString())
+            .then(function(resp) { return resp.json(); })
+            .then(function(data) {
+                document.getElementById('recordCount').textContent =
+                    data.count + ' record nel range selezionato';
+            })
+            .catch(function() {});
+    }
+
+    document.getElementById('dateFrom').addEventListener('change', updateCount);
+    document.getElementById('dateTo').addEventListener('change', updateCount);
+
+    // Show/hide SQL batch size field based on format selection
+    function toggleSqlBatch() {
+        var isSql = document.getElementById('fmtSql').checked;
+        document.getElementById('sqlBatchGroup').style.display = isSql ? '' : 'none';
+    }
+    document.querySelectorAll('input[name="format"]').forEach(function(el) {
+        el.addEventListener('change', toggleSqlBatch);
+    });
+    toggleSqlBatch();
+</script>
+</body>
+</html>

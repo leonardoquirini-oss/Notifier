@@ -16,6 +16,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -64,11 +65,6 @@ public class UnitEventStreamProcessor extends AbstractStreamProcessor {
         event.set("longitude", parseBigDecimal(payload, "longitude"));
         event.set("unit_number", getString(payload, "unitNumber"));
         event.set("unit_type_code", getString(payload, "unitTypeCode"));
-        try {
-            event.set("payload", objectMapper.writeValueAsString(payload));
-        } catch (JsonProcessingException e) {
-            log.warn("Failed to serialize payload JSON for message_id={}: {}", messageId, e.getMessage());
-        }
 
         lastPositionExtras = new LastPositionExtras(
                 getString(payload, "terminalCode"),
@@ -79,6 +75,7 @@ public class UnitEventStreamProcessor extends AbstractStreamProcessor {
         List<Model> models = new ArrayList<>();
         models.add(event);
 
+        // Extract attachments first (preserving real base64 in pendingAttachments)
         pendingAttachments = new ArrayList<>();
         List<Map<String, Object>> attachments =
                 (List<Map<String, Object>>) payload.get("attachments");
@@ -91,6 +88,13 @@ public class UnitEventStreamProcessor extends AbstractStreamProcessor {
                 pendingAttachments.add(new AttachmentUploadContext(a, fileContent));
                 models.add(a);
             }
+        }
+
+        // Serialize sanitized payload (fileContent replaced with "[BASE64]") to DB
+        try {
+            event.set("payload", objectMapper.writeValueAsString(sanitizePayloadForStorage(payload)));
+        } catch (JsonProcessingException e) {
+            log.warn("Failed to serialize payload JSON for message_id={}: {}", messageId, e.getMessage());
         }
 
         return models;
@@ -207,5 +211,23 @@ public class UnitEventStreamProcessor extends AbstractStreamProcessor {
     @Override
     protected String processorName() {
         return "unit event";
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> sanitizePayloadForStorage(Map<String, Object> payload) {
+        Map<String, Object> copy = new LinkedHashMap<>(payload);
+        List<Map<String, Object>> attachments = (List<Map<String, Object>>) copy.get("attachments");
+        if (attachments == null) return copy;
+        List<Map<String, Object>> sanitized = new ArrayList<>();
+        for (Map<String, Object> att : attachments) {
+            Map<String, Object> attCopy = new LinkedHashMap<>(att);
+            Object fc = attCopy.get("fileContent");
+            if (fc != null && !fc.toString().isBlank()) {
+                attCopy.put("fileContent", "[BASE64]");
+            }
+            sanitized.add(attCopy);
+        }
+        copy.put("attachments", sanitized);
+        return copy;
     }
 }
