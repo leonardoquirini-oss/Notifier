@@ -30,7 +30,7 @@ import java.util.Map;
 public class UnitEventStreamProcessor extends AbstractStreamProcessor {
 
     private record AttachmentUploadContext(EvtEventAttachment model, String base64Content) {}
-    private record LastPositionExtras(String terminalCode, String fullEmpty, String operatorCode) {}
+    private record LastPositionExtras(String terminalCode, String fullEmpty, String operatorCode, Object eta) {}
 
     private List<AttachmentUploadContext> pendingAttachments = new ArrayList<>();
     private LastPositionExtras lastPositionExtras;
@@ -69,7 +69,8 @@ public class UnitEventStreamProcessor extends AbstractStreamProcessor {
         lastPositionExtras = new LastPositionExtras(
                 getString(payload, "terminalCode"),
                 getString(payload, "fullEmpty"),
-                getString(payload, "operatorCode")
+                getString(payload, "operatorCode"),
+                parseTimestamp(payload, "eta")
         );
 
         List<Model> models = new ArrayList<>();
@@ -147,20 +148,21 @@ public class UnitEventStreamProcessor extends AbstractStreamProcessor {
                 INSERT INTO evt_unit_last_position (
                   unit_number, unit_type_code, message_type, id_unit_event,
                   event_time, latitude, longitude, container_number,
-                  terminal_code, full_empty, operator_code, event_type, updated_at
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,now())
+                  terminal_code, full_empty, operator_code, event_type, eta, updated_at
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,now())
                 ON CONFLICT (unit_number) DO UPDATE SET
                   message_type=EXCLUDED.message_type, id_unit_event=EXCLUDED.id_unit_event,
                   event_time=EXCLUDED.event_time, latitude=EXCLUDED.latitude,
                   longitude=EXCLUDED.longitude, container_number=EXCLUDED.container_number,
                   terminal_code=EXCLUDED.terminal_code, full_empty=EXCLUDED.full_empty,
                   operator_code=EXCLUDED.operator_code, event_type=EXCLUDED.event_type,
-                  updated_at=now()
+                  eta=EXCLUDED.eta, updated_at=now()
                 WHERE EXCLUDED.event_time > evt_unit_last_position.event_time
                 """;
         String terminalCode = lastPositionExtras != null ? lastPositionExtras.terminalCode() : null;
         String fullEmpty    = lastPositionExtras != null ? lastPositionExtras.fullEmpty()    : null;
         String operatorCode = lastPositionExtras != null ? lastPositionExtras.operatorCode() : null;
+        Object eta          = lastPositionExtras != null ? lastPositionExtras.eta()          : null;
         Base.exec(sql,
                 parent.get("unit_number"),
                 parent.get("unit_type_code"),
@@ -173,7 +175,8 @@ public class UnitEventStreamProcessor extends AbstractStreamProcessor {
                 terminalCode,
                 fullEmpty,
                 operatorCode,
-                parent.get("type")
+                parent.get("type"),
+                eta
         );
     }
 
