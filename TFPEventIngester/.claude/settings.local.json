@@ -12,7 +12,12 @@
       "Bash(mvn package:*)",
       "Bash(ls:*)",
       "Bash(psql:*)",
-      "Bash(task ing:*)"
+      "Bash(task ing:*)",
+      "Bash(xargs cat *)",
+      "Bash(mvn -q -pl . compile)",
+      "Bash(mvn -q compile)",
+      "Bash(mvn -o compile)",
+      "Bash(mvn -o clean compile)"
     ]
   }
 }

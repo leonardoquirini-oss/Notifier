@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>TFP Event Ingester - Event Browser</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
     <style>
         .table th, .table td { vertical-align: middle; font-size: 0.85rem; }
         .msgid-cell { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -82,6 +84,16 @@
                                placeholder="Search..." th:value="${evtUnitNumber}">
                     </div>
                     <div class="col-auto">
+                        <label class="form-label form-label-sm mb-0">Message ID</label>
+                        <input type="text" name="evtMessageId" class="form-control form-control-sm"
+                               placeholder="Search..." th:value="${evtMessageId}">
+                    </div>
+                    <div class="col-auto">
+                        <label class="form-label form-label-sm mb-0">Trailer Plate</label>
+                        <input type="text" name="evtTrailerPlate" class="form-control form-control-sm"
+                               placeholder="Search..." th:value="${evtTrailerPlate}">
+                    </div>
+                    <div class="col-auto">
                         <label class="form-label form-label-sm mb-0">Unit Type</label>
                         <select name="evtUnitTypeCode" class="form-select form-select-sm">
                             <option value="">All</option>
@@ -125,24 +137,34 @@
                         <th>Message ID</th>
                         <th>Unit Type</th>
                         <th>Unit Number</th>
+                        <th>Trailer Plate</th>
                         <th>Type</th>
                         <th>Event Time</th>
                         <th>Create Time</th>
+                        <th>ID Trailer</th>
+                        <th>ID Vehicle</th>
+                        <th>Container Number</th>
                     </tr>
                     </thead>
                     <tbody>
-                    <tr th:each="evt : ${unitEvents}">
+                    <tr th:each="evt : ${unitEvents}"
+                        class="detail-row" style="cursor:pointer"
+                        th:data-detail-url="@{/events/unit-event-detail(id=${evt['id_unit_event']})}">
                         <td th:text="${evt['id_unit_event']}"></td>
                         <td class="msgid-cell" th:title="${evt['message_id']}" th:text="${evt['message_id']}"></td>
                         <td th:text="${evt['unit_type_code']}"></td>
                         <td class="unit-cell" th:title="${evt['unit_number']}" th:text="${evt['unit_number']}"
                             th:classappend="${evt['container_number'] == null and evt['id_trailer'] == null and evt['id_vehicle'] == null} ? 'table-danger'"></td>
+                        <td th:text="${evt['trailer_plate']}"></td>
                         <td th:text="${evt['type']}"></td>
-                        <td th:text="${evt['event_time']}"></td>
-                        <td th:text="${evt['create_time']}"></td>
+                        <td class="date-cell" th:text="${evt['event_time']}"></td>
+                        <td class="date-cell" th:text="${evt['create_time']}"></td>
+                        <td th:text="${evt['id_trailer']}"></td>
+                        <td th:text="${evt['id_vehicle']}"></td>
+                        <td th:text="${evt['container_number']}"></td>
                     </tr>
                     <tr th:if="${#lists.isEmpty(unitEvents)}">
-                        <td colspan="7" class="text-center text-muted py-4">No events found.</td>
+                        <td colspan="11" class="text-center text-muted py-4">No events found.</td>
                     </tr>
                     </tbody>
                 </table>
@@ -155,6 +177,7 @@
                         <a class="page-link"
                            th:href="@{/events(tab='events',
                                evtUnitNumber=${evtUnitNumber}, evtUnitTypeCode=${evtUnitTypeCode},
+                               evtMessageId=${evtMessageId}, evtTrailerPlate=${evtTrailerPlate},
                                evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
                                evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage - 1},
                                posUnitNumber=${posUnitNumber}, posUnitTypeCode=${posUnitTypeCode},
@@ -173,6 +196,7 @@
                             <a class="page-link"
                                th:href="@{/events(tab='events',
                                    evtUnitNumber=${evtUnitNumber}, evtUnitTypeCode=${evtUnitTypeCode},
+                                   evtMessageId=${evtMessageId}, evtTrailerPlate=${evtTrailerPlate}, evtTrailerPlate=${evtTrailerPlate},
                                    evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
                                    evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${p},
                                    posUnitNumber=${posUnitNumber}, posUnitTypeCode=${posUnitTypeCode},
@@ -191,6 +215,7 @@
                         <a class="page-link"
                            th:href="@{/events(tab='events',
                                evtUnitNumber=${evtUnitNumber}, evtUnitTypeCode=${evtUnitTypeCode},
+                               evtMessageId=${evtMessageId}, evtTrailerPlate=${evtTrailerPlate},
                                evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
                                evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage + 1},
                                posUnitNumber=${posUnitNumber}, posUnitTypeCode=${posUnitTypeCode},
@@ -215,6 +240,8 @@
                 <input type="hidden" name="tab" value="positions">
                 <!-- Preserve events tab state -->
                 <input type="hidden" name="evtUnitNumber" th:value="${evtUnitNumber}">
+                <input type="hidden" name="evtMessageId" th:value="${evtMessageId}">
+                <input type="hidden" name="evtTrailerPlate" th:value="${evtTrailerPlate}">
                 <input type="hidden" name="evtUnitTypeCode" th:value="${evtUnitTypeCode}">
                 <input type="hidden" name="evtDateFrom" th:value="${evtDateFrom}">
                 <input type="hidden" name="evtDateTo" th:value="${evtDateTo}">
@@ -292,7 +319,9 @@
                     </tr>
                     </thead>
                     <tbody>
-                    <tr th:each="pos : ${unitPositions}">
+                    <tr th:each="pos : ${unitPositions}"
+                        class="detail-row" style="cursor:pointer"
+                        th:data-detail-url="@{/events/unit-position-detail(id=${pos['id_unit_position']})}">
                         <td th:text="${pos['id_unit_position']}"></td>
                         <td class="msgid-cell" th:title="${pos['message_id']}" th:text="${pos['message_id']}"></td>
                         <td th:text="${pos['unit_type_code']}"></td>
@@ -300,8 +329,8 @@
                             th:classappend="${pos['container_number'] == null and pos['id_trailer'] == null and pos['id_vehicle'] == null} ? 'table-danger'"></td>
                         <td th:text="${pos['latitude']}"></td>
                         <td th:text="${pos['longitude']}"></td>
-                        <td th:text="${pos['position_time']}"></td>
-                        <td th:text="${pos['create_time']}"></td>
+                        <td class="date-cell" th:text="${pos['position_time']}"></td>
+                        <td class="date-cell" th:text="${pos['create_time']}"></td>
                     </tr>
                     <tr th:if="${#lists.isEmpty(unitPositions)}">
                         <td colspan="8" class="text-center text-muted py-4">No positions found.</td>
@@ -320,6 +349,7 @@
                                posDateFrom=${posDateFrom}, posDateTo=${posDateTo},
                                posUnlinkedOnly=${posUnlinkedOnly}, posPage=${posCurrentPage - 1},
                                evtUnitNumber=${evtUnitNumber}, evtUnitTypeCode=${evtUnitTypeCode},
+                               evtMessageId=${evtMessageId}, evtTrailerPlate=${evtTrailerPlate},
                                evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
                                evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage},
                                dmgAssetIdentifier=${dmgAssetIdentifier}, dmgAssetType=${dmgAssetType},
@@ -338,6 +368,7 @@
                                    posDateFrom=${posDateFrom}, posDateTo=${posDateTo},
                                    posUnlinkedOnly=${posUnlinkedOnly}, posPage=${p},
                                    evtUnitNumber=${evtUnitNumber}, evtUnitTypeCode=${evtUnitTypeCode},
+                                   evtMessageId=${evtMessageId}, evtTrailerPlate=${evtTrailerPlate}, evtTrailerPlate=${evtTrailerPlate},
                                    evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
                                    evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage},
                                    dmgAssetIdentifier=${dmgAssetIdentifier}, dmgAssetType=${dmgAssetType},
@@ -356,6 +387,7 @@
                                posDateFrom=${posDateFrom}, posDateTo=${posDateTo},
                                posUnlinkedOnly=${posUnlinkedOnly}, posPage=${posCurrentPage + 1},
                                evtUnitNumber=${evtUnitNumber}, evtUnitTypeCode=${evtUnitTypeCode},
+                               evtMessageId=${evtMessageId}, evtTrailerPlate=${evtTrailerPlate},
                                evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
                                evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage},
                                dmgAssetIdentifier=${dmgAssetIdentifier}, dmgAssetType=${dmgAssetType},
@@ -377,6 +409,8 @@
                 <input type="hidden" name="tab" value="damages">
                 <!-- Preserve events tab state -->
                 <input type="hidden" name="evtUnitNumber" th:value="${evtUnitNumber}">
+                <input type="hidden" name="evtMessageId" th:value="${evtMessageId}">
+                <input type="hidden" name="evtTrailerPlate" th:value="${evtTrailerPlate}">
                 <input type="hidden" name="evtUnitTypeCode" th:value="${evtUnitTypeCode}">
                 <input type="hidden" name="evtDateFrom" th:value="${evtDateFrom}">
                 <input type="hidden" name="evtDateTo" th:value="${evtDateTo}">
@@ -475,7 +509,9 @@
                     </tr>
                     </thead>
                     <tbody>
-                    <tr th:each="dmg : ${assetDamages}">
+                    <tr th:each="dmg : ${assetDamages}"
+                        class="detail-row" style="cursor:pointer"
+                        th:data-detail-url="@{/events/asset-damage-detail(id=${dmg['id_asset_damage']})}">
                         <td th:text="${dmg['id_asset_damage']}"></td>
                         <td class="msgid-cell" th:title="${dmg['message_id']}" th:text="${dmg['message_id']}"></td>
                         <td th:text="${dmg['asset_type']}"></td>
@@ -484,7 +520,7 @@
                         <td th:text="${dmg['severity']}"></td>
                         <td th:text="${dmg['status']}"></td>
                         <td th:text="${dmg['type']}"></td>
-                        <td th:text="${dmg['report_time']}"></td>
+                        <td class="date-cell" th:text="${dmg['report_time']}"></td>
                         <td class="desc-cell" th:title="${dmg['description']}" th:text="${dmg['description']}"></td>
                         <td class="notes-cell" th:title="${dmg['report_notes']}" th:text="${dmg['report_notes']}"></td>
                         <td>
@@ -512,6 +548,7 @@
                                dmgDateFrom=${dmgDateFrom}, dmgDateTo=${dmgDateTo},
                                dmgUnlinkedOnly=${dmgUnlinkedOnly}, dmgPage=${dmgCurrentPage - 1},
                                evtUnitNumber=${evtUnitNumber}, evtUnitTypeCode=${evtUnitTypeCode},
+                               evtMessageId=${evtMessageId}, evtTrailerPlate=${evtTrailerPlate},
                                evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
                                evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage},
                                posUnitNumber=${posUnitNumber}, posUnitTypeCode=${posUnitTypeCode},
@@ -530,6 +567,7 @@
                                    dmgDateFrom=${dmgDateFrom}, dmgDateTo=${dmgDateTo},
                                    dmgUnlinkedOnly=${dmgUnlinkedOnly}, dmgPage=${p},
                                    evtUnitNumber=${evtUnitNumber}, evtUnitTypeCode=${evtUnitTypeCode},
+                                   evtMessageId=${evtMessageId}, evtTrailerPlate=${evtTrailerPlate}, evtTrailerPlate=${evtTrailerPlate},
                                    evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
                                    evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage},
                                    posUnitNumber=${posUnitNumber}, posUnitTypeCode=${posUnitTypeCode},
@@ -548,6 +586,7 @@
                                dmgDateFrom=${dmgDateFrom}, dmgDateTo=${dmgDateTo},
                                dmgUnlinkedOnly=${dmgUnlinkedOnly}, dmgPage=${dmgCurrentPage + 1},
                                evtUnitNumber=${evtUnitNumber}, evtUnitTypeCode=${evtUnitTypeCode},
+                               evtMessageId=${evtMessageId}, evtTrailerPlate=${evtTrailerPlate},
                                evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
                                evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage},
                                posUnitNumber=${posUnitNumber}, posUnitTypeCode=${posUnitTypeCode},
@@ -568,6 +607,8 @@
                 <input type="hidden" name="tab" value="errors">
                 <!-- Preserve events tab state -->
                 <input type="hidden" name="evtUnitNumber" th:value="${evtUnitNumber}">
+                <input type="hidden" name="evtMessageId" th:value="${evtMessageId}">
+                <input type="hidden" name="evtTrailerPlate" th:value="${evtTrailerPlate}">
                 <input type="hidden" name="evtUnitTypeCode" th:value="${evtUnitTypeCode}">
                 <input type="hidden" name="evtDateFrom" th:value="${evtDateFrom}">
                 <input type="hidden" name="evtDateTo" th:value="${evtDateTo}">
@@ -632,7 +673,7 @@
                         <td th:text="${err['id_error_ingestion']}"></td>
                         <td class="msgid-cell" th:title="${err['message_id']}" th:text="${err['message_id']}"></td>
                         <td th:text="${err['event_type']}"></td>
-                        <td th:text="${err['ingestion_time']}"></td>
+                        <td class="date-cell" th:text="${err['ingestion_time']}"></td>
                         <td class="desc-cell" th:title="${err['error_message']}" th:text="${err['error_message']}"></td>
                         <td>
                             <button th:if="${err['has_payload']}" type="button"
@@ -656,6 +697,7 @@
                                errMessageId=${errMessageId}, errDateFrom=${errDateFrom},
                                errDateTo=${errDateTo}, errPage=${errCurrentPage - 1},
                                evtUnitNumber=${evtUnitNumber}, evtUnitTypeCode=${evtUnitTypeCode},
+                               evtMessageId=${evtMessageId}, evtTrailerPlate=${evtTrailerPlate},
                                evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
                                evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage},
                                posUnitNumber=${posUnitNumber}, posUnitTypeCode=${posUnitTypeCode},
@@ -674,6 +716,7 @@
                                    errMessageId=${errMessageId}, errDateFrom=${errDateFrom},
                                    errDateTo=${errDateTo}, errPage=${p},
                                    evtUnitNumber=${evtUnitNumber}, evtUnitTypeCode=${evtUnitTypeCode},
+                                   evtMessageId=${evtMessageId}, evtTrailerPlate=${evtTrailerPlate}, evtTrailerPlate=${evtTrailerPlate},
                                    evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
                                    evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage},
                                    posUnitNumber=${posUnitNumber}, posUnitTypeCode=${posUnitTypeCode},
@@ -692,6 +735,7 @@
                                errMessageId=${errMessageId}, errDateFrom=${errDateFrom},
                                errDateTo=${errDateTo}, errPage=${errCurrentPage + 1},
                                evtUnitNumber=${evtUnitNumber}, evtUnitTypeCode=${evtUnitTypeCode},
+                               evtMessageId=${evtMessageId}, evtTrailerPlate=${evtTrailerPlate},
                                evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
                                evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage},
                                posUnitNumber=${posUnitNumber}, posUnitTypeCode=${posUnitTypeCode},
@@ -706,6 +750,33 @@
             </nav>
         </div>
 
+    </div>
+</div>
+
+<!-- Record Detail Modal -->
+<div class="modal fade" id="detailModal" tabindex="-1" aria-labelledby="detailModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="detailModalLabel">Record Detail</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="detailFields"></div>
+                <div id="detailLabelsWrap" class="mb-3" hidden>
+                    <h6>Active Labels</h6>
+                    <div id="detailLabelsList"></div>
+                </div>
+                <div id="detailAttachmentsWrap" class="mb-3" hidden>
+                    <h6>Attachments</h6>
+                    <ul id="detailAttachmentsList" class="small mb-0"></ul>
+                </div>
+                <div id="detailPayloadWrap" hidden>
+                    <h6>Payload</h6>
+                    <pre id="detailPayload" class="bg-light p-2 rounded" style="max-height:40vh;overflow:auto;font-size:0.8rem"></pre>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -725,7 +796,307 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script>
+var DATE_TZ = 'Europe/Rome';
+var DATE_FMT = new Intl.DateTimeFormat('it-IT', {
+    timeZone: DATE_TZ,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+});
+
+function formatDate(raw) {
+    if (raw === null || raw === undefined || raw === '') return '';
+    var d;
+    if (typeof raw === 'number') {
+        d = new Date(raw);
+    } else {
+        var s = String(raw).trim();
+        if (/^\d+$/.test(s)) {
+            d = new Date(parseInt(s, 10));
+        } else {
+            d = new Date(s.replace(' ', 'T'));
+        }
+    }
+    if (isNaN(d.getTime())) return String(raw);
+    var map = {};
+    DATE_FMT.formatToParts(d).forEach(function(p) { map[p.type] = p.value; });
+    return map.day + '/' + map.month + '/' + map.year + ' ' +
+           map.hour + ':' + map.minute + ':' + map.second;
+}
+
+document.querySelectorAll('td.date-cell').forEach(function(td) {
+    var raw = td.textContent.trim();
+    if (!raw) return;
+    td.textContent = formatDate(raw);
+});
+
+var DATE_KEYS = {
+    event_time: 1, create_time: 1, position_time: 1, report_time: 1,
+    closing_time: 1, edit_time: 1, ingestion_time: 1, updated_at: 1,
+    eta: 1, departure_date: 1, forecast_pickup_date: 1
+};
+
+var detailMap = null;
+function renderDetailMapInline(hostId, lat, lon) {
+    var host = document.getElementById(hostId);
+    if (!host) return;
+    var latF = parseFloat(lat), lonF = parseFloat(lon);
+    if (isNaN(latF) || isNaN(lonF)) {
+        host.innerHTML = '<div class="text-muted small">No coordinates available.</div>';
+        return;
+    }
+    host.innerHTML = '<div id="detailMap" style="height:250px;border:1px solid #dee2e6;border-radius:4px;"></div>';
+    if (detailMap) { detailMap.remove(); detailMap = null; }
+    detailMap = L.map('detailMap').setView([latF, lonF], 14);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors',
+        maxZoom: 19
+    }).addTo(detailMap);
+    L.marker([latF, lonF]).addTo(detailMap)
+        .bindPopup(latF.toFixed(6) + ', ' + lonF.toFixed(6));
+    setTimeout(function() { if (detailMap) detailMap.invalidateSize(); }, 150);
+}
+
+document.getElementById('detailModal').addEventListener('hidden.bs.modal', function() {
+    if (detailMap) { detailMap.remove(); detailMap = null; }
+});
+
+document.querySelectorAll('tr.detail-row').forEach(function(tr) {
+    tr.addEventListener('click', function(e) {
+        if (e.target.closest('a,button,input,.view-payload-btn')) return;
+        openDetail(tr.getAttribute('data-detail-url'));
+    });
+});
+
+function openDetail(url) {
+    var fields = document.getElementById('detailFields');
+    fields.innerHTML = '<div class="text-muted">Loading...</div>';
+    document.getElementById('detailLabelsWrap').hidden = true;
+    document.getElementById('detailAttachmentsWrap').hidden = true;
+    document.getElementById('detailPayloadWrap').hidden = true;
+    new bootstrap.Modal(document.getElementById('detailModal')).show();
+
+    fetch(url)
+        .then(function(r) { return r.text(); })
+        .then(function(text) {
+            if (!text || text === 'null') {
+                fields.innerHTML = '<div class="text-muted">Record not found.</div>';
+                return;
+            }
+            renderDetail(JSON.parse(text));
+        })
+        .catch(function(err) {
+            fields.innerHTML = '<div class="text-danger">Error: ' + err + '</div>';
+        });
+}
+
+var FIELD_LABELS = {
+    id_unit_event: 'ID Unit Event',
+    id_unit_position: 'ID Unit Position',
+    id_asset_damage: 'ID Asset Damage',
+    id_event_attachment: 'ID Attachment',
+    id_damage_attachment: 'ID Attachment',
+    id_document: 'ID Document',
+    message_id: 'Message ID',
+    message_type: 'Message Type',
+    id: 'External ID',
+    type: 'Type',
+    status: 'Status',
+    severity: 'Severity',
+    asset_id: 'Asset ID',
+    asset_type: 'Asset Type',
+    asset_identifier: 'Asset Identifier',
+    asset_owner: 'Asset Owner',
+    edit_time: 'Edit Time',
+    edit_user_id: 'Edit User ID',
+    report_time: 'Report Time',
+    report_notes: 'Report Notes',
+    closing_time: 'Closing Time',
+    closing_user_id: 'Closing User ID',
+    description: 'Description',
+    create_time: 'Create Time',
+    event_time: 'Event Time',
+    position_time: 'Position Time',
+    latitude: 'Latitude',
+    longitude: 'Longitude',
+    unit_number: 'Unit Number',
+    unit_type_code: 'Unit Type Code',
+    vehicle_plate: 'Vehicle Plate',
+    pos_index: 'Position Index',
+    unique_unit: 'Unique Unit',
+    unique_vehicle: 'Unique Vehicle',
+    id_trailer: 'ID Trailer',
+    id_vehicle: 'ID Vehicle',
+    container_number: 'Container Number',
+    filename: 'Filename',
+    content_type: 'Content Type',
+    size_bytes: 'Size (bytes)'
+};
+
+function prettyLabel(key) {
+    if (FIELD_LABELS[key]) return FIELD_LABELS[key];
+    return key.replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+}
+
+function buildSections(data) {
+    if ('id_unit_event' in data) {
+        return [
+            { title: 'Event',      keys: ['id_unit_event','event_time','create_time','message_id','message_type','type'] },
+            { title: 'Unit',       keys: ['unit_number','trailer_plate','unit_type_code','id_trailer','id_vehicle','container_number'] },
+            { title: 'ETA',        keys: ['eta'] },
+            { title: 'Position',   keys: ['latitude','longitude'], showMap: true },
+            { title: 'Event Data', keys: null }
+        ];
+    }
+    if ('id_unit_position' in data) {
+        return [
+            { title: 'Event',      keys: ['id_unit_position','position_time','create_time','message_id','message_type'] },
+            { title: 'Unit',       keys: ['unit_number','vehicle_plate','unit_type_code','id_trailer','id_vehicle','container_number'] },
+            { title: 'Position',   keys: ['latitude','longitude'], showMap: true },
+            { title: 'Event Data', keys: null }
+        ];
+    }
+    if ('id_asset_damage' in data) {
+        return [
+            { title: 'Event',       keys: ['id_asset_damage','report_time','edit_time','closing_time','message_id','message_type','type'] },
+            { title: 'Asset',       keys: ['asset_identifier','asset_type','severity','status','id_trailer','id_vehicle','container_number'] },
+            { title: 'Description', keys: ['description','report_notes'] },
+            { title: 'Event Data',  keys: null }
+        ];
+    }
+    return [{ title: 'Fields', keys: null }];
+}
+
+function formatFieldValue(k, v) {
+    if (v === null || v === undefined || v === '') return '—';
+    if (DATE_KEYS[k]) return formatDate(v);
+    if (typeof v === 'object') return JSON.stringify(v);
+    return String(v);
+}
+
+function buildFieldBox(k, v) {
+    var col = document.createElement('div');
+    col.className = 'col-md-4';
+    var lbl = document.createElement('div');
+    lbl.className = 'small text-muted';
+    lbl.textContent = prettyLabel(k);
+    var val = document.createElement('div');
+    val.className = 'text-break';
+    val.textContent = formatFieldValue(k, v);
+    col.appendChild(lbl);
+    col.appendChild(val);
+    return col;
+}
+
+function buildSectionBlock(title) {
+    var wrap = document.createElement('div');
+    wrap.className = 'mb-3';
+    var h = document.createElement('h6');
+    h.className = 'text-muted border-bottom pb-1 mb-2';
+    h.textContent = title;
+    wrap.appendChild(h);
+    return wrap;
+}
+
+function renderDetail(data) {
+    var fields = document.getElementById('detailFields');
+    fields.className = '';
+    fields.innerHTML = '';
+
+    var SKIP = { payload: 1, activeLabels: 1, attachments: 1 };
+    var sections = buildSections(data);
+    var used = {};
+    var hasMap = false;
+
+    sections.forEach(function(sec) {
+        if (sec.keys === null) return; // "rest" handled after
+        var keys = sec.keys.filter(function(k) {
+            return (k in data) && !SKIP[k];
+        });
+        if (keys.length === 0 && !sec.showMap) return;
+        var block = buildSectionBlock(sec.title);
+        if (keys.length > 0) {
+            var row = document.createElement('div');
+            row.className = 'row g-3';
+            keys.forEach(function(k) {
+                used[k] = 1;
+                row.appendChild(buildFieldBox(k, data[k]));
+            });
+            block.appendChild(row);
+        }
+        if (sec.showMap) {
+            var mapHost = document.createElement('div');
+            mapHost.className = 'mt-3';
+            mapHost.id = 'detailMapHost';
+            block.appendChild(mapHost);
+            hasMap = true;
+        }
+        fields.appendChild(block);
+    });
+
+    // "Event Data" / catch-all: everything else
+    var rest = Object.keys(data).filter(function(k) {
+        return !used[k] && !SKIP[k] && !/^(vl|ul)_/.test(k);
+    }).sort();
+    var catchAll = sections.filter(function(s) { return s.keys === null; })[0];
+    if (rest.length && catchAll) {
+        var block = buildSectionBlock(catchAll.title);
+        var row = document.createElement('div');
+        row.className = 'row g-3';
+        rest.forEach(function(k) { row.appendChild(buildFieldBox(k, data[k])); });
+        block.appendChild(row);
+        fields.appendChild(block);
+    }
+
+    if (hasMap) {
+        renderDetailMapInline('detailMapHost', data.latitude, data.longitude);
+    } else {
+        var wrap = document.getElementById('detailMapWrap');
+        if (wrap) wrap.hidden = true;
+    }
+
+    if (Array.isArray(data.activeLabels) && data.activeLabels.length) {
+        document.getElementById('detailLabelsList').innerHTML = data.activeLabels
+            .map(function(l) {
+                var span = document.createElement('span');
+                span.className = 'badge bg-warning text-dark me-1';
+                span.textContent = l;
+                return span.outerHTML;
+            }).join('');
+        document.getElementById('detailLabelsWrap').hidden = false;
+    }
+
+    if (Array.isArray(data.attachments) && data.attachments.length) {
+        var ul = document.getElementById('detailAttachmentsList');
+        ul.innerHTML = '';
+        data.attachments.forEach(function(a) {
+            var li = document.createElement('li');
+            li.className = 'mb-1';
+            var parts = Object.keys(a).map(function(k) {
+                var v = a[k];
+                if (v === null || v === undefined || v === '') return null;
+                return prettyLabel(k) + ': ' + (typeof v === 'object' ? JSON.stringify(v) : v);
+            }).filter(Boolean);
+            li.textContent = parts.join(' | ');
+            ul.appendChild(li);
+        });
+        document.getElementById('detailAttachmentsWrap').hidden = false;
+    }
+
+    if (data.payload != null && data.payload !== '') {
+        var p = document.getElementById('detailPayload');
+        try {
+            var obj = typeof data.payload === 'string' ? JSON.parse(data.payload) : data.payload;
+            p.textContent = JSON.stringify(obj, null, 2);
+        } catch (e) {
+            p.textContent = String(data.payload);
+        }
+        document.getElementById('detailPayloadWrap').hidden = false;
+    }
+}
+
 document.querySelectorAll('.view-payload-btn').forEach(function(btn) {
     btn.addEventListener('click', function() {
         var messageId = this.getAttribute('data-message-id');

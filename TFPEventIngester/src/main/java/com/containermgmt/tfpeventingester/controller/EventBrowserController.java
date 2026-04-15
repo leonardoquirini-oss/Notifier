@@ -28,6 +28,8 @@ public class EventBrowserController {
             // Unit Events filters
             @RequestParam(required = false) String evtUnitNumber,
             @RequestParam(required = false) String evtUnitTypeCode,
+            @RequestParam(required = false) String evtMessageId,
+            @RequestParam(required = false) String evtTrailerPlate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate evtDateFrom,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate evtDateTo,
             @RequestParam(defaultValue = "false") boolean evtUnlinkedOnly,
@@ -59,9 +61,9 @@ public class EventBrowserController {
 
         // --- Unit Events ---
         List<Map<String, Object>> unitEvents = eventBrowserService.searchUnitEvents(
-                evtUnitNumber, evtUnitTypeCode, evtDateFrom, evtDateTo, evtUnlinkedOnly, evtPage);
+                evtUnitNumber, evtUnitTypeCode, evtMessageId, evtTrailerPlate, evtDateFrom, evtDateTo, evtUnlinkedOnly, evtPage);
         long evtTotalCount = eventBrowserService.countUnitEvents(
-                evtUnitNumber, evtUnitTypeCode, evtDateFrom, evtDateTo, evtUnlinkedOnly);
+                evtUnitNumber, evtUnitTypeCode, evtMessageId, evtTrailerPlate, evtDateFrom, evtDateTo, evtUnlinkedOnly);
         int evtTotalPages = (int) Math.ceil((double) evtTotalCount / pageSize);
         List<String> evtUnitTypeCodes = eventBrowserService.getDistinctValues("unit_type_code", "evt_unit_events");
 
@@ -74,6 +76,8 @@ public class EventBrowserController {
         // Repopulate event filters
         model.addAttribute("evtUnitNumber", evtUnitNumber);
         model.addAttribute("evtUnitTypeCode", evtUnitTypeCode);
+        model.addAttribute("evtMessageId", evtMessageId);
+        model.addAttribute("evtTrailerPlate", evtTrailerPlate);
         model.addAttribute("evtDateFrom", evtDateFrom);
         model.addAttribute("evtDateTo", evtDateTo);
         model.addAttribute("evtUnlinkedOnly", evtUnlinkedOnly);
@@ -155,5 +159,23 @@ public class EventBrowserController {
     public String getErrorPayload(@RequestParam String messageId) {
         String payload = eventBrowserService.getErrorPayload(messageId);
         return payload != null ? payload : "";
+    }
+
+    @GetMapping("/events/unit-event-detail")
+    @ResponseBody
+    public Map<String, Object> getUnitEventDetail(@RequestParam long id) {
+        return eventBrowserService.getUnitEventDetail(id);
+    }
+
+    @GetMapping("/events/unit-position-detail")
+    @ResponseBody
+    public Map<String, Object> getUnitPositionDetail(@RequestParam long id) {
+        return eventBrowserService.getUnitPositionDetail(id);
+    }
+
+    @GetMapping("/events/asset-damage-detail")
+    @ResponseBody
+    public Map<String, Object> getAssetDamageDetail(@RequestParam long id) {
+        return eventBrowserService.getAssetDamageDetail(id);
     }
 }
