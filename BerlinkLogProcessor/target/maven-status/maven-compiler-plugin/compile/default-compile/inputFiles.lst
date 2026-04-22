@@ -1,0 +1,17 @@
+/mnt/c/Projects/GIT/BERLinkPlatform/Processors/BerlinkLogProcessor/src/main/java/it/berlink/monitoring/model/DurationDistribution.java
+/mnt/c/Projects/GIT/BERLinkPlatform/Processors/BerlinkLogProcessor/src/main/java/it/berlink/monitoring/model/ParseError.java
+/mnt/c/Projects/GIT/BERLinkPlatform/Processors/BerlinkLogProcessor/src/main/java/it/berlink/config/RedisConfig.java
+/mnt/c/Projects/GIT/BERLinkPlatform/Processors/BerlinkLogProcessor/src/main/java/it/berlink/monitoring/model/PaginatedResult.java
+/mnt/c/Projects/GIT/BERLinkPlatform/Processors/BerlinkLogProcessor/src/main/java/it/berlink/monitoring/controller/DashboardController.java
+/mnt/c/Projects/GIT/BERLinkPlatform/Processors/BerlinkLogProcessor/src/main/java/it/berlink/monitoring/model/ExecutionPoint.java
+/mnt/c/Projects/GIT/BERLinkPlatform/Processors/BerlinkLogProcessor/src/main/java/it/berlink/monitoring/service/QueryLogFileProcessor.java
+/mnt/c/Projects/GIT/BERLinkPlatform/Processors/BerlinkLogProcessor/src/main/java/it/berlink/monitoring/model/QueryMetric.java
+/mnt/c/Projects/GIT/BERLinkPlatform/Processors/BerlinkLogProcessor/src/main/java/it/berlink/monitoring/model/QueryDetail.java
+/mnt/c/Projects/GIT/BERLinkPlatform/Processors/BerlinkLogProcessor/src/main/java/it/berlink/monitoring/model/TimeSeriesPoint.java
+/mnt/c/Projects/GIT/BERLinkPlatform/Processors/BerlinkLogProcessor/src/main/java/it/berlink/monitoring/model/MonitorOverview.java
+/mnt/c/Projects/GIT/BERLinkPlatform/Processors/BerlinkLogProcessor/src/main/java/it/berlink/monitoring/model/QueryMetricWithTrend.java
+/mnt/c/Projects/GIT/BERLinkPlatform/Processors/BerlinkLogProcessor/src/main/java/it/berlink/monitoring/parser/QueryLogParser.java
+/mnt/c/Projects/GIT/BERLinkPlatform/Processors/BerlinkLogProcessor/src/main/java/it/berlink/monitoring/service/QueryMonitorService.java
+/mnt/c/Projects/GIT/BERLinkPlatform/Processors/BerlinkLogProcessor/src/main/java/it/berlink/LogProcessorApplication.java
+/mnt/c/Projects/GIT/BERLinkPlatform/Processors/BerlinkLogProcessor/src/main/java/it/berlink/monitoring/controller/QueryMonitorController.java
+/mnt/c/Projects/GIT/BERLinkPlatform/Processors/BerlinkLogProcessor/src/main/java/it/berlink/monitoring/model/ProcessorStatus.java

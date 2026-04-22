@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>TFP Gateway - Statistics</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+          rel="stylesheet">
+    <style>
+        .kpi-card        { border-left: 4px solid #0d6efd; }
+        .kpi-card .value { font-size: 1.6rem; font-weight: 600; line-height: 1.1; }
+        .kpi-card .label { font-size: 0.8rem; color: #6c757d; text-transform: uppercase; letter-spacing: 0.03em; }
+        .chart-wrap      { position: relative; height: 360px; }
+        .chart-wrap-sm   { position: relative; height: 280px; }
+        .badge-event     { font-size: 0.8rem; }
+        .table th, .table td { vertical-align: middle; font-size: 0.88rem; }
+        .muted-sm        { font-size: 0.8rem; color: #6c757d; }
+        .silence-critical { background-color: #f8d7da; }
+        .silence-warn     { background-color: #fff3cd; }
+    </style>
+</head>
+<body class="bg-light">
+<div class="container-fluid py-3">
+
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0">TFP Gateway &mdash; Statistics</h4>
+        <div class="d-flex align-items-center gap-2">
+            <label class="muted-sm mb-0">Range</label>
+            <select id="rangeSelect" class="form-select form-select-sm" style="width:auto">
+                <option value="1|minute">Last 1h (per minute)</option>
+                <option value="6|minute">Last 6h (per minute)</option>
+                <option value="24|hour" selected>Last 24h (per hour)</option>
+                <option value="168|hour">Last 7d (per hour)</option>
+                <option value="720|day">Last 30d (per day)</option>
+            </select>
+            <button type="button" class="btn btn-outline-primary btn-sm" id="refreshBtn">Refresh</button>
+            <div class="dropdown">
+                <button class="btn btn-outline-secondary btn-sm" type="button"
+                        data-bs-toggle="dropdown" title="Menu">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
+                        <path fill-rule="evenodd" d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5"/>
+                    </svg>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li><a class="dropdown-item" href="/events">Event Browser</a></li>
+                    <li><a class="dropdown-item" href="/gateway">Configurazione Gateway</a></li>
+                    <li><a class="dropdown-item" href="/backup">Backup</a></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- KPI summary -->
+    <div class="row g-2 mb-3">
+        <div class="col-6 col-md-2">
+            <div class="card kpi-card h-100"><div class="card-body p-2">
+                <div class="label">Total events</div>
+                <div class="value" id="kpiTotal">&mdash;</div>
+            </div></div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="card kpi-card h-100"><div class="card-body p-2">
+                <div class="label">Today</div>
+                <div class="value" id="kpiToday">&mdash;</div>
+            </div></div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="card kpi-card h-100"><div class="card-body p-2">
+                <div class="label">Last 24h</div>
+                <div class="value" id="kpi24h">&mdash;</div>
+            </div></div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="card kpi-card h-100"><div class="card-body p-2">
+                <div class="label">Last 7d</div>
+                <div class="value" id="kpi7d">&mdash;</div>
+            </div></div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="card kpi-card h-100"><div class="card-body p-2">
+                <div class="label">Event types</div>
+                <div class="value" id="kpiTypes">&mdash;</div>
+            </div></div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="card kpi-card h-100"><div class="card-body p-2">
+                <div class="label">Throughput /min (last 60m)</div>
+                <div class="value" id="kpiThroughput">&mdash;</div>
+            </div></div>
+        </div>
+    </div>
+
+    <!-- Time-series: messages per event type -->
+    <div class="card mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span class="fw-bold">Messaggi ricevuti nel tempo per Event Type</span>
+            <div class="d-flex align-items-center gap-2">
+                <div class="form-check form-switch mb-0">
+                    <input class="form-check-input" type="checkbox" id="stackedToggle" checked>
+                    <label class="form-check-label muted-sm" for="stackedToggle">Stacked</label>
+                </div>
+                <span class="muted-sm" id="tsMeta"></span>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="chart-wrap">
+                <canvas id="timeSeriesChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Split: distribution donut + counts table -->
+    <div class="row g-3 mb-3">
+        <div class="col-lg-5">
+            <div class="card h-100">
+                <div class="card-header fw-bold">Distribuzione per Event Type</div>
+                <div class="card-body">
+                    <div class="chart-wrap-sm">
+                        <canvas id="donutChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-7">
+            <div class="card h-100">
+                <div class="card-header fw-bold">Conteggi e ultimo evento ricevuto</div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-striped mb-0">
+                            <thead class="table-light">
+                            <tr>
+                                <th>Event Type</th>
+                                <th class="text-end">Count</th>
+                                <th class="text-end">%</th>
+                                <th>Ultimo ricevuto</th>
+                            </tr>
+                            </thead>
+                            <tbody id="countsTableBody">
+                            <tr><td colspan="4" class="text-center text-muted py-3">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Processing lag -->
+    <div class="card mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span class="fw-bold">Processing Lag <small class="text-muted">(processed_at &minus; event_time, secondi)</small></span>
+            <span class="muted-sm">
+                Valori alti su p95/p99 indicano backpressure: consumer lento o broker in accumulo.
+            </span>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-sm table-striped mb-0">
+                    <thead class="table-light">
+                    <tr>
+                        <th>Event Type</th>
+                        <th class="text-end">Campioni</th>
+                        <th class="text-end">Avg</th>
+                        <th class="text-end">p50</th>
+                        <th class="text-end">p95</th>
+                        <th class="text-end">p99</th>
+                        <th class="text-end">Max</th>
+                    </tr>
+                    </thead>
+                    <tbody id="lagTableBody">
+                    <tr><td colspan="7" class="text-center text-muted py-3">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Arrival gap distribution -->
+    <div class="card mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span class="fw-bold">Arrival Gap Distribution <small class="text-muted">(delta tra eventi consecutivi, per event type)</small></span>
+            <span class="muted-sm">
+                Concentrazione a sinistra = burst &middot; coda a destra = starvation
+            </span>
+        </div>
+        <div class="card-body">
+            <div class="chart-wrap">
+                <canvas id="gapHistogramChart"></canvas>
+            </div>
+        </div>
+        <div class="card-body pt-0 p-0">
+            <div class="table-responsive">
+                <table class="table table-sm table-striped mb-0">
+                    <thead class="table-light">
+                    <tr>
+                        <th>Event Type</th>
+                        <th class="text-end">Campioni</th>
+                        <th class="text-end">Min</th>
+                        <th class="text-end">p50</th>
+                        <th class="text-end">Avg</th>
+                        <th class="text-end">p95</th>
+                        <th class="text-end">Max</th>
+                    </tr>
+                    </thead>
+                    <tbody id="gapStatsTableBody">
+                    <tr><td colspan="7" class="text-center text-muted py-3">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Silence monitor -->
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span class="fw-bold">Silence Monitor <small class="text-muted">(tempo trascorso dall'ultimo evento ricevuto)</small></span>
+            <span class="muted-sm">
+                Giallo: nessun evento da &gt; 1h &middot; Rosso: &gt; 24h
+            </span>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-sm mb-0">
+                    <thead class="table-light">
+                    <tr>
+                        <th>Event Type</th>
+                        <th>Ultimo evento</th>
+                        <th class="text-end">Silenzio</th>
+                        <th class="text-end">Eventi totali</th>
+                    </tr>
+                    </thead>
+                    <tbody id="silenceTableBody">
+                    <tr><td colspan="4" class="text-center text-muted py-3">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+    /* --- Palette condivisa con events.html --- */
+    var PALETTE = [
+        '#4e79a7','#f28e2b','#e15759','#76b7b2','#59a14f',
+        '#edc948','#b07aa1','#ff9da7','#9c755f','#bab0ac',
+        '#1f77b4','#ff7f0e','#2ca02c','#d62728','#9467bd'
+    ];
+
+    function colorFor(name, idx) {
+        return PALETTE[idx % PALETTE.length];
+    }
+
+    var timeSeriesChart = null;
+    var donutChart = null;
+    var gapHistogramChart = null;
+
+    function getRange() {
+        var parts = document.getElementById('rangeSelect').value.split('|');
+        return { lookbackHours: parseInt(parts[0], 10), granularity: parts[1] };
+    }
+
+    function formatNumber(n) {
+        if (n === null || n === undefined) return '—';
+        return Number(n).toLocaleString('it-IT');
+    }
+
+    function formatDuration(seconds) {
+        if (seconds === null || seconds === undefined) return '—';
+        var s = Number(seconds);
+        if (s < 60) return s.toFixed(1) + 's';
+        if (s < 3600) return (s / 60).toFixed(1) + 'm';
+        if (s < 86400) return (s / 3600).toFixed(1) + 'h';
+        return (s / 86400).toFixed(1) + 'd';
+    }
+
+    function formatTs(raw) {
+        if (!raw) return '';
+        var d = new Date(raw);
+        if (isNaN(d.getTime())) return raw;
+        var pad = function(n, l) { return String(n).padStart(l || 2, '0'); };
+        return pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear() +
+               ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+    }
+
+    function formatBucket(raw, granularity) {
+        if (!raw) return '';
+        var d = new Date(raw);
+        if (isNaN(d.getTime())) return raw;
+        var pad = function(n) { return String(n).padStart(2, '0'); };
+        if (granularity === 'day') {
+            return pad(d.getDate()) + '/' + pad(d.getMonth() + 1);
+        }
+        if (granularity === 'hour') {
+            return pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + ' ' + pad(d.getHours()) + 'h';
+        }
+        return pad(d.getHours()) + ':' + pad(d.getMinutes());
+    }
+
+    /* --- Data loaders --- */
+    function loadSummary() {
+        return fetch('/statistics/api/summary')
+            .then(function(r) { return r.json(); })
+            .then(function(s) {
+                document.getElementById('kpiTotal').textContent      = formatNumber(s.totalEvents);
+                document.getElementById('kpiToday').textContent      = formatNumber(s.eventsToday);
+                document.getElementById('kpi24h').textContent        = formatNumber(s.eventsLast24h);
+                document.getElementById('kpi7d').textContent         = formatNumber(s.eventsLast7d);
+                document.getElementById('kpiTypes').textContent      = formatNumber(s.distinctEventTypes);
+                document.getElementById('kpiThroughput').textContent = formatNumber(s.throughputPerMin);
+            });
+    }
+
+    function loadTimeSeries() {
+        var range = getRange();
+        var url = '/statistics/api/events-over-time?granularity=' + range.granularity +
+                  '&lookbackHours=' + range.lookbackHours;
+        return fetch(url)
+            .then(function(r) { return r.json(); })
+            .then(function(data) { renderTimeSeries(data); });
+    }
+
+    function loadCounts() {
+        var range = getRange();
+        return fetch('/statistics/api/counts-by-type?lookbackHours=' + range.lookbackHours)
+            .then(function(r) { return r.json(); })
+            .then(function(rows) {
+                renderCountsTable(rows);
+                renderDonut(rows);
+            });
+    }
+
+    function loadLag() {
+        var range = getRange();
+        return fetch('/statistics/api/processing-lag?lookbackHours=' + range.lookbackHours)
+            .then(function(r) { return r.json(); })
+            .then(function(rows) { renderLagTable(rows); });
+    }
+
+    function loadArrivalGaps() {
+        var range = getRange();
+        return fetch('/statistics/api/arrival-gaps?lookbackHours=' + range.lookbackHours)
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                renderGapHistogram(data);
+                renderGapStatsTable(data);
+            });
+    }
+
+    function loadSilence() {
+        return fetch('/statistics/api/silence')
+            .then(function(r) { return r.json(); })
+            .then(function(rows) { renderSilenceTable(rows); });
+    }
+
+    /* --- Renderers --- */
+    function renderTimeSeries(data) {
+        var labels = data.buckets.map(function(b) { return formatBucket(b, data.granularity); });
+        var eventTypes = Object.keys(data.series);
+        var stacked = document.getElementById('stackedToggle').checked;
+
+        var datasets = eventTypes.map(function(et, idx) {
+            var c = colorFor(et, idx);
+            return {
+                label: et,
+                data: data.series[et],
+                borderColor: c,
+                backgroundColor: stacked ? c + 'cc' : c + '33',
+                fill: stacked,
+                tension: 0.2,
+                borderWidth: 1.5,
+                pointRadius: data.buckets.length > 60 ? 0 : 2
+            };
+        });
+
+        document.getElementById('tsMeta').textContent =
+            data.buckets.length + ' bucket &middot; ' + eventTypes.length + ' event type';
+
+        if (timeSeriesChart) timeSeriesChart.destroy();
+        var ctx = document.getElementById('timeSeriesChart').getContext('2d');
+        timeSeriesChart = new Chart(ctx, {
+            type: 'line',
+            data: { labels: labels, datasets: datasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
+                    tooltip: { mode: 'index', intersect: false }
+                },
+                scales: {
+                    x: { stacked: stacked, ticks: { maxRotation: 0, autoSkip: true } },
+                    y: { stacked: stacked, beginAtZero: true, ticks: { precision: 0 } }
+                }
+            }
+        });
+    }
+
+    function renderDonut(rows) {
+        var labels = rows.map(function(r) { return r.eventType; });
+        var values = rows.map(function(r) { return r.count; });
+        var colors = rows.map(function(r, i) { return colorFor(r.eventType, i); });
+
+        if (donutChart) donutChart.destroy();
+        var ctx = document.getElementById('donutChart').getContext('2d');
+        donutChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: { labels: labels, datasets: [{ data: values, backgroundColor: colors }] },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 } } }
+                }
+            }
+        });
+    }
+
+    function renderCountsTable(rows) {
+        var tbody = document.getElementById('countsTableBody');
+        if (!rows.length) {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">Nessun evento nel range selezionato.</td></tr>';
+            return;
+        }
+        var total = rows.reduce(function(sum, r) { return sum + r.count; }, 0);
+        tbody.innerHTML = rows.map(function(r, i) {
+            var pct = total > 0 ? (r.count / total * 100).toFixed(1) : '0.0';
+            var c = colorFor(r.eventType, i);
+            return '<tr>' +
+                '<td><span class="badge badge-event" style="background:' + c + '33;color:#212529">' + escHtml(r.eventType) + '</span></td>' +
+                '<td class="text-end">' + formatNumber(r.count) + '</td>' +
+                '<td class="text-end">' + pct + '%</td>' +
+                '<td>' + formatTs(r.lastSeen) + '</td>' +
+                '</tr>';
+        }).join('');
+    }
+
+    function renderLagTable(rows) {
+        var tbody = document.getElementById('lagTableBody');
+        if (!rows.length) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-3">Nessun dato nel range selezionato.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = rows.map(function(r) {
+            return '<tr>' +
+                '<td>' + escHtml(r.eventType) + '</td>' +
+                '<td class="text-end">' + formatNumber(r.count) + '</td>' +
+                '<td class="text-end">' + formatDuration(r.avgSec) + '</td>' +
+                '<td class="text-end">' + formatDuration(r.p50Sec) + '</td>' +
+                '<td class="text-end">' + formatDuration(r.p95Sec) + '</td>' +
+                '<td class="text-end">' + formatDuration(r.p99Sec) + '</td>' +
+                '<td class="text-end">' + formatDuration(r.maxSec) + '</td>' +
+                '</tr>';
+        }).join('');
+    }
+
+    function renderGapHistogram(data) {
+        var labels = data.bucketLabels;
+        var datasets = data.series.map(function(s, idx) {
+            var c = colorFor(s.eventType, idx);
+            return {
+                label: s.eventType,
+                data: s.counts,
+                backgroundColor: c + 'cc',
+                borderColor: c,
+                borderWidth: 1
+            };
+        });
+
+        if (gapHistogramChart) gapHistogramChart.destroy();
+        var ctx = document.getElementById('gapHistogramChart').getContext('2d');
+        gapHistogramChart = new Chart(ctx, {
+            type: 'bar',
+            data: { labels: labels, datasets: datasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
+                    tooltip: { mode: 'index', intersect: false }
+                },
+                scales: {
+                    x: { title: { display: true, text: 'Gap tra eventi consecutivi' } },
+                    y: { beginAtZero: true, ticks: { precision: 0 }, title: { display: true, text: 'Numero di gap' } }
+                }
+            }
+        });
+    }
+
+    function renderGapStatsTable(data) {
+        var tbody = document.getElementById('gapStatsTableBody');
+        if (!data.series.length) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-3">Nessun dato nel range selezionato.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = data.series.map(function(s) {
+            return '<tr>' +
+                '<td>' + escHtml(s.eventType) + '</td>' +
+                '<td class="text-end">' + formatNumber(s.samples) + '</td>' +
+                '<td class="text-end">' + formatDuration(s.minSec) + '</td>' +
+                '<td class="text-end">' + formatDuration(s.p50Sec) + '</td>' +
+                '<td class="text-end">' + formatDuration(s.avgSec) + '</td>' +
+                '<td class="text-end">' + formatDuration(s.p95Sec) + '</td>' +
+                '<td class="text-end">' + formatDuration(s.maxSec) + '</td>' +
+                '</tr>';
+        }).join('');
+    }
+
+    function renderSilenceTable(rows) {
+        var tbody = document.getElementById('silenceTableBody');
+        if (!rows.length) {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">Nessun evento in DB.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = rows.map(function(r) {
+            var cls = '';
+            if (r.silenceSec >= 86400) cls = 'silence-critical';
+            else if (r.silenceSec >= 3600) cls = 'silence-warn';
+            return '<tr class="' + cls + '">' +
+                '<td>' + escHtml(r.eventType) + '</td>' +
+                '<td>' + formatTs(r.lastSeen) + '</td>' +
+                '<td class="text-end">' + formatDuration(r.silenceSec) + '</td>' +
+                '<td class="text-end">' + formatNumber(r.total) + '</td>' +
+                '</tr>';
+        }).join('');
+    }
+
+    function escHtml(s) {
+        var d = document.createElement('div');
+        d.textContent = s == null ? '' : s;
+        return d.innerHTML;
+    }
+
+    function loadAll() {
+        return Promise.all([
+            loadSummary(),
+            loadTimeSeries(),
+            loadCounts(),
+            loadLag(),
+            loadArrivalGaps(),
+            loadSilence()
+        ]);
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        document.getElementById('rangeSelect').addEventListener('change', loadAll);
+        document.getElementById('refreshBtn').addEventListener('click', loadAll);
+        document.getElementById('stackedToggle').addEventListener('change', loadTimeSeries);
+        loadAll();
+    });
+</script>
+</body>
+</html>
