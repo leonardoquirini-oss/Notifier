@@ -3,6 +3,7 @@ package it.berlink.monitoring.controller;
 import it.berlink.monitoring.model.DurationDistribution;
 import it.berlink.monitoring.model.MonitorOverview;
 import it.berlink.monitoring.model.PaginatedResult;
+import it.berlink.monitoring.model.ParseError;
 import it.berlink.monitoring.model.ProcessorStatus;
 import it.berlink.monitoring.model.QueryDetail;
 import it.berlink.monitoring.model.QueryMetric;
@@ -102,6 +103,18 @@ public class QueryMonitorController {
     @GetMapping("/processor/status")
     public ResponseEntity<ProcessorStatus> getProcessorStatus() {
         return ResponseEntity.ok(fileProcessor.getStatus());
+    }
+
+    /**
+     * Returns the most recent parse errors captured by the log file processor.
+     *
+     * @param limit Maximum number of errors to return (default 50)
+     * @return List of parse errors, newest first
+     */
+    @GetMapping("/processor/parse-errors")
+    public ResponseEntity<List<ParseError>> getRecentParseErrors(
+            @RequestParam(defaultValue = "50") int limit) {
+        return ResponseEntity.ok(fileProcessor.getRecentParseErrors(limit));
     }
 
     /**

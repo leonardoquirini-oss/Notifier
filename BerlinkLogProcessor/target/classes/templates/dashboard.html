@@ -142,6 +142,41 @@
             padding: 0.25rem 0.6rem;
             font-size: 0.8rem;
         }
+        .parse-error-line {
+            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+            font-size: 0.78rem;
+            color: #991b1b;
+            background-color: #fef2f2;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            border: 1px solid #fecaca;
+            white-space: pre-wrap;
+            word-break: break-all;
+            max-height: 4.5em;
+            overflow: hidden;
+            cursor: pointer;
+            transition: max-height 0.2s ease;
+        }
+        .parse-error-line.expanded {
+            max-height: 400px;
+            overflow: auto;
+        }
+        .parse-error-timestamp {
+            font-size: 0.78rem;
+            color: #64748b;
+            white-space: nowrap;
+            font-family: 'Monaco', 'Menlo', monospace;
+        }
+        .parse-errors-empty {
+            padding: 2.5rem 1rem;
+            text-align: center;
+            color: #64748b;
+        }
+        .parse-errors-empty i {
+            font-size: 2.5rem;
+            color: #10b981;
+            opacity: 0.7;
+        }
     </style>
 </head>
 <body>
@@ -427,6 +462,48 @@
                 </div>
             </div>
         </div>
+
+        <!-- Recent Parse Errors -->
+        <div class="row g-4 mb-4">
+            <div class="col-12">
+                <div class="card fade-in">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <h6 class="mb-0">
+                            <i class="bi bi-exclamation-triangle text-danger me-2"></i>Recent Parse Errors
+                            <small class="text-muted ms-2">(last 50)</small>
+                        </h6>
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="badge bg-danger" id="parseErrorsBadge">0</span>
+                            <button class="btn btn-outline-secondary btn-sm" id="parseErrorsRefreshBtn" title="Refresh parse errors">
+                                <i class="bi bi-arrow-clockwise"></i>
+                            </button>
+                            <button class="btn btn-outline-secondary btn-sm" id="parseErrorsToggleBtn" title="Expand/collapse">
+                                <i class="bi bi-chevron-up"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body p-0" id="parseErrorsBody">
+                        <div class="table-container" style="max-height: 420px; overflow-y: auto;">
+                            <table class="table table-hover mb-0 align-middle">
+                                <thead class="table-light sticky-top">
+                                    <tr>
+                                        <th style="width: 180px;">Timestamp</th>
+                                        <th>Line (click to expand)</th>
+                                        <th style="width: 60px;" class="text-center"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="parseErrorsTable">
+                                    <tr><td colspan="3" class="parse-errors-empty">
+                                        <i class="bi bi-hourglass-split"></i><br>
+                                        <span>Loading...</span>
+                                    </td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Query Detail Modal -->
@@ -576,6 +653,8 @@
             // Load paginated tables
             loadPaginatedTable('slowest');
             loadPaginatedTable('frequent');
+            // Load parse errors
+            loadParseErrors();
         });
 
         async function loadChartData() {
@@ -913,6 +992,40 @@
                 });
             });
 
+            // Parse errors: manual refresh + expand/collapse card
+            const parseErrorsRefreshBtn = document.getElementById('parseErrorsRefreshBtn');
+            if (parseErrorsRefreshBtn) {
+                parseErrorsRefreshBtn.addEventListener('click', function() {
+                    const icon = this.querySelector('i');
+                    icon.classList.add('spinning');
+                    loadParseErrors().finally(() => {
+                        setTimeout(() => icon.classList.remove('spinning'), 300);
+                    });
+                });
+            }
+            const parseErrorsToggleBtn = document.getElementById('parseErrorsToggleBtn');
+            if (parseErrorsToggleBtn) {
+                parseErrorsToggleBtn.addEventListener('click', function() {
+                    const body = document.getElementById('parseErrorsBody');
+                    const icon = this.querySelector('i');
+                    if (body.style.display === 'none') {
+                        body.style.display = '';
+                        icon.className = 'bi bi-chevron-up';
+                    } else {
+                        body.style.display = 'none';
+                        icon.className = 'bi bi-chevron-down';
+                    }
+                });
+            }
+
+            // Expand/collapse single parse-error line on click
+            document.addEventListener('click', function(e) {
+                const line = e.target.closest('.parse-error-line');
+                if (line) {
+                    line.classList.toggle('expanded');
+                }
+            });
+
             // Filter inputs with debounce
             ['slowest', 'frequent'].forEach(tableName => {
                 const state = tableState[tableName];
@@ -1145,6 +1258,7 @@
                 updateTables();
                 await updateCharts();
                 updateProcessorDetails();
+                loadParseErrors();
                 updateLastUpdateTime();
 
             } catch (error) {
@@ -1214,6 +1328,62 @@
             document.getElementById('processorParseErrors').textContent = processorStatus.parseErrors || 0;
             document.getElementById('processorLastRead').textContent =
                 processorStatus.lastReadTime ? new Date(processorStatus.lastReadTime).toLocaleString() : 'Never';
+        }
+
+        async function loadParseErrors() {
+            try {
+                const response = await fetch('/api/query-monitor/processor/parse-errors?limit=50');
+                if (!response.ok) {
+                    console.error('Failed to fetch parse errors:', response.status);
+                    return;
+                }
+                const errors = await response.json();
+                renderParseErrors(errors);
+            } catch (error) {
+                console.error('Error loading parse errors:', error);
+            }
+        }
+
+        function renderParseErrors(errors) {
+            const tbody = document.getElementById('parseErrorsTable');
+            const badge = document.getElementById('parseErrorsBadge');
+            badge.textContent = errors.length;
+            badge.className = errors.length === 0 ? 'badge bg-success' : 'badge bg-danger';
+
+            if (!errors || errors.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="3" class="parse-errors-empty">
+                    <i class="bi bi-check-circle"></i><br>
+                    <span>No parse errors recorded</span>
+                </td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = errors.map((e, idx) => `
+                <tr>
+                    <td class="parse-error-timestamp">
+                        ${e.timestamp ? new Date(e.timestamp).toLocaleString() : '-'}
+                    </td>
+                    <td>
+                        <div class="parse-error-line" title="Click to expand/collapse">${escapeHtml(e.line)}</div>
+                    </td>
+                    <td class="text-center">
+                        <button class="btn btn-sm btn-outline-secondary"
+                                onclick="copyParseErrorLine(${idx})"
+                                title="Copy line">
+                            <i class="bi bi-clipboard"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+
+            // Store raw lines for copy functionality
+            window._parseErrorLines = errors.map(e => e.line);
+        }
+
+        function copyParseErrorLine(idx) {
+            const line = (window._parseErrorLines || [])[idx];
+            if (!line) return;
+            navigator.clipboard.writeText(line).catch(err => console.error('Copy failed:', err));
         }
 
         function updateLastUpdateTime() {
