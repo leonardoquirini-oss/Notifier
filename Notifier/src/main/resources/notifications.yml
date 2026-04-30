@@ -93,3 +93,10 @@ notifications:
       auto-ack: true
       email-list-specified: true                           # la lista da usare e' specificata nell'evento
       email-sender-name: "Bernardini - Richiesta Prenotazione"
+
+    # Richiesta ANTICIPI_POSTICIPI_DATA_RICHIESTA
+    - stream: "order-check-stream"
+      event-type: order:check        # Evento
+      template-code: "ANTICIPI_POSTICIPI_DATA_RICHIESTA"            # Template messaggio
+      consumer-group: "notifier-group"  
+      auto-ack: true

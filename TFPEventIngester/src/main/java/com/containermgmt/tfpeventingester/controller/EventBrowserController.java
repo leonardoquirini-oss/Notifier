@@ -30,6 +30,7 @@ public class EventBrowserController {
             @RequestParam(required = false) String evtUnitTypeCode,
             @RequestParam(required = false) String evtMessageId,
             @RequestParam(required = false) String evtTrailerPlate,
+            @RequestParam(required = false) String evtType,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate evtDateFrom,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate evtDateTo,
             @RequestParam(defaultValue = "false") boolean evtUnlinkedOnly,
@@ -61,23 +62,26 @@ public class EventBrowserController {
 
         // --- Unit Events ---
         List<Map<String, Object>> unitEvents = eventBrowserService.searchUnitEvents(
-                evtUnitNumber, evtUnitTypeCode, evtMessageId, evtTrailerPlate, evtDateFrom, evtDateTo, evtUnlinkedOnly, evtPage);
+                evtUnitNumber, evtUnitTypeCode, evtMessageId, evtTrailerPlate, evtType, evtDateFrom, evtDateTo, evtUnlinkedOnly, evtPage);
         long evtTotalCount = eventBrowserService.countUnitEvents(
-                evtUnitNumber, evtUnitTypeCode, evtMessageId, evtTrailerPlate, evtDateFrom, evtDateTo, evtUnlinkedOnly);
+                evtUnitNumber, evtUnitTypeCode, evtMessageId, evtTrailerPlate, evtType, evtDateFrom, evtDateTo, evtUnlinkedOnly);
         int evtTotalPages = (int) Math.ceil((double) evtTotalCount / pageSize);
         List<String> evtUnitTypeCodes = eventBrowserService.getDistinctValues("unit_type_code", "evt_unit_events");
+        List<String> evtTypes = eventBrowserService.getDistinctValues("type", "evt_unit_events");
 
         model.addAttribute("unitEvents", unitEvents);
         model.addAttribute("evtTotalCount", evtTotalCount);
         model.addAttribute("evtTotalPages", evtTotalPages);
         model.addAttribute("evtCurrentPage", evtPage);
         model.addAttribute("evtUnitTypeCodes", evtUnitTypeCodes);
+        model.addAttribute("evtTypes", evtTypes);
 
         // Repopulate event filters
         model.addAttribute("evtUnitNumber", evtUnitNumber);
         model.addAttribute("evtUnitTypeCode", evtUnitTypeCode);
         model.addAttribute("evtMessageId", evtMessageId);
         model.addAttribute("evtTrailerPlate", evtTrailerPlate);
+        model.addAttribute("evtType", evtType);
         model.addAttribute("evtDateFrom", evtDateFrom);
         model.addAttribute("evtDateTo", evtDateTo);
         model.addAttribute("evtUnlinkedOnly", evtUnlinkedOnly);

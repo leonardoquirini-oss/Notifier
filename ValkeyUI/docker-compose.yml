@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  valkey-ui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: valkey-ui
+    ports:
+      - "8096:8080"
+    environment:
+      - VALKEY_HOST=${VALKEY_HOST:-valkey-service}
+      - VALKEY_PORT=${VALKEY_PORT:-6379}
+      - VALKEY_DB=${VALKEY_DB:-0}
+      - VALKEY_PASSWORD=${VALKEY_PASSWORD:-}
+      - VALKEYUI_READ_ONLY=${VALKEYUI_READ_ONLY:-false}
+      - VALKEYUI_ADMIN_USERNAME=${VALKEYUI_ADMIN_USERNAME:-admin}
+      - VALKEYUI_ADMIN_TOKEN=${VALKEYUI_ADMIN_TOKEN:-change-me}
+      - VALKEYUI_SAMPLER_ENABLED=${VALKEYUI_SAMPLER_ENABLED:-true}
+      - VALKEYUI_SAMPLER_INTERVAL_MS=${VALKEYUI_SAMPLER_INTERVAL_MS:-60000}
+    networks:
+      - berlink-network
+    restart: unless-stopped
+
+networks:
+  berlink-network:
+    external: true
+    name: berlink-dev_berlink-network

@@ -21,6 +21,7 @@ public class EventBrowserService {
     /** Whitelist of allowed (column, table) combinations for getDistinctValues() */
     private static final Set<String> ALLOWED_DISTINCT_QUERIES = Set.of(
             "unit_type_code:evt_unit_events",
+            "type:evt_unit_events",
             "unit_type_code:evt_unit_positions",
             "asset_type:evt_asset_damages",
             "severity:evt_asset_damages",
@@ -42,7 +43,7 @@ public class EventBrowserService {
     // --- Unit Events ---
 
     public List<Map<String, Object>> searchUnitEvents(String unitNumber, String unitTypeCode,
-                                                       String messageId, String trailerPlate,
+                                                       String messageId, String trailerPlate, String type,
                                                        LocalDate dateFrom, LocalDate dateTo,
                                                        boolean unlinkedOnly, int page) {
         try {
@@ -55,7 +56,7 @@ public class EventBrowserService {
                     "FROM evt_unit_events");
             List<Object> params = new ArrayList<>();
 
-            appendUnitEventsWhere(sql, params, unitNumber, unitTypeCode, messageId, trailerPlate, dateFrom, dateTo, unlinkedOnly);
+            appendUnitEventsWhere(sql, params, unitNumber, unitTypeCode, messageId, trailerPlate, type, dateFrom, dateTo, unlinkedOnly);
 
             sql.append(" ORDER BY event_time DESC LIMIT ? OFFSET ?");
             params.add(PAGE_SIZE);
@@ -67,7 +68,7 @@ public class EventBrowserService {
         }
     }
 
-    public long countUnitEvents(String unitNumber, String unitTypeCode, String messageId, String trailerPlate,
+    public long countUnitEvents(String unitNumber, String unitTypeCode, String messageId, String trailerPlate, String type,
                                 LocalDate dateFrom, LocalDate dateTo, boolean unlinkedOnly) {
         try {
             Base.open(dataSource);
@@ -75,7 +76,7 @@ public class EventBrowserService {
             StringBuilder sql = new StringBuilder("SELECT COUNT(*) AS cnt FROM evt_unit_events");
             List<Object> params = new ArrayList<>();
 
-            appendUnitEventsWhere(sql, params, unitNumber, unitTypeCode, messageId, trailerPlate, dateFrom, dateTo, unlinkedOnly);
+            appendUnitEventsWhere(sql, params, unitNumber, unitTypeCode, messageId, trailerPlate, type, dateFrom, dateTo, unlinkedOnly);
 
             Object result = Base.firstCell(sql.toString(), params.toArray());
             return result != null ? ((Number) result).longValue() : 0;
@@ -360,7 +361,7 @@ public class EventBrowserService {
     // --- Where clause builders ---
 
     private void appendUnitEventsWhere(StringBuilder sql, List<Object> params,
-                                       String unitNumber, String unitTypeCode, String messageId, String trailerPlate,
+                                       String unitNumber, String unitTypeCode, String messageId, String trailerPlate, String type,
                                        LocalDate dateFrom, LocalDate dateTo, boolean unlinkedOnly) {
         List<String> conditions = new ArrayList<>();
 
@@ -379,6 +380,10 @@ public class EventBrowserService {
         if (trailerPlate != null && !trailerPlate.isBlank()) {
             conditions.add("trailer_plate ILIKE ?");
             params.add("%" + trailerPlate.trim() + "%");
+        }
+        if (type != null && !type.isBlank()) {
+            conditions.add("type = ?");
+            params.add(type);
         }
         if (dateFrom != null) {
             conditions.add("event_time >= ?::timestamp");

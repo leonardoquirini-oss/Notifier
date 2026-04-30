@@ -104,6 +104,16 @@
                         </select>
                     </div>
                     <div class="col-auto">
+                        <label class="form-label form-label-sm mb-0">Type</label>
+                        <select name="evtType" class="form-select form-select-sm">
+                            <option value="">All</option>
+                            <option th:each="t : ${evtTypes}"
+                                    th:value="${t}" th:text="${t}"
+                                    th:selected="${t == evtType}">
+                            </option>
+                        </select>
+                    </div>
+                    <div class="col-auto">
                         <label class="form-label form-label-sm mb-0">From</label>
                         <input type="date" name="evtDateFrom" class="form-control form-control-sm"
                                th:value="${evtDateFrom}">
@@ -178,7 +188,7 @@
                            th:href="@{/events(tab='events',
                                evtUnitNumber=${evtUnitNumber}, evtUnitTypeCode=${evtUnitTypeCode},
                                evtMessageId=${evtMessageId}, evtTrailerPlate=${evtTrailerPlate},
-                               evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
+                               evtType=${evtType}, evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
                                evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage - 1},
                                posUnitNumber=${posUnitNumber}, posUnitTypeCode=${posUnitTypeCode},
                                posDateFrom=${posDateFrom}, posDateTo=${posDateTo},
@@ -196,7 +206,7 @@
                             <a class="page-link"
                                th:href="@{/events(tab='events',
                                    evtUnitNumber=${evtUnitNumber}, evtUnitTypeCode=${evtUnitTypeCode},
-                                   evtMessageId=${evtMessageId}, evtTrailerPlate=${evtTrailerPlate}, evtTrailerPlate=${evtTrailerPlate},
+                                   evtMessageId=${evtMessageId}, evtTrailerPlate=${evtTrailerPlate}, evtType=${evtType},
                                    evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
                                    evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${p},
                                    posUnitNumber=${posUnitNumber}, posUnitTypeCode=${posUnitTypeCode},
@@ -216,7 +226,7 @@
                            th:href="@{/events(tab='events',
                                evtUnitNumber=${evtUnitNumber}, evtUnitTypeCode=${evtUnitTypeCode},
                                evtMessageId=${evtMessageId}, evtTrailerPlate=${evtTrailerPlate},
-                               evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
+                               evtType=${evtType}, evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
                                evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage + 1},
                                posUnitNumber=${posUnitNumber}, posUnitTypeCode=${posUnitTypeCode},
                                posDateFrom=${posDateFrom}, posDateTo=${posDateTo},
@@ -243,6 +253,7 @@
                 <input type="hidden" name="evtMessageId" th:value="${evtMessageId}">
                 <input type="hidden" name="evtTrailerPlate" th:value="${evtTrailerPlate}">
                 <input type="hidden" name="evtUnitTypeCode" th:value="${evtUnitTypeCode}">
+                <input type="hidden" name="evtType" th:value="${evtType}">
                 <input type="hidden" name="evtDateFrom" th:value="${evtDateFrom}">
                 <input type="hidden" name="evtDateTo" th:value="${evtDateTo}">
                 <input type="hidden" name="evtUnlinkedOnly" th:value="${evtUnlinkedOnly}">
@@ -350,7 +361,7 @@
                                posUnlinkedOnly=${posUnlinkedOnly}, posPage=${posCurrentPage - 1},
                                evtUnitNumber=${evtUnitNumber}, evtUnitTypeCode=${evtUnitTypeCode},
                                evtMessageId=${evtMessageId}, evtTrailerPlate=${evtTrailerPlate},
-                               evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
+                               evtType=${evtType}, evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
                                evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage},
                                dmgAssetIdentifier=${dmgAssetIdentifier}, dmgAssetType=${dmgAssetType},
                                dmgSeverity=${dmgSeverity}, dmgStatus=${dmgStatus},
@@ -368,7 +379,7 @@
                                    posDateFrom=${posDateFrom}, posDateTo=${posDateTo},
                                    posUnlinkedOnly=${posUnlinkedOnly}, posPage=${p},
                                    evtUnitNumber=${evtUnitNumber}, evtUnitTypeCode=${evtUnitTypeCode},
-                                   evtMessageId=${evtMessageId}, evtTrailerPlate=${evtTrailerPlate}, evtTrailerPlate=${evtTrailerPlate},
+                                   evtMessageId=${evtMessageId}, evtTrailerPlate=${evtTrailerPlate}, evtType=${evtType},
                                    evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
                                    evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage},
                                    dmgAssetIdentifier=${dmgAssetIdentifier}, dmgAssetType=${dmgAssetType},
@@ -388,7 +399,7 @@
                                posUnlinkedOnly=${posUnlinkedOnly}, posPage=${posCurrentPage + 1},
                                evtUnitNumber=${evtUnitNumber}, evtUnitTypeCode=${evtUnitTypeCode},
                                evtMessageId=${evtMessageId}, evtTrailerPlate=${evtTrailerPlate},
-                               evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
+                               evtType=${evtType}, evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
                                evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage},
                                dmgAssetIdentifier=${dmgAssetIdentifier}, dmgAssetType=${dmgAssetType},
                                dmgSeverity=${dmgSeverity}, dmgStatus=${dmgStatus},
@@ -412,6 +423,7 @@
                 <input type="hidden" name="evtMessageId" th:value="${evtMessageId}">
                 <input type="hidden" name="evtTrailerPlate" th:value="${evtTrailerPlate}">
                 <input type="hidden" name="evtUnitTypeCode" th:value="${evtUnitTypeCode}">
+                <input type="hidden" name="evtType" th:value="${evtType}">
                 <input type="hidden" name="evtDateFrom" th:value="${evtDateFrom}">
                 <input type="hidden" name="evtDateTo" th:value="${evtDateTo}">
                 <input type="hidden" name="evtUnlinkedOnly" th:value="${evtUnlinkedOnly}">
@@ -549,7 +561,7 @@
                                dmgUnlinkedOnly=${dmgUnlinkedOnly}, dmgPage=${dmgCurrentPage - 1},
                                evtUnitNumber=${evtUnitNumber}, evtUnitTypeCode=${evtUnitTypeCode},
                                evtMessageId=${evtMessageId}, evtTrailerPlate=${evtTrailerPlate},
-                               evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
+                               evtType=${evtType}, evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
                                evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage},
                                posUnitNumber=${posUnitNumber}, posUnitTypeCode=${posUnitTypeCode},
                                posDateFrom=${posDateFrom}, posDateTo=${posDateTo},
@@ -567,7 +579,7 @@
                                    dmgDateFrom=${dmgDateFrom}, dmgDateTo=${dmgDateTo},
                                    dmgUnlinkedOnly=${dmgUnlinkedOnly}, dmgPage=${p},
                                    evtUnitNumber=${evtUnitNumber}, evtUnitTypeCode=${evtUnitTypeCode},
-                                   evtMessageId=${evtMessageId}, evtTrailerPlate=${evtTrailerPlate}, evtTrailerPlate=${evtTrailerPlate},
+                                   evtMessageId=${evtMessageId}, evtTrailerPlate=${evtTrailerPlate}, evtType=${evtType},
                                    evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
                                    evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage},
                                    posUnitNumber=${posUnitNumber}, posUnitTypeCode=${posUnitTypeCode},
@@ -587,7 +599,7 @@
                                dmgUnlinkedOnly=${dmgUnlinkedOnly}, dmgPage=${dmgCurrentPage + 1},
                                evtUnitNumber=${evtUnitNumber}, evtUnitTypeCode=${evtUnitTypeCode},
                                evtMessageId=${evtMessageId}, evtTrailerPlate=${evtTrailerPlate},
-                               evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
+                               evtType=${evtType}, evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
                                evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage},
                                posUnitNumber=${posUnitNumber}, posUnitTypeCode=${posUnitTypeCode},
                                posDateFrom=${posDateFrom}, posDateTo=${posDateTo},
@@ -610,6 +622,7 @@
                 <input type="hidden" name="evtMessageId" th:value="${evtMessageId}">
                 <input type="hidden" name="evtTrailerPlate" th:value="${evtTrailerPlate}">
                 <input type="hidden" name="evtUnitTypeCode" th:value="${evtUnitTypeCode}">
+                <input type="hidden" name="evtType" th:value="${evtType}">
                 <input type="hidden" name="evtDateFrom" th:value="${evtDateFrom}">
                 <input type="hidden" name="evtDateTo" th:value="${evtDateTo}">
                 <input type="hidden" name="evtUnlinkedOnly" th:value="${evtUnlinkedOnly}">
@@ -698,7 +711,7 @@
                                errDateTo=${errDateTo}, errPage=${errCurrentPage - 1},
                                evtUnitNumber=${evtUnitNumber}, evtUnitTypeCode=${evtUnitTypeCode},
                                evtMessageId=${evtMessageId}, evtTrailerPlate=${evtTrailerPlate},
-                               evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
+                               evtType=${evtType}, evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
                                evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage},
                                posUnitNumber=${posUnitNumber}, posUnitTypeCode=${posUnitTypeCode},
                                posDateFrom=${posDateFrom}, posDateTo=${posDateTo},
@@ -716,7 +729,7 @@
                                    errMessageId=${errMessageId}, errDateFrom=${errDateFrom},
                                    errDateTo=${errDateTo}, errPage=${p},
                                    evtUnitNumber=${evtUnitNumber}, evtUnitTypeCode=${evtUnitTypeCode},
-                                   evtMessageId=${evtMessageId}, evtTrailerPlate=${evtTrailerPlate}, evtTrailerPlate=${evtTrailerPlate},
+                                   evtMessageId=${evtMessageId}, evtTrailerPlate=${evtTrailerPlate}, evtType=${evtType},
                                    evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
                                    evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage},
                                    posUnitNumber=${posUnitNumber}, posUnitTypeCode=${posUnitTypeCode},
@@ -736,7 +749,7 @@
                                errDateTo=${errDateTo}, errPage=${errCurrentPage + 1},
                                evtUnitNumber=${evtUnitNumber}, evtUnitTypeCode=${evtUnitTypeCode},
                                evtMessageId=${evtMessageId}, evtTrailerPlate=${evtTrailerPlate},
-                               evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
+                               evtType=${evtType}, evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
                                evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage},
                                posUnitNumber=${posUnitNumber}, posUnitTypeCode=${posUnitTypeCode},
                                posDateFrom=${posDateFrom}, posDateTo=${posDateTo},

@@ -3,8 +3,12 @@ spring:
     name: notifier-service
 
   # Import additional configuration files
+  # file: legge da WORKDIR (/app) — necessario per il volume mount in docker
+  # classpath: come fallback per dev/test quando il file è nel JAR
   config:
-    import: optional:classpath:notifications.yml
+    import:
+      - optional:file:./notifications.yml
+      - optional:classpath:notifications.yml
 
   # PostgreSQL Database Configuration
   datasource:

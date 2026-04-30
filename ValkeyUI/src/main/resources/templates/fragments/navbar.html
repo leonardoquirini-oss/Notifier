@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<nav th:fragment="navbar(active)" class="navbar navbar-expand-md navbar-dark bg-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" th:href="@{/}">Valkey UI</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#vuiNav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="vuiNav">
+            <ul class="navbar-nav me-auto mb-2 mb-md-0">
+                <li class="nav-item">
+                    <a class="nav-link" th:classappend="${active == 'dashboard'} ? 'active' : ''" th:href="@{/}">Dashboard</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" th:classappend="${active == 'streams'} ? 'active' : ''" th:href="@{/streams}">Streams</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" th:classappend="${active == 'audit'} ? 'active' : ''" th:href="@{/audit}">Audit</a>
+                </li>
+            </ul>
+            <span th:if="${readOnly}" class="badge bg-warning text-dark me-3">READ-ONLY</span>
+            <span class="navbar-text small">Valkey UI v1.0.0</span>
+        </div>
+    </div>
+</nav>
+</body>
+</html>
