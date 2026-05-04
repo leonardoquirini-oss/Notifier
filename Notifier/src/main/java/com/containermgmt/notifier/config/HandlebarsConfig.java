@@ -34,19 +34,26 @@ public class HandlebarsConfig {
     public Handlebars handlebars() {
         Handlebars handlebars = new Handlebars();
 
-        // Registra helper custom per tag {{now "formato"}} o {{now formato}}
+        // Registra helper custom per tag {{now "formato"}}, {{now formato}} o {{now <delta> "formato"}}
         handlebars.registerHelper("now", new Helper<Object>() {
             @Override
             public CharSequence apply(Object context, Options options) throws IOException {
-                // Il formato può essere passato in due modi:
-                // 1. Come context: {{now DD/MM/YYYY}} -> context contiene "DD/MM/YYYY"
-                // 2. Come parametro: {{now "DD/MM/YYYY"}} -> params[0] contiene "DD/MM/YYYY"
+                // Il formato e l'eventuale delta giorni possono essere passati in vari modi:
+                // 1. {{now}} -> default
+                // 2. {{now "DD/MM/YYYY"}} -> context = "DD/MM/YYYY", nessun param
+                // 3. {{now DD/MM/YYYY}} -> context = "DD/MM/YYYY" (senza virgolette)
+                // 4. {{now -7 "DD/MM/YYYY"}} -> context = -7 (Number), params[0] = "DD/MM/YYYY"
                 String format;
+                long deltaDays = 0L;
 
-                if (options.params.length > 0) {
+                if (context instanceof Number) {
+                    // Caso 4: primo argomento è un delta numerico
+                    deltaDays = ((Number) context).longValue();
+                    format = options.param(0, "dd/MM/yyyy HH:mm:ss");
+                } else if (options.params.length > 0) {
                     // Formato passato come parametro con virgolette
                     format = options.param(0, "dd/MM/yyyy HH:mm:ss");
-                } else if (context != null && context instanceof String) {
+                } else if (context instanceof String) {
                     // Formato passato come context senza virgolette
                     format = (String) context;
                 } else {
@@ -54,16 +61,16 @@ public class HandlebarsConfig {
                     format = "dd/MM/yyyy HH:mm:ss";
                 }
 
-                logger.info("###DEBUG### Formato rilevato: {}", format);
+                logger.info("###DEBUG### Formato rilevato: {}, delta giorni: {}", format, deltaDays);
 
                 try {
                     // Converti formato da maiuscolo a pattern Java se necessario
                     String javaPattern = convertToJavaPattern(format);
                     logger.info("###DEBUG### Pattern Java: {}", javaPattern);
 
-                    // Formatta la data corrente
+                    // Formatta la data corrente applicando il delta
                     DateTimeFormatter formatter = DateTimeFormatter.ofPattern(javaPattern);
-                    String result = LocalDateTime.now().format(formatter);
+                    String result = LocalDateTime.now().plusDays(deltaDays).format(formatter);
                     logger.info("###DEBUG### Risultato formattazione: {}", result);
 
                     return result;

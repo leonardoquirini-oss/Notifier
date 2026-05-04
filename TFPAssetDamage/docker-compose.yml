@@ -12,25 +12,25 @@ services:
       - 9229:9229  
     environment:
       # Scheduling
-      - CRON_SCHEDULE=${CRON_SCHEDULE:-0 18 * * *}
-      - TZ=${TZ:-Europe/Rome}
+      - CRON_SCHEDULE=36 9 * * *
+      - TZ=Europe/Rome
 
       # Redis
-      - REDIS_HOST=${REDIS_HOST:-valkey-service}
-      - REDIS_PORT=${REDIS_PORT:-6379}
-      - REDIS_STREAM_KEY=${REDIS_STREAM_KEY:-trailer-damage-stream}
+      - REDIS_HOST=valkey-service
+      - REDIS_PORT=6379
+      - REDIS_STREAM_KEY=trailer-damage-stream
 
       # BERLink API
-      - TRAILER_API_URL=${TRAILER_API_URL:-http://localhost:8080}
-      - TRAILER_API_KEY=${TRAILER_API_KEY:-tfp-test-key-2025-DO-NOT-USE-IN-PRODUCTION}
-      - TRAILER_API_TIMEOUT=${TRAILER_API_TIMEOUT:-30000}
+      - TRAILER_API_URL=http://berlink-backend:8080
+      - TRAILER_API_KEY=tfp-test-key-2025-DO-NOT-USE-IN-PRODUCTION
+      - TRAILER_API_TIMEOUT=30000
 
       # TFP API
-      - TPF_API_URL=${TPF_API_URL}
-      - TPF_API_TIMEOUT=${TPF_API_TIMEOUT:-30000}
-      - TPF_API_RETRY_ATTEMPTS=${TPF_API_RETRY_ATTEMPTS:-3}
-      - TPF_API_USERNAME=${TPF_API_USERNAME}
-      - TPF_API_PASSWORD=${TPF_API_PASSWORD}
+      - TPF_API_URL=https://tfp.circletouch.eu/api
+      - TPF_API_TIMEOUT=30000
+      - TPF_API_RETRY_ATTEMPTS=3
+      - TPF_API_USERNAME=admin.b
+      - TPF_API_PASSWORD=TB_adm_2026.
 
       # Logging
       - LOG_LEVEL=${LOG_LEVEL:-info}
