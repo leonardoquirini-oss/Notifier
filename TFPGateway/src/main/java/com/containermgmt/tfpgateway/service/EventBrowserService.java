@@ -34,7 +34,8 @@ public class EventBrowserService {
     }
 
     public List<Map<String, Object>> searchEvents(String eventType, LocalDate dateFrom,
-                                                    LocalDate dateTo, String messageId, int page) {
+                                                    LocalDate dateTo, String messageId,
+                                                    String unitNumber, String payloadType, int page) {
         try {
             activeJDBCConfig.openConnection();
 
@@ -44,7 +45,7 @@ public class EventBrowserService {
                     "payload::text AS payload_full FROM evt_raw_events");
             List<Object> params = new ArrayList<>();
 
-            appendWhereClause(sql, params, eventType, dateFrom, dateTo, messageId);
+            appendWhereClause(sql, params, eventType, dateFrom, dateTo, messageId, unitNumber, payloadType);
 
             sql.append(" ORDER BY event_time DESC LIMIT ? OFFSET ?");
             params.add(PAGE_SIZE);
@@ -69,14 +70,15 @@ public class EventBrowserService {
         }
     }
 
-    public long countEvents(String eventType, LocalDate dateFrom, LocalDate dateTo, String messageId) {
+    public long countEvents(String eventType, LocalDate dateFrom, LocalDate dateTo, String messageId,
+                            String unitNumber, String payloadType) {
         try {
             activeJDBCConfig.openConnection();
 
             StringBuilder sql = new StringBuilder("SELECT COUNT(*) AS cnt FROM evt_raw_events");
             List<Object> params = new ArrayList<>();
 
-            appendWhereClause(sql, params, eventType, dateFrom, dateTo, messageId);
+            appendWhereClause(sql, params, eventType, dateFrom, dateTo, messageId, unitNumber, payloadType);
 
             Object result = Base.firstCell(sql.toString(), params.toArray());
             return result != null ? ((Number) result).longValue() : 0;
@@ -160,7 +162,8 @@ public class EventBrowserService {
     }
 
     public int resendAllByFilter(String eventType, LocalDate dateFrom, LocalDate dateTo,
-                                 String messageId, boolean forceMessageId) {
+                                 String messageId, String unitNumber, String payloadType,
+                                 boolean forceMessageId) {
         List<Map<String, Object>> events;
         try {
             activeJDBCConfig.openConnection();
@@ -169,7 +172,7 @@ public class EventBrowserService {
                     "SELECT id_event, message_id, event_type, event_time, payload::text AS payload FROM evt_raw_events");
             List<Object> params = new ArrayList<>();
 
-            appendWhereClause(sql, params, eventType, dateFrom, dateTo, messageId);
+            appendWhereClause(sql, params, eventType, dateFrom, dateTo, messageId, unitNumber, payloadType);
             sql.append(" ORDER BY event_time DESC");
 
             events = new ArrayList<>();
@@ -212,14 +215,14 @@ public class EventBrowserService {
             }
         }
 
-        log.info("Resend all by filter: resent {}/{} events (eventType={}, dateFrom={}, dateTo={}, messageId={}, forceMessageId={})",
-                count, events.size(), eventType, dateFrom, dateTo, messageId, forceMessageId);
+        log.info("Resend all by filter: resent {}/{} events (eventType={}, dateFrom={}, dateTo={}, messageId={}, unitNumber={}, payloadType={}, forceMessageId={})",
+                count, events.size(), eventType, dateFrom, dateTo, messageId, unitNumber, payloadType, forceMessageId);
         return count;
     }
 
     private void appendWhereClause(StringBuilder sql, List<Object> params,
                                     String eventType, LocalDate dateFrom, LocalDate dateTo,
-                                    String messageId) {
+                                    String messageId, String unitNumber, String payloadType) {
         List<String> conditions = new ArrayList<>();
 
         if (eventType != null && !eventType.isBlank()) {
@@ -237,6 +240,14 @@ public class EventBrowserService {
         if (messageId != null && !messageId.isBlank()) {
             conditions.add("message_id ILIKE ?");
             params.add("%" + messageId + "%");
+        }
+        if (unitNumber != null && !unitNumber.isBlank()) {
+            conditions.add("payload->>'unitNumber' ILIKE ?");
+            params.add("%" + unitNumber + "%");
+        }
+        if (payloadType != null && !payloadType.isBlank()) {
+            conditions.add("payload->>'type' ILIKE ?");
+            params.add("%" + payloadType + "%");
         }
 
         if (!conditions.isEmpty()) {
