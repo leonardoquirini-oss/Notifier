@@ -1,5 +1,6 @@
 package it.berlink.monitoring.parser;
 
+import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -59,7 +60,12 @@ public class QueryLogParser {
     private final ObjectMapper objectMapper;
 
     public QueryLogParser(ObjectMapper objectMapper) {
-        this.objectMapper = objectMapper;
+        // ActiveJDBC's DB logger emits SQL inside a JSON-looking payload without
+        // escaping backslashes, so regex patterns like '[\s,;.:\-/]+' produce
+        // invalid JSON escapes. Use a lenient copy so these lines parse instead
+        // of being dropped as parse errors.
+        this.objectMapper = objectMapper.copy()
+            .configure(JsonParser.Feature.ALLOW_BACKSLASH_ESCAPING_ANY_CHARACTER, true);
     }
 
     /**
