@@ -33,11 +33,12 @@ public class EventBrowserController {
             @RequestParam(required = false) String messageId,
             @RequestParam(required = false) String unitNumber,
             @RequestParam(required = false) String payloadType,
+            @RequestParam(required = false) String additionalData,
             @RequestParam(defaultValue = "0") int page,
             Model model) {
 
-        List<Map<String, Object>> events = eventBrowserService.searchEvents(eventType, dateFrom, dateTo, messageId, unitNumber, payloadType, page);
-        long totalCount = eventBrowserService.countEvents(eventType, dateFrom, dateTo, messageId, unitNumber, payloadType);
+        List<Map<String, Object>> events = eventBrowserService.searchEvents(eventType, dateFrom, dateTo, messageId, unitNumber, payloadType, additionalData, page);
+        long totalCount = eventBrowserService.countEvents(eventType, dateFrom, dateTo, messageId, unitNumber, payloadType, additionalData);
         List<String> eventTypes = eventBrowserService.getDistinctEventTypes();
 
         int totalPages = (int) Math.ceil((double) totalCount / PAGE_SIZE);
@@ -55,6 +56,7 @@ public class EventBrowserController {
         model.addAttribute("messageId", messageId);
         model.addAttribute("unitNumber", unitNumber);
         model.addAttribute("payloadType", payloadType);
+        model.addAttribute("additionalData", additionalData);
 
         return "events";
     }
@@ -85,10 +87,11 @@ public class EventBrowserController {
             @RequestParam(required = false) String messageId,
             @RequestParam(required = false) String unitNumber,
             @RequestParam(required = false) String payloadType,
+            @RequestParam(required = false) String additionalData,
             @RequestParam(required = false, defaultValue = "false") boolean forceMessageId,
             RedirectAttributes redirectAttributes) {
 
-        int count = eventBrowserService.resendAllByFilter(eventType, dateFrom, dateTo, messageId, unitNumber, payloadType, forceMessageId);
+        int count = eventBrowserService.resendAllByFilter(eventType, dateFrom, dateTo, messageId, unitNumber, payloadType, additionalData, forceMessageId);
 
         if (count == 0) {
             redirectAttributes.addFlashAttribute("errorMessage", "No events matched the filter criteria.");

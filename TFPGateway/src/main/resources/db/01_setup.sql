@@ -18,3 +18,4 @@ CREATE INDEX IF NOT EXISTS idx_events_event_time ON evt_raw_events(event_time);
 CREATE INDEX IF NOT EXISTS idx_events_processed_at ON evt_raw_events(processed_at);
 
 ALTER TABLE evt_raw_events ADD COLUMN IF NOT EXISTS checksum VARCHAR(100);
+ALTER TABLE evt_raw_events ADD COLUMN IF NOT EXISTS additional_data VARCHAR(50);
