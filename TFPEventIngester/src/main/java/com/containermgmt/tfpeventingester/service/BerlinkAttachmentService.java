@@ -88,6 +88,22 @@ public class BerlinkAttachmentService {
     }
 
     /**
+     * Downloads an attachment from the BERLink document repository.
+     *
+     * @param idDocument the BERLink document ID to download
+     * @return the response entity with raw bytes and headers, or null on failure
+     */
+    public ResponseEntity<byte[]> download(Long idDocument) {
+        String url = config.getBaseUrl() + "/api/attachments/" + idDocument + "/download";
+        try {
+            return restTemplate.getForEntity(url, byte[].class);
+        } catch (Exception e) {
+            log.warn("Failed to download BERLink attachment id_document={}: {}", idDocument, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
      * Deletes an attachment from the BERLink document repository.
      * Failures are logged as warnings and not rethrown, so resend flow is not interrupted.
      *

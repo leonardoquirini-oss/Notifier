@@ -6,17 +6,22 @@ import org.javalite.activejdbc.Base;
 import org.springframework.stereotype.Service;
 
 import javax.sql.DataSource;
-import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
 public class EventBrowserService {
 
     private static final int PAGE_SIZE = 50;
+
+    private static final DateTimeFormatter SQL_TS_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     /** Whitelist of allowed (column, table) combinations for getDistinctValues() */
     private static final Set<String> ALLOWED_DISTINCT_QUERIES = Set.of(
@@ -43,8 +48,9 @@ public class EventBrowserService {
     // --- Unit Events ---
 
     public List<Map<String, Object>> searchUnitEvents(String unitNumber, String unitTypeCode,
-                                                       String messageId, String trailerPlate, String type,
-                                                       LocalDate dateFrom, LocalDate dateTo,
+                                                       String messageId, String trailerPlate,
+                                                       String containerNumber, String type,
+                                                       LocalDateTime dateFrom, LocalDateTime dateTo,
                                                        boolean unlinkedOnly, int page) {
         try {
             Base.open(dataSource);
@@ -56,7 +62,8 @@ public class EventBrowserService {
                     "FROM evt_unit_events");
             List<Object> params = new ArrayList<>();
 
-            appendUnitEventsWhere(sql, params, unitNumber, unitTypeCode, messageId, trailerPlate, type, dateFrom, dateTo, unlinkedOnly);
+            appendUnitEventsWhere(sql, params, unitNumber, unitTypeCode, messageId, trailerPlate,
+                    containerNumber, type, dateFrom, dateTo, unlinkedOnly);
 
             sql.append(" ORDER BY event_time DESC LIMIT ? OFFSET ?");
             params.add(PAGE_SIZE);
@@ -68,15 +75,17 @@ public class EventBrowserService {
         }
     }
 
-    public long countUnitEvents(String unitNumber, String unitTypeCode, String messageId, String trailerPlate, String type,
-                                LocalDate dateFrom, LocalDate dateTo, boolean unlinkedOnly) {
+    public long countUnitEvents(String unitNumber, String unitTypeCode, String messageId,
+                                String trailerPlate, String containerNumber, String type,
+                                LocalDateTime dateFrom, LocalDateTime dateTo, boolean unlinkedOnly) {
         try {
             Base.open(dataSource);
 
             StringBuilder sql = new StringBuilder("SELECT COUNT(*) AS cnt FROM evt_unit_events");
             List<Object> params = new ArrayList<>();
 
-            appendUnitEventsWhere(sql, params, unitNumber, unitTypeCode, messageId, trailerPlate, type, dateFrom, dateTo, unlinkedOnly);
+            appendUnitEventsWhere(sql, params, unitNumber, unitTypeCode, messageId, trailerPlate,
+                    containerNumber, type, dateFrom, dateTo, unlinkedOnly);
 
             Object result = Base.firstCell(sql.toString(), params.toArray());
             return result != null ? ((Number) result).longValue() : 0;
@@ -88,7 +97,8 @@ public class EventBrowserService {
     // --- Unit Positions ---
 
     public List<Map<String, Object>> searchUnitPositions(String unitNumber, String unitTypeCode,
-                                                          LocalDate dateFrom, LocalDate dateTo,
+                                                          String vehiclePlate, String containerNumber,
+                                                          LocalDateTime dateFrom, LocalDateTime dateTo,
                                                           boolean unlinkedOnly, int page) {
         try {
             Base.open(dataSource);
@@ -100,7 +110,8 @@ public class EventBrowserService {
                     "FROM evt_unit_positions");
             List<Object> params = new ArrayList<>();
 
-            appendUnitPositionsWhere(sql, params, unitNumber, unitTypeCode, dateFrom, dateTo, unlinkedOnly);
+            appendUnitPositionsWhere(sql, params, unitNumber, unitTypeCode, vehiclePlate, containerNumber,
+                    dateFrom, dateTo, unlinkedOnly);
 
             sql.append(" ORDER BY position_time DESC LIMIT ? OFFSET ?");
             params.add(PAGE_SIZE);
@@ -113,14 +124,16 @@ public class EventBrowserService {
     }
 
     public long countUnitPositions(String unitNumber, String unitTypeCode,
-                                   LocalDate dateFrom, LocalDate dateTo, boolean unlinkedOnly) {
+                                   String vehiclePlate, String containerNumber,
+                                   LocalDateTime dateFrom, LocalDateTime dateTo, boolean unlinkedOnly) {
         try {
             Base.open(dataSource);
 
             StringBuilder sql = new StringBuilder("SELECT COUNT(*) AS cnt FROM evt_unit_positions");
             List<Object> params = new ArrayList<>();
 
-            appendUnitPositionsWhere(sql, params, unitNumber, unitTypeCode, dateFrom, dateTo, unlinkedOnly);
+            appendUnitPositionsWhere(sql, params, unitNumber, unitTypeCode, vehiclePlate, containerNumber,
+                    dateFrom, dateTo, unlinkedOnly);
 
             Object result = Base.firstCell(sql.toString(), params.toArray());
             return result != null ? ((Number) result).longValue() : 0;
@@ -132,8 +145,9 @@ public class EventBrowserService {
     // --- Asset Damages ---
 
     public List<Map<String, Object>> searchAssetDamages(String assetIdentifier, String assetType,
+                                                         String containerNumber,
                                                          String severity, String status,
-                                                         LocalDate dateFrom, LocalDate dateTo,
+                                                         LocalDateTime dateFrom, LocalDateTime dateTo,
                                                          boolean unlinkedOnly, int page) {
         try {
             Base.open(dataSource);
@@ -163,8 +177,8 @@ public class EventBrowserService {
                     "LEFT JOIN evt_unit_damage_labels ul ON ul.id_asset_damage = d.id_asset_damage");
             List<Object> params = new ArrayList<>();
 
-            appendAssetDamagesWhere(sql, params, assetIdentifier, assetType, severity, status,
-                    dateFrom, dateTo, unlinkedOnly);
+            appendAssetDamagesWhere(sql, params, assetIdentifier, assetType, containerNumber,
+                    severity, status, dateFrom, dateTo, unlinkedOnly);
 
             sql.append(" ORDER BY d.report_time DESC NULLS LAST LIMIT ? OFFSET ?");
             params.add(PAGE_SIZE);
@@ -184,23 +198,57 @@ public class EventBrowserService {
                 row.put("activeLabels", activeLabels);
             }
 
+            // Batch-load attachments for all rows (single query, avoid N+1)
+            attachAttachmentsToRows(rows);
+
             return rows;
         } finally {
             Base.close();
         }
     }
 
-    public long countAssetDamages(String assetIdentifier, String assetType,
+    private void attachAttachmentsToRows(List<Map<String, Object>> rows) {
+        if (rows.isEmpty()) return;
+
+        List<Long> ids = rows.stream()
+                .map(r -> r.get("id_asset_damage"))
+                .filter(java.util.Objects::nonNull)
+                .map(o -> ((Number) o).longValue())
+                .collect(Collectors.toList());
+        if (ids.isEmpty()) {
+            for (Map<String, Object> row : rows) row.put("attachments", List.of());
+            return;
+        }
+
+        String placeholders = String.join(",", ids.stream().map(i -> "?").collect(Collectors.toList()));
+        String sql = "SELECT id_damage_attachment, id_asset_damage, id_document, filename " +
+                "FROM evt_damage_attachment WHERE id_asset_damage IN (" + placeholders + ") " +
+                "ORDER BY id_damage_attachment";
+        List<Map<String, Object>> atts = Base.findAll(sql, ids.toArray());
+
+        Map<Long, List<Map<String, Object>>> grouped = new HashMap<>();
+        for (Map<String, Object> a : atts) {
+            Long key = ((Number) a.get("id_asset_damage")).longValue();
+            grouped.computeIfAbsent(key, k -> new ArrayList<>()).add(a);
+        }
+        for (Map<String, Object> row : rows) {
+            Object idObj = row.get("id_asset_damage");
+            Long id = idObj != null ? ((Number) idObj).longValue() : null;
+            row.put("attachments", grouped.getOrDefault(id, List.of()));
+        }
+    }
+
+    public long countAssetDamages(String assetIdentifier, String assetType, String containerNumber,
                                    String severity, String status,
-                                   LocalDate dateFrom, LocalDate dateTo, boolean unlinkedOnly) {
+                                   LocalDateTime dateFrom, LocalDateTime dateTo, boolean unlinkedOnly) {
         try {
             Base.open(dataSource);
 
             StringBuilder sql = new StringBuilder("SELECT COUNT(*) AS cnt FROM evt_asset_damages d");
             List<Object> params = new ArrayList<>();
 
-            appendAssetDamagesWhere(sql, params, assetIdentifier, assetType, severity, status,
-                    dateFrom, dateTo, unlinkedOnly);
+            appendAssetDamagesWhere(sql, params, assetIdentifier, assetType, containerNumber,
+                    severity, status, dateFrom, dateTo, unlinkedOnly);
 
             Object result = Base.firstCell(sql.toString(), params.toArray());
             return result != null ? ((Number) result).longValue() : 0;
@@ -235,7 +283,7 @@ public class EventBrowserService {
     // --- Ingestion Errors ---
 
     public List<Map<String, Object>> searchErrors(String messageId,
-                                                    LocalDate dateFrom, LocalDate dateTo, int page) {
+                                                    LocalDateTime dateFrom, LocalDateTime dateTo, int page) {
         try {
             Base.open(dataSource);
 
@@ -258,7 +306,7 @@ public class EventBrowserService {
         }
     }
 
-    public long countErrors(String messageId, LocalDate dateFrom, LocalDate dateTo) {
+    public long countErrors(String messageId, LocalDateTime dateFrom, LocalDateTime dateTo) {
         try {
             Base.open(dataSource);
 
@@ -361,8 +409,9 @@ public class EventBrowserService {
     // --- Where clause builders ---
 
     private void appendUnitEventsWhere(StringBuilder sql, List<Object> params,
-                                       String unitNumber, String unitTypeCode, String messageId, String trailerPlate, String type,
-                                       LocalDate dateFrom, LocalDate dateTo, boolean unlinkedOnly) {
+                                       String unitNumber, String unitTypeCode, String messageId,
+                                       String trailerPlate, String containerNumber, String type,
+                                       LocalDateTime dateFrom, LocalDateTime dateTo, boolean unlinkedOnly) {
         List<String> conditions = new ArrayList<>();
 
         if (unitNumber != null && !unitNumber.isBlank()) {
@@ -381,17 +430,21 @@ public class EventBrowserService {
             conditions.add("trailer_plate ILIKE ?");
             params.add("%" + trailerPlate.trim() + "%");
         }
+        if (containerNumber != null && !containerNumber.isBlank()) {
+            conditions.add("container_number ILIKE ?");
+            params.add("%" + containerNumber.trim() + "%");
+        }
         if (type != null && !type.isBlank()) {
             conditions.add("type = ?");
             params.add(type);
         }
         if (dateFrom != null) {
             conditions.add("event_time >= ?::timestamp");
-            params.add(dateFrom.toString());
+            params.add(dateFrom.format(SQL_TS_FMT));
         }
         if (dateTo != null) {
-            conditions.add("event_time < (?::date + interval '1 day')");
-            params.add(dateTo.toString());
+            conditions.add("event_time <= ?::timestamp");
+            params.add(dateTo.format(SQL_TS_FMT));
         }
         if (unlinkedOnly) {
             conditions.add("container_number IS NULL AND id_trailer IS NULL AND id_vehicle IS NULL");
@@ -404,7 +457,8 @@ public class EventBrowserService {
 
     private void appendUnitPositionsWhere(StringBuilder sql, List<Object> params,
                                            String unitNumber, String unitTypeCode,
-                                           LocalDate dateFrom, LocalDate dateTo, boolean unlinkedOnly) {
+                                           String vehiclePlate, String containerNumber,
+                                           LocalDateTime dateFrom, LocalDateTime dateTo, boolean unlinkedOnly) {
         List<String> conditions = new ArrayList<>();
 
         if (unitNumber != null && !unitNumber.isBlank()) {
@@ -415,13 +469,21 @@ public class EventBrowserService {
             conditions.add("unit_type_code = ?");
             params.add(unitTypeCode);
         }
+        if (vehiclePlate != null && !vehiclePlate.isBlank()) {
+            conditions.add("vehicle_plate ILIKE ?");
+            params.add("%" + vehiclePlate.trim() + "%");
+        }
+        if (containerNumber != null && !containerNumber.isBlank()) {
+            conditions.add("container_number ILIKE ?");
+            params.add("%" + containerNumber.trim() + "%");
+        }
         if (dateFrom != null) {
             conditions.add("position_time >= ?::timestamp");
-            params.add(dateFrom.toString());
+            params.add(dateFrom.format(SQL_TS_FMT));
         }
         if (dateTo != null) {
-            conditions.add("position_time < (?::date + interval '1 day')");
-            params.add(dateTo.toString());
+            conditions.add("position_time <= ?::timestamp");
+            params.add(dateTo.format(SQL_TS_FMT));
         }
         if (unlinkedOnly) {
             conditions.add("container_number IS NULL AND id_trailer IS NULL AND id_vehicle IS NULL");
@@ -433,9 +495,9 @@ public class EventBrowserService {
     }
 
     private void appendAssetDamagesWhere(StringBuilder sql, List<Object> params,
-                                          String assetIdentifier, String assetType,
+                                          String assetIdentifier, String assetType, String containerNumber,
                                           String severity, String status,
-                                          LocalDate dateFrom, LocalDate dateTo, boolean unlinkedOnly) {
+                                          LocalDateTime dateFrom, LocalDateTime dateTo, boolean unlinkedOnly) {
         List<String> conditions = new ArrayList<>();
 
         if (assetIdentifier != null && !assetIdentifier.isBlank()) {
@@ -445,6 +507,10 @@ public class EventBrowserService {
         if (assetType != null && !assetType.isBlank()) {
             conditions.add("d.asset_type = ?");
             params.add(assetType);
+        }
+        if (containerNumber != null && !containerNumber.isBlank()) {
+            conditions.add("d.container_number ILIKE ?");
+            params.add("%" + containerNumber.trim() + "%");
         }
         if (severity != null && !severity.isBlank()) {
             conditions.add("d.severity = ?");
@@ -456,11 +522,11 @@ public class EventBrowserService {
         }
         if (dateFrom != null) {
             conditions.add("d.report_time >= ?::timestamp");
-            params.add(dateFrom.toString());
+            params.add(dateFrom.format(SQL_TS_FMT));
         }
         if (dateTo != null) {
-            conditions.add("d.report_time < (?::date + interval '1 day')");
-            params.add(dateTo.toString());
+            conditions.add("d.report_time <= ?::timestamp");
+            params.add(dateTo.format(SQL_TS_FMT));
         }
         if (unlinkedOnly) {
             conditions.add("d.container_number IS NULL AND d.id_trailer IS NULL AND d.id_vehicle IS NULL");
@@ -472,7 +538,7 @@ public class EventBrowserService {
     }
 
     private void appendErrorsWhere(StringBuilder sql, List<Object> params,
-                                    String messageId, LocalDate dateFrom, LocalDate dateTo) {
+                                    String messageId, LocalDateTime dateFrom, LocalDateTime dateTo) {
         List<String> conditions = new ArrayList<>();
 
         if (messageId != null && !messageId.isBlank()) {
@@ -481,11 +547,11 @@ public class EventBrowserService {
         }
         if (dateFrom != null) {
             conditions.add("e.ingestion_time >= ?::timestamp");
-            params.add(dateFrom.toString());
+            params.add(dateFrom.format(SQL_TS_FMT));
         }
         if (dateTo != null) {
-            conditions.add("e.ingestion_time < (?::date + interval '1 day')");
-            params.add(dateTo.toString());
+            conditions.add("e.ingestion_time <= ?::timestamp");
+            params.add(dateTo.format(SQL_TS_FMT));
         }
 
         if (!conditions.isEmpty()) {

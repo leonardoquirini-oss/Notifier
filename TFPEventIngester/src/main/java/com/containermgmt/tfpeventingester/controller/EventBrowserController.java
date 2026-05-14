@@ -1,25 +1,42 @@
 package com.containermgmt.tfpeventingester.controller;
 
+import com.containermgmt.tfpeventingester.service.BerlinkAttachmentService;
 import com.containermgmt.tfpeventingester.service.EventBrowserService;
 
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
-import java.time.LocalDate;
+import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 
 @Controller
 public class EventBrowserController {
 
-    private final EventBrowserService eventBrowserService;
+    private static final String DT_PATTERN = "yyyy-MM-dd'T'HH:mm[:ss]";
+    private static final DateTimeFormatter DT_INPUT_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm");
 
-    public EventBrowserController(EventBrowserService eventBrowserService) {
+    private static String fmt(LocalDateTime dt) {
+        return dt != null ? dt.format(DT_INPUT_FMT) : "";
+    }
+
+    private final EventBrowserService eventBrowserService;
+    private final BerlinkAttachmentService berlinkAttachmentService;
+
+    public EventBrowserController(EventBrowserService eventBrowserService,
+                                  BerlinkAttachmentService berlinkAttachmentService) {
         this.eventBrowserService = eventBrowserService;
+        this.berlinkAttachmentService = berlinkAttachmentService;
     }
 
     @GetMapping("/events")
@@ -30,31 +47,35 @@ public class EventBrowserController {
             @RequestParam(required = false) String evtUnitTypeCode,
             @RequestParam(required = false) String evtMessageId,
             @RequestParam(required = false) String evtTrailerPlate,
+            @RequestParam(required = false) String evtContainerNumber,
             @RequestParam(required = false) String evtType,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate evtDateFrom,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate evtDateTo,
+            @RequestParam(required = false) @DateTimeFormat(pattern = DT_PATTERN) LocalDateTime evtDateFrom,
+            @RequestParam(required = false) @DateTimeFormat(pattern = DT_PATTERN) LocalDateTime evtDateTo,
             @RequestParam(defaultValue = "false") boolean evtUnlinkedOnly,
             @RequestParam(defaultValue = "0") int evtPage,
             // Unit Positions filters
             @RequestParam(required = false) String posUnitNumber,
             @RequestParam(required = false) String posUnitTypeCode,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate posDateFrom,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate posDateTo,
+            @RequestParam(required = false) String posVehiclePlate,
+            @RequestParam(required = false) String posContainerNumber,
+            @RequestParam(required = false) @DateTimeFormat(pattern = DT_PATTERN) LocalDateTime posDateFrom,
+            @RequestParam(required = false) @DateTimeFormat(pattern = DT_PATTERN) LocalDateTime posDateTo,
             @RequestParam(defaultValue = "false") boolean posUnlinkedOnly,
             @RequestParam(defaultValue = "0") int posPage,
             // Asset Damages filters
             @RequestParam(required = false) String dmgAssetIdentifier,
             @RequestParam(required = false) String dmgAssetType,
+            @RequestParam(required = false) String dmgContainerNumber,
             @RequestParam(required = false) String dmgSeverity,
             @RequestParam(required = false) String dmgStatus,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dmgDateFrom,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dmgDateTo,
+            @RequestParam(required = false) @DateTimeFormat(pattern = DT_PATTERN) LocalDateTime dmgDateFrom,
+            @RequestParam(required = false) @DateTimeFormat(pattern = DT_PATTERN) LocalDateTime dmgDateTo,
             @RequestParam(defaultValue = "false") boolean dmgUnlinkedOnly,
             @RequestParam(defaultValue = "0") int dmgPage,
             // Ingestion Errors filters
             @RequestParam(required = false) String errMessageId,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate errDateFrom,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate errDateTo,
+            @RequestParam(required = false) @DateTimeFormat(pattern = DT_PATTERN) LocalDateTime errDateFrom,
+            @RequestParam(required = false) @DateTimeFormat(pattern = DT_PATTERN) LocalDateTime errDateTo,
             @RequestParam(defaultValue = "0") int errPage,
             Model model) {
 
@@ -62,9 +83,11 @@ public class EventBrowserController {
 
         // --- Unit Events ---
         List<Map<String, Object>> unitEvents = eventBrowserService.searchUnitEvents(
-                evtUnitNumber, evtUnitTypeCode, evtMessageId, evtTrailerPlate, evtType, evtDateFrom, evtDateTo, evtUnlinkedOnly, evtPage);
+                evtUnitNumber, evtUnitTypeCode, evtMessageId, evtTrailerPlate, evtContainerNumber,
+                evtType, evtDateFrom, evtDateTo, evtUnlinkedOnly, evtPage);
         long evtTotalCount = eventBrowserService.countUnitEvents(
-                evtUnitNumber, evtUnitTypeCode, evtMessageId, evtTrailerPlate, evtType, evtDateFrom, evtDateTo, evtUnlinkedOnly);
+                evtUnitNumber, evtUnitTypeCode, evtMessageId, evtTrailerPlate, evtContainerNumber,
+                evtType, evtDateFrom, evtDateTo, evtUnlinkedOnly);
         int evtTotalPages = (int) Math.ceil((double) evtTotalCount / pageSize);
         List<String> evtUnitTypeCodes = eventBrowserService.getDistinctValues("unit_type_code", "evt_unit_events");
         List<String> evtTypes = eventBrowserService.getDistinctValues("type", "evt_unit_events");
@@ -81,16 +104,19 @@ public class EventBrowserController {
         model.addAttribute("evtUnitTypeCode", evtUnitTypeCode);
         model.addAttribute("evtMessageId", evtMessageId);
         model.addAttribute("evtTrailerPlate", evtTrailerPlate);
+        model.addAttribute("evtContainerNumber", evtContainerNumber);
         model.addAttribute("evtType", evtType);
-        model.addAttribute("evtDateFrom", evtDateFrom);
-        model.addAttribute("evtDateTo", evtDateTo);
+        model.addAttribute("evtDateFromStr", fmt(evtDateFrom));
+        model.addAttribute("evtDateToStr", fmt(evtDateTo));
         model.addAttribute("evtUnlinkedOnly", evtUnlinkedOnly);
 
         // --- Unit Positions ---
         List<Map<String, Object>> unitPositions = eventBrowserService.searchUnitPositions(
-                posUnitNumber, posUnitTypeCode, posDateFrom, posDateTo, posUnlinkedOnly, posPage);
+                posUnitNumber, posUnitTypeCode, posVehiclePlate, posContainerNumber,
+                posDateFrom, posDateTo, posUnlinkedOnly, posPage);
         long posTotalCount = eventBrowserService.countUnitPositions(
-                posUnitNumber, posUnitTypeCode, posDateFrom, posDateTo, posUnlinkedOnly);
+                posUnitNumber, posUnitTypeCode, posVehiclePlate, posContainerNumber,
+                posDateFrom, posDateTo, posUnlinkedOnly);
         int posTotalPages = (int) Math.ceil((double) posTotalCount / pageSize);
         List<String> posUnitTypeCodes = eventBrowserService.getDistinctValues("unit_type_code", "evt_unit_positions");
 
@@ -103,16 +129,18 @@ public class EventBrowserController {
         // Repopulate position filters
         model.addAttribute("posUnitNumber", posUnitNumber);
         model.addAttribute("posUnitTypeCode", posUnitTypeCode);
-        model.addAttribute("posDateFrom", posDateFrom);
-        model.addAttribute("posDateTo", posDateTo);
+        model.addAttribute("posVehiclePlate", posVehiclePlate);
+        model.addAttribute("posContainerNumber", posContainerNumber);
+        model.addAttribute("posDateFromStr", fmt(posDateFrom));
+        model.addAttribute("posDateToStr", fmt(posDateTo));
         model.addAttribute("posUnlinkedOnly", posUnlinkedOnly);
 
         // --- Asset Damages ---
         List<Map<String, Object>> assetDamages = eventBrowserService.searchAssetDamages(
-                dmgAssetIdentifier, dmgAssetType, dmgSeverity, dmgStatus,
+                dmgAssetIdentifier, dmgAssetType, dmgContainerNumber, dmgSeverity, dmgStatus,
                 dmgDateFrom, dmgDateTo, dmgUnlinkedOnly, dmgPage);
         long dmgTotalCount = eventBrowserService.countAssetDamages(
-                dmgAssetIdentifier, dmgAssetType, dmgSeverity, dmgStatus,
+                dmgAssetIdentifier, dmgAssetType, dmgContainerNumber, dmgSeverity, dmgStatus,
                 dmgDateFrom, dmgDateTo, dmgUnlinkedOnly);
         int dmgTotalPages = (int) Math.ceil((double) dmgTotalCount / pageSize);
         List<String> dmgAssetTypes = eventBrowserService.getDistinctValues("asset_type", "evt_asset_damages");
@@ -130,10 +158,11 @@ public class EventBrowserController {
         // Repopulate damage filters
         model.addAttribute("dmgAssetIdentifier", dmgAssetIdentifier);
         model.addAttribute("dmgAssetType", dmgAssetType);
+        model.addAttribute("dmgContainerNumber", dmgContainerNumber);
         model.addAttribute("dmgSeverity", dmgSeverity);
         model.addAttribute("dmgStatus", dmgStatus);
-        model.addAttribute("dmgDateFrom", dmgDateFrom);
-        model.addAttribute("dmgDateTo", dmgDateTo);
+        model.addAttribute("dmgDateFromStr", fmt(dmgDateFrom));
+        model.addAttribute("dmgDateToStr", fmt(dmgDateTo));
         model.addAttribute("dmgUnlinkedOnly", dmgUnlinkedOnly);
 
         // --- Ingestion Errors ---
@@ -149,8 +178,8 @@ public class EventBrowserController {
 
         // Repopulate error filters
         model.addAttribute("errMessageId", errMessageId);
-        model.addAttribute("errDateFrom", errDateFrom);
-        model.addAttribute("errDateTo", errDateTo);
+        model.addAttribute("errDateFromStr", fmt(errDateFrom));
+        model.addAttribute("errDateToStr", fmt(errDateTo));
 
         // Active tab
         model.addAttribute("activeTab", tab);
@@ -181,5 +210,24 @@ public class EventBrowserController {
     @ResponseBody
     public Map<String, Object> getAssetDamageDetail(@RequestParam long id) {
         return eventBrowserService.getAssetDamageDetail(id);
+    }
+
+    @GetMapping("/events/attachments/{idDocument}/download")
+    public ResponseEntity<byte[]> downloadAttachment(@PathVariable Long idDocument,
+                                                      @RequestParam(required = false) String filename) {
+        ResponseEntity<byte[]> upstream = berlinkAttachmentService.download(idDocument);
+        if (upstream == null || !upstream.getStatusCode().is2xxSuccessful() || upstream.getBody() == null) {
+            return ResponseEntity.notFound().build();
+        }
+        HttpHeaders headers = new HttpHeaders();
+        MediaType contentType = upstream.getHeaders().getContentType();
+        headers.setContentType(contentType != null ? contentType : MediaType.APPLICATION_OCTET_STREAM);
+        String downloadName = (filename != null && !filename.isBlank())
+                ? filename
+                : "attachment-" + idDocument;
+        String encoded = java.net.URLEncoder.encode(downloadName, StandardCharsets.UTF_8).replace("+", "%20");
+        headers.add(HttpHeaders.CONTENT_DISPOSITION,
+                "attachment; filename=\"" + downloadName.replace("\"", "") + "\"; filename*=UTF-8''" + encoded);
+        return ResponseEntity.ok().headers(headers).body(upstream.getBody());
     }
 }

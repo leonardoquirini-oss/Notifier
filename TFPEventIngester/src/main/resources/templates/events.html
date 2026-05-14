@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>TFP Event Ingester - Event Browser</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
           integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
     <style>
@@ -12,6 +13,10 @@
         .msgid-cell { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .unit-cell  { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .desc-cell, .notes-cell { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .att-link { display: inline-flex; flex-direction: column; align-items: center;
+                    text-decoration: none; margin: 0 4px; font-size: 0.7rem; line-height: 1; }
+        .att-link i { font-size: 1.25rem; }
+        .att-link .att-id { margin-top: 2px; color: #555; }
     </style>
 </head>
 <body class="bg-light">
@@ -58,23 +63,26 @@
                 <!-- Preserve positions tab state -->
                 <input type="hidden" name="posUnitNumber" th:value="${posUnitNumber}">
                 <input type="hidden" name="posUnitTypeCode" th:value="${posUnitTypeCode}">
-                <input type="hidden" name="posDateFrom" th:value="${posDateFrom}">
-                <input type="hidden" name="posDateTo" th:value="${posDateTo}">
+                <input type="hidden" name="posVehiclePlate" th:value="${posVehiclePlate}">
+                <input type="hidden" name="posContainerNumber" th:value="${posContainerNumber}">
+                <input type="hidden" name="posDateFrom" th:value="${posDateFromStr}">
+                <input type="hidden" name="posDateTo" th:value="${posDateToStr}">
                 <input type="hidden" name="posUnlinkedOnly" th:value="${posUnlinkedOnly}">
                 <input type="hidden" name="posPage" th:value="${posCurrentPage}">
                 <!-- Preserve damages tab state -->
                 <input type="hidden" name="dmgAssetIdentifier" th:value="${dmgAssetIdentifier}">
                 <input type="hidden" name="dmgAssetType" th:value="${dmgAssetType}">
+                <input type="hidden" name="dmgContainerNumber" th:value="${dmgContainerNumber}">
                 <input type="hidden" name="dmgSeverity" th:value="${dmgSeverity}">
                 <input type="hidden" name="dmgStatus" th:value="${dmgStatus}">
-                <input type="hidden" name="dmgDateFrom" th:value="${dmgDateFrom}">
-                <input type="hidden" name="dmgDateTo" th:value="${dmgDateTo}">
+                <input type="hidden" name="dmgDateFrom" th:value="${dmgDateFromStr}">
+                <input type="hidden" name="dmgDateTo" th:value="${dmgDateToStr}">
                 <input type="hidden" name="dmgUnlinkedOnly" th:value="${dmgUnlinkedOnly}">
                 <input type="hidden" name="dmgPage" th:value="${dmgCurrentPage}">
                 <!-- Preserve errors tab state -->
                 <input type="hidden" name="errMessageId" th:value="${errMessageId}">
-                <input type="hidden" name="errDateFrom" th:value="${errDateFrom}">
-                <input type="hidden" name="errDateTo" th:value="${errDateTo}">
+                <input type="hidden" name="errDateFrom" th:value="${errDateFromStr}">
+                <input type="hidden" name="errDateTo" th:value="${errDateToStr}">
                 <input type="hidden" name="errPage" th:value="${errCurrentPage}">
 
                 <div class="row g-2 align-items-end">
@@ -92,6 +100,11 @@
                         <label class="form-label form-label-sm mb-0">Trailer Plate</label>
                         <input type="text" name="evtTrailerPlate" class="form-control form-control-sm"
                                placeholder="Search..." th:value="${evtTrailerPlate}">
+                    </div>
+                    <div class="col-auto">
+                        <label class="form-label form-label-sm mb-0">Container Number</label>
+                        <input type="text" name="evtContainerNumber" class="form-control form-control-sm"
+                               placeholder="Search..." th:value="${evtContainerNumber}">
                     </div>
                     <div class="col-auto">
                         <label class="form-label form-label-sm mb-0">Unit Type</label>
@@ -115,13 +128,13 @@
                     </div>
                     <div class="col-auto">
                         <label class="form-label form-label-sm mb-0">From</label>
-                        <input type="date" name="evtDateFrom" class="form-control form-control-sm"
-                               th:value="${evtDateFrom}">
+                        <input type="datetime-local" name="evtDateFrom" class="form-control form-control-sm"
+                               th:value="${evtDateFromStr}">
                     </div>
                     <div class="col-auto">
                         <label class="form-label form-label-sm mb-0">To</label>
-                        <input type="date" name="evtDateTo" class="form-control form-control-sm"
-                               th:value="${evtDateTo}">
+                        <input type="datetime-local" name="evtDateTo" class="form-control form-control-sm"
+                               th:value="${evtDateToStr}">
                     </div>
                     <div class="col-auto">
                         <div class="form-check mt-3">
@@ -148,12 +161,12 @@
                         <th>Unit Type</th>
                         <th>Unit Number</th>
                         <th>Trailer Plate</th>
+                        <th>Container Number</th>
                         <th>Type</th>
                         <th>Event Time</th>
                         <th>Create Time</th>
                         <th>ID Trailer</th>
                         <th>ID Vehicle</th>
-                        <th>Container Number</th>
                     </tr>
                     </thead>
                     <tbody>
@@ -166,12 +179,12 @@
                         <td class="unit-cell" th:title="${evt['unit_number']}" th:text="${evt['unit_number']}"
                             th:classappend="${evt['container_number'] == null and evt['id_trailer'] == null and evt['id_vehicle'] == null} ? 'table-danger'"></td>
                         <td th:text="${evt['trailer_plate']}"></td>
+                        <td th:text="${evt['container_number']}"></td>
                         <td th:text="${evt['type']}"></td>
                         <td class="date-cell" th:text="${evt['event_time']}"></td>
                         <td class="date-cell" th:text="${evt['create_time']}"></td>
                         <td th:text="${evt['id_trailer']}"></td>
                         <td th:text="${evt['id_vehicle']}"></td>
-                        <td th:text="${evt['container_number']}"></td>
                     </tr>
                     <tr th:if="${#lists.isEmpty(unitEvents)}">
                         <td colspan="11" class="text-center text-muted py-4">No events found.</td>
@@ -188,17 +201,20 @@
                            th:href="@{/events(tab='events',
                                evtUnitNumber=${evtUnitNumber}, evtUnitTypeCode=${evtUnitTypeCode},
                                evtMessageId=${evtMessageId}, evtTrailerPlate=${evtTrailerPlate},
-                               evtType=${evtType}, evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
+                               evtContainerNumber=${evtContainerNumber},
+                               evtType=${evtType}, evtDateFrom=${evtDateFromStr}, evtDateTo=${evtDateToStr},
                                evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage - 1},
                                posUnitNumber=${posUnitNumber}, posUnitTypeCode=${posUnitTypeCode},
-                               posDateFrom=${posDateFrom}, posDateTo=${posDateTo},
+                               posVehiclePlate=${posVehiclePlate}, posContainerNumber=${posContainerNumber},
+                               posDateFrom=${posDateFromStr}, posDateTo=${posDateToStr},
                                posUnlinkedOnly=${posUnlinkedOnly}, posPage=${posCurrentPage},
                                dmgAssetIdentifier=${dmgAssetIdentifier}, dmgAssetType=${dmgAssetType},
+                               dmgContainerNumber=${dmgContainerNumber},
                                dmgSeverity=${dmgSeverity}, dmgStatus=${dmgStatus},
-                               dmgDateFrom=${dmgDateFrom}, dmgDateTo=${dmgDateTo},
+                               dmgDateFrom=${dmgDateFromStr}, dmgDateTo=${dmgDateToStr},
                                dmgUnlinkedOnly=${dmgUnlinkedOnly}, dmgPage=${dmgCurrentPage},
-                               errMessageId=${errMessageId}, errDateFrom=${errDateFrom},
-                               errDateTo=${errDateTo}, errPage=${errCurrentPage})}">&laquo;</a>
+                               errMessageId=${errMessageId}, errDateFrom=${errDateFromStr},
+                               errDateTo=${errDateToStr}, errPage=${errCurrentPage})}">&laquo;</a>
                     </li>
                     <th:block th:each="p : ${#numbers.sequence(0, evtTotalPages - 1)}">
                         <li class="page-item" th:classappend="${p == evtCurrentPage} ? 'active'"
@@ -206,18 +222,21 @@
                             <a class="page-link"
                                th:href="@{/events(tab='events',
                                    evtUnitNumber=${evtUnitNumber}, evtUnitTypeCode=${evtUnitTypeCode},
-                                   evtMessageId=${evtMessageId}, evtTrailerPlate=${evtTrailerPlate}, evtType=${evtType},
-                                   evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
+                                   evtMessageId=${evtMessageId}, evtTrailerPlate=${evtTrailerPlate},
+                                   evtContainerNumber=${evtContainerNumber}, evtType=${evtType},
+                                   evtDateFrom=${evtDateFromStr}, evtDateTo=${evtDateToStr},
                                    evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${p},
                                    posUnitNumber=${posUnitNumber}, posUnitTypeCode=${posUnitTypeCode},
-                                   posDateFrom=${posDateFrom}, posDateTo=${posDateTo},
+                                   posVehiclePlate=${posVehiclePlate}, posContainerNumber=${posContainerNumber},
+                                   posDateFrom=${posDateFromStr}, posDateTo=${posDateToStr},
                                    posUnlinkedOnly=${posUnlinkedOnly}, posPage=${posCurrentPage},
                                    dmgAssetIdentifier=${dmgAssetIdentifier}, dmgAssetType=${dmgAssetType},
+                                   dmgContainerNumber=${dmgContainerNumber},
                                    dmgSeverity=${dmgSeverity}, dmgStatus=${dmgStatus},
-                                   dmgDateFrom=${dmgDateFrom}, dmgDateTo=${dmgDateTo},
+                                   dmgDateFrom=${dmgDateFromStr}, dmgDateTo=${dmgDateToStr},
                                    dmgUnlinkedOnly=${dmgUnlinkedOnly}, dmgPage=${dmgCurrentPage},
-                                   errMessageId=${errMessageId}, errDateFrom=${errDateFrom},
-                                   errDateTo=${errDateTo}, errPage=${errCurrentPage})}"
+                                   errMessageId=${errMessageId}, errDateFrom=${errDateFromStr},
+                                   errDateTo=${errDateToStr}, errPage=${errCurrentPage})}"
                                th:text="${p + 1}"></a>
                         </li>
                     </th:block>
@@ -226,17 +245,20 @@
                            th:href="@{/events(tab='events',
                                evtUnitNumber=${evtUnitNumber}, evtUnitTypeCode=${evtUnitTypeCode},
                                evtMessageId=${evtMessageId}, evtTrailerPlate=${evtTrailerPlate},
-                               evtType=${evtType}, evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
+                               evtContainerNumber=${evtContainerNumber},
+                               evtType=${evtType}, evtDateFrom=${evtDateFromStr}, evtDateTo=${evtDateToStr},
                                evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage + 1},
                                posUnitNumber=${posUnitNumber}, posUnitTypeCode=${posUnitTypeCode},
-                               posDateFrom=${posDateFrom}, posDateTo=${posDateTo},
+                               posVehiclePlate=${posVehiclePlate}, posContainerNumber=${posContainerNumber},
+                               posDateFrom=${posDateFromStr}, posDateTo=${posDateToStr},
                                posUnlinkedOnly=${posUnlinkedOnly}, posPage=${posCurrentPage},
                                dmgAssetIdentifier=${dmgAssetIdentifier}, dmgAssetType=${dmgAssetType},
+                               dmgContainerNumber=${dmgContainerNumber},
                                dmgSeverity=${dmgSeverity}, dmgStatus=${dmgStatus},
-                               dmgDateFrom=${dmgDateFrom}, dmgDateTo=${dmgDateTo},
+                               dmgDateFrom=${dmgDateFromStr}, dmgDateTo=${dmgDateToStr},
                                dmgUnlinkedOnly=${dmgUnlinkedOnly}, dmgPage=${dmgCurrentPage},
-                               errMessageId=${errMessageId}, errDateFrom=${errDateFrom},
-                               errDateTo=${errDateTo}, errPage=${errCurrentPage})}">&raquo;</a>
+                               errMessageId=${errMessageId}, errDateFrom=${errDateFromStr},
+                               errDateTo=${errDateToStr}, errPage=${errCurrentPage})}">&raquo;</a>
                     </li>
                 </ul>
             </nav>
@@ -252,25 +274,27 @@
                 <input type="hidden" name="evtUnitNumber" th:value="${evtUnitNumber}">
                 <input type="hidden" name="evtMessageId" th:value="${evtMessageId}">
                 <input type="hidden" name="evtTrailerPlate" th:value="${evtTrailerPlate}">
+                <input type="hidden" name="evtContainerNumber" th:value="${evtContainerNumber}">
                 <input type="hidden" name="evtUnitTypeCode" th:value="${evtUnitTypeCode}">
                 <input type="hidden" name="evtType" th:value="${evtType}">
-                <input type="hidden" name="evtDateFrom" th:value="${evtDateFrom}">
-                <input type="hidden" name="evtDateTo" th:value="${evtDateTo}">
+                <input type="hidden" name="evtDateFrom" th:value="${evtDateFromStr}">
+                <input type="hidden" name="evtDateTo" th:value="${evtDateToStr}">
                 <input type="hidden" name="evtUnlinkedOnly" th:value="${evtUnlinkedOnly}">
                 <input type="hidden" name="evtPage" th:value="${evtCurrentPage}">
                 <!-- Preserve damages tab state -->
                 <input type="hidden" name="dmgAssetIdentifier" th:value="${dmgAssetIdentifier}">
                 <input type="hidden" name="dmgAssetType" th:value="${dmgAssetType}">
+                <input type="hidden" name="dmgContainerNumber" th:value="${dmgContainerNumber}">
                 <input type="hidden" name="dmgSeverity" th:value="${dmgSeverity}">
                 <input type="hidden" name="dmgStatus" th:value="${dmgStatus}">
-                <input type="hidden" name="dmgDateFrom" th:value="${dmgDateFrom}">
-                <input type="hidden" name="dmgDateTo" th:value="${dmgDateTo}">
+                <input type="hidden" name="dmgDateFrom" th:value="${dmgDateFromStr}">
+                <input type="hidden" name="dmgDateTo" th:value="${dmgDateToStr}">
                 <input type="hidden" name="dmgUnlinkedOnly" th:value="${dmgUnlinkedOnly}">
                 <input type="hidden" name="dmgPage" th:value="${dmgCurrentPage}">
                 <!-- Preserve errors tab state -->
                 <input type="hidden" name="errMessageId" th:value="${errMessageId}">
-                <input type="hidden" name="errDateFrom" th:value="${errDateFrom}">
-                <input type="hidden" name="errDateTo" th:value="${errDateTo}">
+                <input type="hidden" name="errDateFrom" th:value="${errDateFromStr}">
+                <input type="hidden" name="errDateTo" th:value="${errDateToStr}">
                 <input type="hidden" name="errPage" th:value="${errCurrentPage}">
 
                 <div class="row g-2 align-items-end">
@@ -278,6 +302,16 @@
                         <label class="form-label form-label-sm mb-0">Unit Number</label>
                         <input type="text" name="posUnitNumber" class="form-control form-control-sm"
                                placeholder="Search..." th:value="${posUnitNumber}">
+                    </div>
+                    <div class="col-auto">
+                        <label class="form-label form-label-sm mb-0">Vehicle Plate</label>
+                        <input type="text" name="posVehiclePlate" class="form-control form-control-sm"
+                               placeholder="Search..." th:value="${posVehiclePlate}">
+                    </div>
+                    <div class="col-auto">
+                        <label class="form-label form-label-sm mb-0">Container Number</label>
+                        <input type="text" name="posContainerNumber" class="form-control form-control-sm"
+                               placeholder="Search..." th:value="${posContainerNumber}">
                     </div>
                     <div class="col-auto">
                         <label class="form-label form-label-sm mb-0">Unit Type</label>
@@ -291,13 +325,13 @@
                     </div>
                     <div class="col-auto">
                         <label class="form-label form-label-sm mb-0">From</label>
-                        <input type="date" name="posDateFrom" class="form-control form-control-sm"
-                               th:value="${posDateFrom}">
+                        <input type="datetime-local" name="posDateFrom" class="form-control form-control-sm"
+                               th:value="${posDateFromStr}">
                     </div>
                     <div class="col-auto">
                         <label class="form-label form-label-sm mb-0">To</label>
-                        <input type="date" name="posDateTo" class="form-control form-control-sm"
-                               th:value="${posDateTo}">
+                        <input type="datetime-local" name="posDateTo" class="form-control form-control-sm"
+                               th:value="${posDateToStr}">
                     </div>
                     <div class="col-auto">
                         <div class="form-check mt-3">
@@ -323,9 +357,11 @@
                         <th>Message ID</th>
                         <th>Unit Type</th>
                         <th>Unit Number</th>
+                        <th>Vehicle Plate</th>
+                        <th>Container Number</th>
+                        <th>Position Time</th>
                         <th>Lat</th>
                         <th>Lon</th>
-                        <th>Position Time</th>
                         <th>Create Time</th>
                     </tr>
                     </thead>
@@ -338,13 +374,15 @@
                         <td th:text="${pos['unit_type_code']}"></td>
                         <td class="unit-cell" th:title="${pos['unit_number']}" th:text="${pos['unit_number']}"
                             th:classappend="${pos['container_number'] == null and pos['id_trailer'] == null and pos['id_vehicle'] == null} ? 'table-danger'"></td>
+                        <td th:text="${pos['vehicle_plate']}"></td>
+                        <td th:text="${pos['container_number']}"></td>
+                        <td class="date-cell" th:text="${pos['position_time']}"></td>
                         <td th:text="${pos['latitude']}"></td>
                         <td th:text="${pos['longitude']}"></td>
-                        <td class="date-cell" th:text="${pos['position_time']}"></td>
                         <td class="date-cell" th:text="${pos['create_time']}"></td>
                     </tr>
                     <tr th:if="${#lists.isEmpty(unitPositions)}">
-                        <td colspan="8" class="text-center text-muted py-4">No positions found.</td>
+                        <td colspan="10" class="text-center text-muted py-4">No positions found.</td>
                     </tr>
                     </tbody>
                 </table>
@@ -357,18 +395,21 @@
                         <a class="page-link"
                            th:href="@{/events(tab='positions',
                                posUnitNumber=${posUnitNumber}, posUnitTypeCode=${posUnitTypeCode},
-                               posDateFrom=${posDateFrom}, posDateTo=${posDateTo},
+                               posVehiclePlate=${posVehiclePlate}, posContainerNumber=${posContainerNumber},
+                               posDateFrom=${posDateFromStr}, posDateTo=${posDateToStr},
                                posUnlinkedOnly=${posUnlinkedOnly}, posPage=${posCurrentPage - 1},
                                evtUnitNumber=${evtUnitNumber}, evtUnitTypeCode=${evtUnitTypeCode},
                                evtMessageId=${evtMessageId}, evtTrailerPlate=${evtTrailerPlate},
-                               evtType=${evtType}, evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
+                               evtContainerNumber=${evtContainerNumber},
+                               evtType=${evtType}, evtDateFrom=${evtDateFromStr}, evtDateTo=${evtDateToStr},
                                evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage},
                                dmgAssetIdentifier=${dmgAssetIdentifier}, dmgAssetType=${dmgAssetType},
+                               dmgContainerNumber=${dmgContainerNumber},
                                dmgSeverity=${dmgSeverity}, dmgStatus=${dmgStatus},
-                               dmgDateFrom=${dmgDateFrom}, dmgDateTo=${dmgDateTo},
+                               dmgDateFrom=${dmgDateFromStr}, dmgDateTo=${dmgDateToStr},
                                dmgUnlinkedOnly=${dmgUnlinkedOnly}, dmgPage=${dmgCurrentPage},
-                               errMessageId=${errMessageId}, errDateFrom=${errDateFrom},
-                               errDateTo=${errDateTo}, errPage=${errCurrentPage})}">&laquo;</a>
+                               errMessageId=${errMessageId}, errDateFrom=${errDateFromStr},
+                               errDateTo=${errDateToStr}, errPage=${errCurrentPage})}">&laquo;</a>
                     </li>
                     <th:block th:each="p : ${#numbers.sequence(0, posTotalPages - 1)}">
                         <li class="page-item" th:classappend="${p == posCurrentPage} ? 'active'"
@@ -376,18 +417,21 @@
                             <a class="page-link"
                                th:href="@{/events(tab='positions',
                                    posUnitNumber=${posUnitNumber}, posUnitTypeCode=${posUnitTypeCode},
-                                   posDateFrom=${posDateFrom}, posDateTo=${posDateTo},
+                                   posVehiclePlate=${posVehiclePlate}, posContainerNumber=${posContainerNumber},
+                                   posDateFrom=${posDateFromStr}, posDateTo=${posDateToStr},
                                    posUnlinkedOnly=${posUnlinkedOnly}, posPage=${p},
                                    evtUnitNumber=${evtUnitNumber}, evtUnitTypeCode=${evtUnitTypeCode},
-                                   evtMessageId=${evtMessageId}, evtTrailerPlate=${evtTrailerPlate}, evtType=${evtType},
-                                   evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
+                                   evtMessageId=${evtMessageId}, evtTrailerPlate=${evtTrailerPlate},
+                                   evtContainerNumber=${evtContainerNumber}, evtType=${evtType},
+                                   evtDateFrom=${evtDateFromStr}, evtDateTo=${evtDateToStr},
                                    evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage},
                                    dmgAssetIdentifier=${dmgAssetIdentifier}, dmgAssetType=${dmgAssetType},
+                                   dmgContainerNumber=${dmgContainerNumber},
                                    dmgSeverity=${dmgSeverity}, dmgStatus=${dmgStatus},
-                                   dmgDateFrom=${dmgDateFrom}, dmgDateTo=${dmgDateTo},
+                                   dmgDateFrom=${dmgDateFromStr}, dmgDateTo=${dmgDateToStr},
                                    dmgUnlinkedOnly=${dmgUnlinkedOnly}, dmgPage=${dmgCurrentPage},
-                                   errMessageId=${errMessageId}, errDateFrom=${errDateFrom},
-                                   errDateTo=${errDateTo}, errPage=${errCurrentPage})}"
+                                   errMessageId=${errMessageId}, errDateFrom=${errDateFromStr},
+                                   errDateTo=${errDateToStr}, errPage=${errCurrentPage})}"
                                th:text="${p + 1}"></a>
                         </li>
                     </th:block>
@@ -395,18 +439,21 @@
                         <a class="page-link"
                            th:href="@{/events(tab='positions',
                                posUnitNumber=${posUnitNumber}, posUnitTypeCode=${posUnitTypeCode},
-                               posDateFrom=${posDateFrom}, posDateTo=${posDateTo},
+                               posVehiclePlate=${posVehiclePlate}, posContainerNumber=${posContainerNumber},
+                               posDateFrom=${posDateFromStr}, posDateTo=${posDateToStr},
                                posUnlinkedOnly=${posUnlinkedOnly}, posPage=${posCurrentPage + 1},
                                evtUnitNumber=${evtUnitNumber}, evtUnitTypeCode=${evtUnitTypeCode},
                                evtMessageId=${evtMessageId}, evtTrailerPlate=${evtTrailerPlate},
-                               evtType=${evtType}, evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
+                               evtContainerNumber=${evtContainerNumber},
+                               evtType=${evtType}, evtDateFrom=${evtDateFromStr}, evtDateTo=${evtDateToStr},
                                evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage},
                                dmgAssetIdentifier=${dmgAssetIdentifier}, dmgAssetType=${dmgAssetType},
+                               dmgContainerNumber=${dmgContainerNumber},
                                dmgSeverity=${dmgSeverity}, dmgStatus=${dmgStatus},
-                               dmgDateFrom=${dmgDateFrom}, dmgDateTo=${dmgDateTo},
+                               dmgDateFrom=${dmgDateFromStr}, dmgDateTo=${dmgDateToStr},
                                dmgUnlinkedOnly=${dmgUnlinkedOnly}, dmgPage=${dmgCurrentPage},
-                               errMessageId=${errMessageId}, errDateFrom=${errDateFrom},
-                               errDateTo=${errDateTo}, errPage=${errCurrentPage})}">&raquo;</a>
+                               errMessageId=${errMessageId}, errDateFrom=${errDateFromStr},
+                               errDateTo=${errDateToStr}, errPage=${errCurrentPage})}">&raquo;</a>
                     </li>
                 </ul>
             </nav>
@@ -422,23 +469,26 @@
                 <input type="hidden" name="evtUnitNumber" th:value="${evtUnitNumber}">
                 <input type="hidden" name="evtMessageId" th:value="${evtMessageId}">
                 <input type="hidden" name="evtTrailerPlate" th:value="${evtTrailerPlate}">
+                <input type="hidden" name="evtContainerNumber" th:value="${evtContainerNumber}">
                 <input type="hidden" name="evtUnitTypeCode" th:value="${evtUnitTypeCode}">
                 <input type="hidden" name="evtType" th:value="${evtType}">
-                <input type="hidden" name="evtDateFrom" th:value="${evtDateFrom}">
-                <input type="hidden" name="evtDateTo" th:value="${evtDateTo}">
+                <input type="hidden" name="evtDateFrom" th:value="${evtDateFromStr}">
+                <input type="hidden" name="evtDateTo" th:value="${evtDateToStr}">
                 <input type="hidden" name="evtUnlinkedOnly" th:value="${evtUnlinkedOnly}">
                 <input type="hidden" name="evtPage" th:value="${evtCurrentPage}">
                 <!-- Preserve positions tab state -->
                 <input type="hidden" name="posUnitNumber" th:value="${posUnitNumber}">
                 <input type="hidden" name="posUnitTypeCode" th:value="${posUnitTypeCode}">
-                <input type="hidden" name="posDateFrom" th:value="${posDateFrom}">
-                <input type="hidden" name="posDateTo" th:value="${posDateTo}">
+                <input type="hidden" name="posVehiclePlate" th:value="${posVehiclePlate}">
+                <input type="hidden" name="posContainerNumber" th:value="${posContainerNumber}">
+                <input type="hidden" name="posDateFrom" th:value="${posDateFromStr}">
+                <input type="hidden" name="posDateTo" th:value="${posDateToStr}">
                 <input type="hidden" name="posUnlinkedOnly" th:value="${posUnlinkedOnly}">
                 <input type="hidden" name="posPage" th:value="${posCurrentPage}">
                 <!-- Preserve errors tab state -->
                 <input type="hidden" name="errMessageId" th:value="${errMessageId}">
-                <input type="hidden" name="errDateFrom" th:value="${errDateFrom}">
-                <input type="hidden" name="errDateTo" th:value="${errDateTo}">
+                <input type="hidden" name="errDateFrom" th:value="${errDateFromStr}">
+                <input type="hidden" name="errDateTo" th:value="${errDateToStr}">
                 <input type="hidden" name="errPage" th:value="${errCurrentPage}">
 
                 <div class="row g-2 align-items-end">
@@ -446,6 +496,11 @@
                         <label class="form-label form-label-sm mb-0">Asset Identifier</label>
                         <input type="text" name="dmgAssetIdentifier" class="form-control form-control-sm"
                                placeholder="Search..." th:value="${dmgAssetIdentifier}">
+                    </div>
+                    <div class="col-auto">
+                        <label class="form-label form-label-sm mb-0">Container Number</label>
+                        <input type="text" name="dmgContainerNumber" class="form-control form-control-sm"
+                               placeholder="Search..." th:value="${dmgContainerNumber}">
                     </div>
                     <div class="col-auto">
                         <label class="form-label form-label-sm mb-0">Asset Type</label>
@@ -479,13 +534,13 @@
                     </div>
                     <div class="col-auto">
                         <label class="form-label form-label-sm mb-0">From</label>
-                        <input type="date" name="dmgDateFrom" class="form-control form-control-sm"
-                               th:value="${dmgDateFrom}">
+                        <input type="datetime-local" name="dmgDateFrom" class="form-control form-control-sm"
+                               th:value="${dmgDateFromStr}">
                     </div>
                     <div class="col-auto">
                         <label class="form-label form-label-sm mb-0">To</label>
-                        <input type="date" name="dmgDateTo" class="form-control form-control-sm"
-                               th:value="${dmgDateTo}">
+                        <input type="datetime-local" name="dmgDateTo" class="form-control form-control-sm"
+                               th:value="${dmgDateToStr}">
                     </div>
                     <div class="col-auto">
                         <div class="form-check mt-3">
@@ -511,6 +566,7 @@
                         <th>Message ID</th>
                         <th>Unit Type</th>
                         <th>Unit Number</th>
+                        <th>Container Number</th>
                         <th>Severity</th>
                         <th>Status</th>
                         <th>Type</th>
@@ -518,6 +574,7 @@
                         <th>Description</th>
                         <th>Notes</th>
                         <th>Checklist</th>
+                        <th>Attachments</th>
                     </tr>
                     </thead>
                     <tbody>
@@ -529,6 +586,7 @@
                         <td th:text="${dmg['asset_type']}"></td>
                         <td class="unit-cell" th:title="${dmg['asset_identifier']}" th:text="${dmg['asset_identifier']}"
                             th:classappend="${dmg['container_number'] == null and dmg['id_trailer'] == null and dmg['id_vehicle'] == null} ? 'table-danger'"></td>
+                        <td th:text="${dmg['container_number']}"></td>
                         <td th:text="${dmg['severity']}"></td>
                         <td th:text="${dmg['status']}"></td>
                         <td th:text="${dmg['type']}"></td>
@@ -541,9 +599,19 @@
                                   th:classappend="${dmg['severity'] == 'HIGH'} ? 'bg-danger' : (${dmg['severity'] == 'MEDIUM'} ? 'bg-warning text-dark' : 'bg-success')"
                                   th:text="${label}"></span>
                         </td>
+                        <td>
+                            <a th:each="att : ${dmg['attachments']}"
+                               th:if="${att['id_document'] != null}"
+                               class="att-link att-action"
+                               th:href="@{/events/attachments/{id}/download(id=${att['id_document']}, filename=${att['filename']})}"
+                               th:title="${att['filename']}">
+                                <i class="bi bi-file-earmark-arrow-down"></i>
+                                <span class="att-id" th:text="${att['id_document']}"></span>
+                            </a>
+                        </td>
                     </tr>
                     <tr th:if="${#lists.isEmpty(assetDamages)}">
-                        <td colspan="11" class="text-center text-muted py-4">No asset damages found.</td>
+                        <td colspan="13" class="text-center text-muted py-4">No asset damages found.</td>
                     </tr>
                     </tbody>
                 </table>
@@ -556,18 +624,21 @@
                         <a class="page-link"
                            th:href="@{/events(tab='damages',
                                dmgAssetIdentifier=${dmgAssetIdentifier}, dmgAssetType=${dmgAssetType},
+                               dmgContainerNumber=${dmgContainerNumber},
                                dmgSeverity=${dmgSeverity}, dmgStatus=${dmgStatus},
-                               dmgDateFrom=${dmgDateFrom}, dmgDateTo=${dmgDateTo},
+                               dmgDateFrom=${dmgDateFromStr}, dmgDateTo=${dmgDateToStr},
                                dmgUnlinkedOnly=${dmgUnlinkedOnly}, dmgPage=${dmgCurrentPage - 1},
                                evtUnitNumber=${evtUnitNumber}, evtUnitTypeCode=${evtUnitTypeCode},
                                evtMessageId=${evtMessageId}, evtTrailerPlate=${evtTrailerPlate},
-                               evtType=${evtType}, evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
+                               evtContainerNumber=${evtContainerNumber},
+                               evtType=${evtType}, evtDateFrom=${evtDateFromStr}, evtDateTo=${evtDateToStr},
                                evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage},
                                posUnitNumber=${posUnitNumber}, posUnitTypeCode=${posUnitTypeCode},
-                               posDateFrom=${posDateFrom}, posDateTo=${posDateTo},
+                               posVehiclePlate=${posVehiclePlate}, posContainerNumber=${posContainerNumber},
+                               posDateFrom=${posDateFromStr}, posDateTo=${posDateToStr},
                                posUnlinkedOnly=${posUnlinkedOnly}, posPage=${posCurrentPage},
-                               errMessageId=${errMessageId}, errDateFrom=${errDateFrom},
-                               errDateTo=${errDateTo}, errPage=${errCurrentPage})}">&laquo;</a>
+                               errMessageId=${errMessageId}, errDateFrom=${errDateFromStr},
+                               errDateTo=${errDateToStr}, errPage=${errCurrentPage})}">&laquo;</a>
                     </li>
                     <th:block th:each="p : ${#numbers.sequence(0, dmgTotalPages - 1)}">
                         <li class="page-item" th:classappend="${p == dmgCurrentPage} ? 'active'"
@@ -575,18 +646,21 @@
                             <a class="page-link"
                                th:href="@{/events(tab='damages',
                                    dmgAssetIdentifier=${dmgAssetIdentifier}, dmgAssetType=${dmgAssetType},
+                                   dmgContainerNumber=${dmgContainerNumber},
                                    dmgSeverity=${dmgSeverity}, dmgStatus=${dmgStatus},
-                                   dmgDateFrom=${dmgDateFrom}, dmgDateTo=${dmgDateTo},
+                                   dmgDateFrom=${dmgDateFromStr}, dmgDateTo=${dmgDateToStr},
                                    dmgUnlinkedOnly=${dmgUnlinkedOnly}, dmgPage=${p},
                                    evtUnitNumber=${evtUnitNumber}, evtUnitTypeCode=${evtUnitTypeCode},
-                                   evtMessageId=${evtMessageId}, evtTrailerPlate=${evtTrailerPlate}, evtType=${evtType},
-                                   evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
+                                   evtMessageId=${evtMessageId}, evtTrailerPlate=${evtTrailerPlate},
+                                   evtContainerNumber=${evtContainerNumber}, evtType=${evtType},
+                                   evtDateFrom=${evtDateFromStr}, evtDateTo=${evtDateToStr},
                                    evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage},
                                    posUnitNumber=${posUnitNumber}, posUnitTypeCode=${posUnitTypeCode},
-                                   posDateFrom=${posDateFrom}, posDateTo=${posDateTo},
+                                   posVehiclePlate=${posVehiclePlate}, posContainerNumber=${posContainerNumber},
+                                   posDateFrom=${posDateFromStr}, posDateTo=${posDateToStr},
                                    posUnlinkedOnly=${posUnlinkedOnly}, posPage=${posCurrentPage},
-                                   errMessageId=${errMessageId}, errDateFrom=${errDateFrom},
-                                   errDateTo=${errDateTo}, errPage=${errCurrentPage})}"
+                                   errMessageId=${errMessageId}, errDateFrom=${errDateFromStr},
+                                   errDateTo=${errDateToStr}, errPage=${errCurrentPage})}"
                                th:text="${p + 1}"></a>
                         </li>
                     </th:block>
@@ -594,18 +668,21 @@
                         <a class="page-link"
                            th:href="@{/events(tab='damages',
                                dmgAssetIdentifier=${dmgAssetIdentifier}, dmgAssetType=${dmgAssetType},
+                               dmgContainerNumber=${dmgContainerNumber},
                                dmgSeverity=${dmgSeverity}, dmgStatus=${dmgStatus},
-                               dmgDateFrom=${dmgDateFrom}, dmgDateTo=${dmgDateTo},
+                               dmgDateFrom=${dmgDateFromStr}, dmgDateTo=${dmgDateToStr},
                                dmgUnlinkedOnly=${dmgUnlinkedOnly}, dmgPage=${dmgCurrentPage + 1},
                                evtUnitNumber=${evtUnitNumber}, evtUnitTypeCode=${evtUnitTypeCode},
                                evtMessageId=${evtMessageId}, evtTrailerPlate=${evtTrailerPlate},
-                               evtType=${evtType}, evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
+                               evtContainerNumber=${evtContainerNumber},
+                               evtType=${evtType}, evtDateFrom=${evtDateFromStr}, evtDateTo=${evtDateToStr},
                                evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage},
                                posUnitNumber=${posUnitNumber}, posUnitTypeCode=${posUnitTypeCode},
-                               posDateFrom=${posDateFrom}, posDateTo=${posDateTo},
+                               posVehiclePlate=${posVehiclePlate}, posContainerNumber=${posContainerNumber},
+                               posDateFrom=${posDateFromStr}, posDateTo=${posDateToStr},
                                posUnlinkedOnly=${posUnlinkedOnly}, posPage=${posCurrentPage},
-                               errMessageId=${errMessageId}, errDateFrom=${errDateFrom},
-                               errDateTo=${errDateTo}, errPage=${errCurrentPage})}">&raquo;</a>
+                               errMessageId=${errMessageId}, errDateFrom=${errDateFromStr},
+                               errDateTo=${errDateToStr}, errPage=${errCurrentPage})}">&raquo;</a>
                     </li>
                 </ul>
             </nav>
@@ -621,26 +698,30 @@
                 <input type="hidden" name="evtUnitNumber" th:value="${evtUnitNumber}">
                 <input type="hidden" name="evtMessageId" th:value="${evtMessageId}">
                 <input type="hidden" name="evtTrailerPlate" th:value="${evtTrailerPlate}">
+                <input type="hidden" name="evtContainerNumber" th:value="${evtContainerNumber}">
                 <input type="hidden" name="evtUnitTypeCode" th:value="${evtUnitTypeCode}">
                 <input type="hidden" name="evtType" th:value="${evtType}">
-                <input type="hidden" name="evtDateFrom" th:value="${evtDateFrom}">
-                <input type="hidden" name="evtDateTo" th:value="${evtDateTo}">
+                <input type="hidden" name="evtDateFrom" th:value="${evtDateFromStr}">
+                <input type="hidden" name="evtDateTo" th:value="${evtDateToStr}">
                 <input type="hidden" name="evtUnlinkedOnly" th:value="${evtUnlinkedOnly}">
                 <input type="hidden" name="evtPage" th:value="${evtCurrentPage}">
                 <!-- Preserve positions tab state -->
                 <input type="hidden" name="posUnitNumber" th:value="${posUnitNumber}">
                 <input type="hidden" name="posUnitTypeCode" th:value="${posUnitTypeCode}">
-                <input type="hidden" name="posDateFrom" th:value="${posDateFrom}">
-                <input type="hidden" name="posDateTo" th:value="${posDateTo}">
+                <input type="hidden" name="posVehiclePlate" th:value="${posVehiclePlate}">
+                <input type="hidden" name="posContainerNumber" th:value="${posContainerNumber}">
+                <input type="hidden" name="posDateFrom" th:value="${posDateFromStr}">
+                <input type="hidden" name="posDateTo" th:value="${posDateToStr}">
                 <input type="hidden" name="posUnlinkedOnly" th:value="${posUnlinkedOnly}">
                 <input type="hidden" name="posPage" th:value="${posCurrentPage}">
                 <!-- Preserve damages tab state -->
                 <input type="hidden" name="dmgAssetIdentifier" th:value="${dmgAssetIdentifier}">
                 <input type="hidden" name="dmgAssetType" th:value="${dmgAssetType}">
+                <input type="hidden" name="dmgContainerNumber" th:value="${dmgContainerNumber}">
                 <input type="hidden" name="dmgSeverity" th:value="${dmgSeverity}">
                 <input type="hidden" name="dmgStatus" th:value="${dmgStatus}">
-                <input type="hidden" name="dmgDateFrom" th:value="${dmgDateFrom}">
-                <input type="hidden" name="dmgDateTo" th:value="${dmgDateTo}">
+                <input type="hidden" name="dmgDateFrom" th:value="${dmgDateFromStr}">
+                <input type="hidden" name="dmgDateTo" th:value="${dmgDateToStr}">
                 <input type="hidden" name="dmgUnlinkedOnly" th:value="${dmgUnlinkedOnly}">
                 <input type="hidden" name="dmgPage" th:value="${dmgCurrentPage}">
 
@@ -652,13 +733,13 @@
                     </div>
                     <div class="col-auto">
                         <label class="form-label form-label-sm mb-0">From</label>
-                        <input type="date" name="errDateFrom" class="form-control form-control-sm"
-                               th:value="${errDateFrom}">
+                        <input type="datetime-local" name="errDateFrom" class="form-control form-control-sm"
+                               th:value="${errDateFromStr}">
                     </div>
                     <div class="col-auto">
                         <label class="form-label form-label-sm mb-0">To</label>
-                        <input type="date" name="errDateTo" class="form-control form-control-sm"
-                               th:value="${errDateTo}">
+                        <input type="datetime-local" name="errDateTo" class="form-control form-control-sm"
+                               th:value="${errDateToStr}">
                     </div>
                     <div class="col-auto">
                         <button type="submit" class="btn btn-primary btn-sm">Search</button>
@@ -707,18 +788,21 @@
                     <li class="page-item" th:classappend="${errCurrentPage == 0} ? 'disabled'">
                         <a class="page-link"
                            th:href="@{/events(tab='errors',
-                               errMessageId=${errMessageId}, errDateFrom=${errDateFrom},
-                               errDateTo=${errDateTo}, errPage=${errCurrentPage - 1},
+                               errMessageId=${errMessageId}, errDateFrom=${errDateFromStr},
+                               errDateTo=${errDateToStr}, errPage=${errCurrentPage - 1},
                                evtUnitNumber=${evtUnitNumber}, evtUnitTypeCode=${evtUnitTypeCode},
                                evtMessageId=${evtMessageId}, evtTrailerPlate=${evtTrailerPlate},
-                               evtType=${evtType}, evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
+                               evtContainerNumber=${evtContainerNumber},
+                               evtType=${evtType}, evtDateFrom=${evtDateFromStr}, evtDateTo=${evtDateToStr},
                                evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage},
                                posUnitNumber=${posUnitNumber}, posUnitTypeCode=${posUnitTypeCode},
-                               posDateFrom=${posDateFrom}, posDateTo=${posDateTo},
+                               posVehiclePlate=${posVehiclePlate}, posContainerNumber=${posContainerNumber},
+                               posDateFrom=${posDateFromStr}, posDateTo=${posDateToStr},
                                posUnlinkedOnly=${posUnlinkedOnly}, posPage=${posCurrentPage},
                                dmgAssetIdentifier=${dmgAssetIdentifier}, dmgAssetType=${dmgAssetType},
+                               dmgContainerNumber=${dmgContainerNumber},
                                dmgSeverity=${dmgSeverity}, dmgStatus=${dmgStatus},
-                               dmgDateFrom=${dmgDateFrom}, dmgDateTo=${dmgDateTo},
+                               dmgDateFrom=${dmgDateFromStr}, dmgDateTo=${dmgDateToStr},
                                dmgUnlinkedOnly=${dmgUnlinkedOnly}, dmgPage=${dmgCurrentPage})}">&laquo;</a>
                     </li>
                     <th:block th:each="p : ${#numbers.sequence(0, errTotalPages - 1)}">
@@ -726,18 +810,21 @@
                             th:if="${p == 0 or p == errTotalPages - 1 or (p >= errCurrentPage - 2 and p <= errCurrentPage + 2)}">
                             <a class="page-link"
                                th:href="@{/events(tab='errors',
-                                   errMessageId=${errMessageId}, errDateFrom=${errDateFrom},
-                                   errDateTo=${errDateTo}, errPage=${p},
+                                   errMessageId=${errMessageId}, errDateFrom=${errDateFromStr},
+                                   errDateTo=${errDateToStr}, errPage=${p},
                                    evtUnitNumber=${evtUnitNumber}, evtUnitTypeCode=${evtUnitTypeCode},
-                                   evtMessageId=${evtMessageId}, evtTrailerPlate=${evtTrailerPlate}, evtType=${evtType},
-                                   evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
+                                   evtMessageId=${evtMessageId}, evtTrailerPlate=${evtTrailerPlate},
+                                   evtContainerNumber=${evtContainerNumber}, evtType=${evtType},
+                                   evtDateFrom=${evtDateFromStr}, evtDateTo=${evtDateToStr},
                                    evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage},
                                    posUnitNumber=${posUnitNumber}, posUnitTypeCode=${posUnitTypeCode},
-                                   posDateFrom=${posDateFrom}, posDateTo=${posDateTo},
+                                   posVehiclePlate=${posVehiclePlate}, posContainerNumber=${posContainerNumber},
+                                   posDateFrom=${posDateFromStr}, posDateTo=${posDateToStr},
                                    posUnlinkedOnly=${posUnlinkedOnly}, posPage=${posCurrentPage},
                                    dmgAssetIdentifier=${dmgAssetIdentifier}, dmgAssetType=${dmgAssetType},
+                                   dmgContainerNumber=${dmgContainerNumber},
                                    dmgSeverity=${dmgSeverity}, dmgStatus=${dmgStatus},
-                                   dmgDateFrom=${dmgDateFrom}, dmgDateTo=${dmgDateTo},
+                                   dmgDateFrom=${dmgDateFromStr}, dmgDateTo=${dmgDateToStr},
                                    dmgUnlinkedOnly=${dmgUnlinkedOnly}, dmgPage=${dmgCurrentPage})}"
                                th:text="${p + 1}"></a>
                         </li>
@@ -745,18 +832,21 @@
                     <li class="page-item" th:classappend="${errCurrentPage == errTotalPages - 1} ? 'disabled'">
                         <a class="page-link"
                            th:href="@{/events(tab='errors',
-                               errMessageId=${errMessageId}, errDateFrom=${errDateFrom},
-                               errDateTo=${errDateTo}, errPage=${errCurrentPage + 1},
+                               errMessageId=${errMessageId}, errDateFrom=${errDateFromStr},
+                               errDateTo=${errDateToStr}, errPage=${errCurrentPage + 1},
                                evtUnitNumber=${evtUnitNumber}, evtUnitTypeCode=${evtUnitTypeCode},
                                evtMessageId=${evtMessageId}, evtTrailerPlate=${evtTrailerPlate},
-                               evtType=${evtType}, evtDateFrom=${evtDateFrom}, evtDateTo=${evtDateTo},
+                               evtContainerNumber=${evtContainerNumber},
+                               evtType=${evtType}, evtDateFrom=${evtDateFromStr}, evtDateTo=${evtDateToStr},
                                evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage},
                                posUnitNumber=${posUnitNumber}, posUnitTypeCode=${posUnitTypeCode},
-                               posDateFrom=${posDateFrom}, posDateTo=${posDateTo},
+                               posVehiclePlate=${posVehiclePlate}, posContainerNumber=${posContainerNumber},
+                               posDateFrom=${posDateFromStr}, posDateTo=${posDateToStr},
                                posUnlinkedOnly=${posUnlinkedOnly}, posPage=${posCurrentPage},
                                dmgAssetIdentifier=${dmgAssetIdentifier}, dmgAssetType=${dmgAssetType},
+                               dmgContainerNumber=${dmgContainerNumber},
                                dmgSeverity=${dmgSeverity}, dmgStatus=${dmgStatus},
-                               dmgDateFrom=${dmgDateFrom}, dmgDateTo=${dmgDateTo},
+                               dmgDateFrom=${dmgDateFromStr}, dmgDateTo=${dmgDateToStr},
                                dmgUnlinkedOnly=${dmgUnlinkedOnly}, dmgPage=${dmgCurrentPage})}">&raquo;</a>
                     </li>
                 </ul>
@@ -878,9 +968,14 @@ document.getElementById('detailModal').addEventListener('hidden.bs.modal', funct
 
 document.querySelectorAll('tr.detail-row').forEach(function(tr) {
     tr.addEventListener('click', function(e) {
-        if (e.target.closest('a,button,input,.view-payload-btn')) return;
+        if (e.target.closest('a,button,input,.view-payload-btn,.att-action')) return;
         openDetail(tr.getAttribute('data-detail-url'));
     });
+});
+
+// Prevent row click when clicking attachment download links
+document.querySelectorAll('.att-action').forEach(function(a) {
+    a.addEventListener('click', function(e) { e.stopPropagation(); });
 });
 
 function openDetail(url) {
@@ -1092,7 +1187,18 @@ function renderDetail(data) {
                 if (v === null || v === undefined || v === '') return null;
                 return prettyLabel(k) + ': ' + (typeof v === 'object' ? JSON.stringify(v) : v);
             }).filter(Boolean);
-            li.textContent = parts.join(' | ');
+            if (a.id_document !== null && a.id_document !== undefined && a.id_document !== '') {
+                var link = document.createElement('a');
+                link.href = '/events/attachments/' + encodeURIComponent(a.id_document) +
+                    '/download?filename=' + encodeURIComponent(a.filename || '');
+                link.title = a.filename || '';
+                link.className = 'me-1';
+                link.innerHTML = '<i class="bi bi-file-earmark-arrow-down"></i>';
+                li.appendChild(link);
+                li.appendChild(document.createTextNode(parts.join(' | ')));
+            } else {
+                li.textContent = parts.join(' | ');
+            }
             ul.appendChild(li);
         });
         document.getElementById('detailAttachmentsWrap').hidden = false;
