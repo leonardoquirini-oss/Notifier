@@ -1,0 +1,46 @@
+body {
+    background-color: #f6f8fa;
+}
+
+.card .card-header {
+    font-weight: 600;
+    background-color: #f1f3f5;
+}
+
+.heatmap-grid {
+    display: grid;
+    grid-template-columns: 80px repeat(24, 1fr);
+    gap: 2px;
+    font-size: 11px;
+}
+
+.heatmap-cell {
+    background: #e9ecef;
+    text-align: center;
+    padding: 4px 0;
+    border-radius: 2px;
+}
+
+.heatmap-cell.intensity-1 { background: #cfe8ff; }
+.heatmap-cell.intensity-2 { background: #9fc7ff; }
+.heatmap-cell.intensity-3 { background: #5fa6ff; }
+.heatmap-cell.intensity-4 { background: #1f7be0; color: white; }
+.heatmap-cell.intensity-5 { background: #0a3d80; color: white; }
+
+.fields-cell {
+    max-width: 600px;
+    overflow-x: auto;
+    font-family: monospace;
+    font-size: 12px;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.tab-content {
+    border-radius: 0 0 .25rem .25rem;
+}
+
+#summaryRow .badge {
+    font-size: 13px;
+    padding: 6px 10px;
+}

@@ -3,41 +3,44 @@ server:
 
 spring:
   application:
-    name: berlink-log-processor
+    name: flowcenter-collector
 
-  thymeleaf:
-    prefix: classpath:/templates/
-    suffix: .html
-    mode: HTML
-    encoding: UTF-8
-    cache: false
+# FlowCenter central + ingest pipeline
+flowcenter:
+  collector:
+    id: ${COLLECTOR_ID:berlink-prod}
+  central:
+    url: ${FLOWCENTER_URL:http://flowcenter:8000}
+  api:
+    token: ${FLOWCENTER_TOKEN:}
+  ingest:
+    batch:
+      size: 200
+    flush:
+      interval:
+        ms: 5000
+    retry:
+      interval:
+        ms: 30000
+  heartbeat:
+    interval:
+      ms: 30000
+  spool:
+    dir: ${COLLECTOR_STATE_DIR:/var/lib/collector}/spool
+    max:
+      bytes: 104857600          # 100 MB cap on the disk spool
+  position:
+    file: ${COLLECTOR_STATE_DIR:/var/lib/collector}/position.dat
 
-  data:
-    redis:
-      host: 172.28.234.122
-      port: 6379
-      database: 0         
-      timeout: 5000ms
-      lettuce:
-        pool:
-          max-active: 8
-          max-idle: 8
-          min-idle: 2
-          max-wait: -1ms
-
-# Query Monitor Configuration
+# Log file tailing
 query:
   log:
     file:
-      path: /berlink/logs/berlink_queries.log
+      path: ${QUERY_LOG_PATH:/berlink/logs/berlink_queries.log}
   monitor:
-    ttl:
-      days: 15
     poll:
       interval:
         ms: 1000
-    max:
-      samples: 1000
 
 # Actuator
 management:
@@ -51,5 +54,4 @@ management:
 
 logging:
   level:
-    it.berlink: ${LOG_LEVEL:TRACE}
-    org.springframework.data.redis: WARN
+    it.berlink: ${LOG_LEVEL:INFO}

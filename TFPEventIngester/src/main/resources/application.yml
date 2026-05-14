@@ -19,8 +19,8 @@ spring:
 
 # Valkey (Redis) Configuration
 valkey:
-  #host: valkey-service
-  host: 192.168.0.14
+  host: valkey-service
+  #host: 192.168.0.14
   port: 6379
   database: 0
   password: 

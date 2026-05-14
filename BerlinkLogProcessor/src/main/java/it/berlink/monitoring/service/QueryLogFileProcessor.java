@@ -1,13 +1,14 @@
 package it.berlink.monitoring.service;
 
+import it.berlink.monitoring.ingest.ExecutionBuffer;
 import it.berlink.monitoring.model.ParseError;
 import it.berlink.monitoring.model.ProcessorStatus;
 import it.berlink.monitoring.parser.QueryLogParser;
+import it.berlink.position.FilePositionStore;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -15,7 +16,6 @@ import java.io.RandomAccessFile;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -31,14 +31,13 @@ import java.util.regex.Pattern;
 /**
  * Service that continuously reads and processes a log file.
  * Supports log rotation by detecting file truncation/replacement.
- * Persists read position to Valkey for fault tolerance.
+ * Persists read position to a local file for fault tolerance and hands parsed
+ * executions to {@link ExecutionBuffer} for delivery to FlowCenter central.
  */
 @Slf4j
 @Service
 public class QueryLogFileProcessor {
 
-    private static final String POSITION_KEY = "logprocessor:position";
-    private static final String INODE_KEY = "logprocessor:inode";
     private static final int MAX_PARSE_ERRORS = 200;
     private static final int MAX_LINE_LENGTH = 2000;
     private static final int MAX_BUFFERED_LINES = 500;
@@ -54,8 +53,8 @@ public class QueryLogFileProcessor {
     );
 
     private final QueryLogParser parser;
-    private final QueryMonitorService monitorService;
-    private final RedisTemplate<String, Object> redisTemplate;
+    private final ExecutionBuffer executionBuffer;
+    private final FilePositionStore positionStore;
     private final String logFilePath;
     private final long pollIntervalMs;
 
@@ -77,13 +76,13 @@ public class QueryLogFileProcessor {
 
     public QueryLogFileProcessor(
             QueryLogParser parser,
-            QueryMonitorService monitorService,
-            RedisTemplate<String, Object> redisTemplate,
+            ExecutionBuffer executionBuffer,
+            FilePositionStore positionStore,
             @Value("${query.log.file.path}") String logFilePath,
             @Value("${query.monitor.poll.interval.ms:1000}") long pollIntervalMs) {
         this.parser = parser;
-        this.monitorService = monitorService;
-        this.redisTemplate = redisTemplate;
+        this.executionBuffer = executionBuffer;
+        this.positionStore = positionStore;
         this.logFilePath = logFilePath;
         this.pollIntervalMs = pollIntervalMs;
     }
@@ -177,24 +176,11 @@ public class QueryLogFileProcessor {
     }
 
     private void restorePosition() {
-        try {
-            Object posObj = redisTemplate.opsForValue().get(POSITION_KEY);
-            if (posObj instanceof Number) {
-                currentPosition = ((Number) posObj).longValue();
-                log.info("Restored position from Redis: {}", currentPosition);
-            }
-        } catch (Exception e) {
-            log.warn("Failed to restore position from Redis: {}", e.getMessage());
-            currentPosition = 0;
-        }
+        currentPosition = positionStore.restore();
     }
 
     private void savePosition() {
-        try {
-            redisTemplate.opsForValue().set(POSITION_KEY, currentPosition, Duration.ofDays(30));
-        } catch (Exception e) {
-            log.warn("Failed to save position to Redis: {}", e.getMessage());
-        }
+        positionStore.save(currentPosition);
     }
 
     /**
@@ -256,11 +242,7 @@ public class QueryLogFileProcessor {
 
         parser.parse(record).ifPresentOrElse(
             entry -> {
-                monitorService.recordExecution(
-                    entry.queryHash(),
-                    entry.normalizedQuery(),
-                    entry.executionPoint()
-                );
+                executionBuffer.add(entry);
                 entriesParsed.incrementAndGet();
             },
             () -> {

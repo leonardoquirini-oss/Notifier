@@ -14,9 +14,9 @@ WORKDIR /app
 RUN addgroup -g 1001 -S appgroup && \
     adduser -u 1001 -S appuser -G appgroup
 
-# Create log directory
-RUN mkdir -p /berlink/logs && \
-    chown -R appuser:appgroup /berlink
+# Create log directory + collector state directory (named volume inherits this ownership)
+RUN mkdir -p /berlink/logs /var/lib/collector && \
+    chown -R appuser:appgroup /berlink /var/lib/collector
 
 COPY --from=build /app/target/*.jar app.jar
 

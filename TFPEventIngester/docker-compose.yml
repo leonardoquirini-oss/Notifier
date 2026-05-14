@@ -10,6 +10,9 @@ services:
       - "8095:8080"   # Web Console    
     networks:
       - berlink-network
+    volumes:
+      - /opt/berlink/tfp-event-ingester/data/application.yml:/app/application.yml
+      
     restart: unless-stopped
 
 networks:

@@ -1,5 +1,6 @@
 package com.containermgmt.tfpeventingester.config;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -10,6 +11,7 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
 @Configuration
+@Slf4j
 public class ValkeyConfig {
 
     @Value("${valkey.host:localhost}")
@@ -31,9 +33,13 @@ public class ValkeyConfig {
         config.setPort(port);
         config.setDatabase(database);
 
-        if (password != null && !password.isEmpty()) {
+        boolean hasPassword = password != null && !password.isEmpty();
+        if (hasPassword) {
             config.setPassword(password);
         }
+
+        log.info("Valkey connection: host={}, port={}, database={}, password={}",
+                host, port, database, hasPassword ? "***" : "(none)");
 
         return new LettuceConnectionFactory(config);
     }

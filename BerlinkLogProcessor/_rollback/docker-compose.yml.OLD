@@ -6,14 +6,8 @@ services:
     container_name: berlink-log-processor
     ports:
       - "8082:8082"
-    environment:
-      - FLOWCENTER_URL=http://flowcenter:8000
-      - FLOWCENTER_TOKEN=0dbd19b008fc9ca5917132b818fed6d6a1e15d80489063ad
-      - COLLECTOR_ID=berlink-log-processor-01
-      - COLLECTOR_STATE_DIR=/var/lib/collector
     volumes:
       - /opt/berlink/backend/log:/berlink/logs/:ro
-      - collector-state:/var/lib/collector
     networks:
       - berlink-network
     restart: unless-stopped
@@ -23,9 +17,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
-
-volumes:
-  collector-state:
 
 networks:
   berlink-network:

@@ -13,9 +13,9 @@
 
     <groupId>it.berlink</groupId>
     <artifactId>log-processor</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
-    <name>BerlinkLogProcessor</name>
-    <description>SQL Query Monitoring from Log Files</description>
+    <version>2.0.0-SNAPSHOT</version>
+    <name>FlowCenter Collector</name>
+    <description>Edge collector: tails Berlink query logs and ships executions to FlowCenter central</description>
 
     <properties>
         <java.version>17</java.version>
@@ -30,23 +30,7 @@
 
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-data-redis</artifactId>
-            <exclusions>
-                <exclusion>
-                    <groupId>io.netty</groupId>
-                    <artifactId>netty-tcnative</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
-        </dependency>
-
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-thymeleaf</artifactId>
         </dependency>
 
         <!-- Apache Commons for MD5 hashing -->

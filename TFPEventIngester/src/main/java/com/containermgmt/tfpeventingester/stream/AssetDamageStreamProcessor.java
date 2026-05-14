@@ -93,6 +93,7 @@ public class AssetDamageStreamProcessor extends AbstractStreamProcessor {
         EvtAssetDamage damage = new EvtAssetDamage();
         damage.set("message_id", messageId);
         damage.set("message_type", eventType);
+        damage.set("tfp_event_id", getLong(payload, "id"));
         damage.set("type", getString(payload, "type"));
         damage.set("status", getString(payload, "status"));
         damage.set("asset_id", getLong(payload, "assetId"));
