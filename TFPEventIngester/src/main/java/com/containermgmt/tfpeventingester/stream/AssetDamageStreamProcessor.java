@@ -102,6 +102,7 @@ public class AssetDamageStreamProcessor extends AbstractStreamProcessor {
         damage.set("asset_owner", getString(payload, "assetOwner"));
         damage.set("edit_user_id", getLong(payload, "editUserId"));
         damage.set("report_time", parseTimestamp(payload, "reportTime"));
+        damage.set("report_user_id", getLong(payload, "reportUserId"));
         damage.set("closing_time", parseTimestamp(payload, "closingTime"));
         damage.set("description", getString(payload, "description"));
         damage.set("report_notes", getString(payload, "reportNotes"));
