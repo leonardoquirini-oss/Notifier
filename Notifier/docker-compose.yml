@@ -13,6 +13,14 @@ services:
     environment:
       # Logging
       LOGGING_LEVEL_COM_CONTAINERMGMT_NOTIFIER: DEBUG
+      # Health Check (BERLink HEALTH_CONTRACT)
+      HEALTH_API_KEY: ${HEALTH_API_KEY:-change-me-notifier-health-key}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/api/health/live"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
     volumes:
       - /opt/berlink/notifier/data/application.yml:/app/application.yml
       - /opt/berlink/notifier/data/notifications.yml:/app/notifications.yml

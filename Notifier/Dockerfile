@@ -35,9 +35,9 @@ EXPOSE 8080
 EXPOSE 5005
 ENV JAVA_TOOL_OPTIONS="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005"
 
-# Health check
+# Health check (BERLink HEALTH_CONTRACT: liveness pubblico, no auth)
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
-  CMD curl -f http://localhost:8080/actuator/health || exit 1
+  CMD curl -fsS http://localhost:8080/api/health/live || exit 1
 
 # Run application
 ENTRYPOINT ["java", "-jar", "app.jar"]

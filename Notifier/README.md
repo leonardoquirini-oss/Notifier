@@ -820,12 +820,35 @@ redis-cli XPENDING purchase-orders notifier-group
 
 ### Test con curl (Health Check)
 
-```bash
-# Health check
-curl http://localhost:8080/actuator/health
+Il servizio espone gli endpoint conformi al contratto BERLink (`prompt/HEALTH_CONTRACT.md`):
 
-# Metrics
+```bash
+# Liveness (pubblico, sempre 200 se il processo e' vivo)
+curl http://localhost:8080/api/health/live
+
+# Readiness (richiede X-API-Key, verifica DB + Valkey)
+curl -H "X-API-Key: $HEALTH_API_KEY" http://localhost:8080/api/health/ready
+
+# Alias deprecato di /ready (back-compat)
+curl -H "X-API-Key: $HEALTH_API_KEY" http://localhost:8080/api/health
+
+# Metriche Actuator (interno)
 curl http://localhost:8080/actuator/metrics
+```
+
+Risposta `/api/health/ready` (200 quando tutto UP, 503 se almeno una dipendenza DOWN):
+
+```json
+{
+  "status": "UP",
+  "service": "notifier-service",
+  "version": "1.0.0",
+  "timestamp": "2026-05-15T09:51:57Z",
+  "checks": {
+    "database": "UP",
+    "valkey": "UP"
+  }
+}
 ```
 
 ### Logs
@@ -905,10 +928,19 @@ spec:
             cpu: "500m"
         livenessProbe:
           httpGet:
-            path: /actuator/health
+            path: /api/health/live
             port: 8080
-          initialDelaySeconds: 60
+          initialDelaySeconds: 30
           periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /api/health/ready
+            port: 8080
+            httpHeaders:
+              - name: X-API-Key
+                value: ${HEALTH_API_KEY}   # da secret manager
+          initialDelaySeconds: 10
+          periodSeconds: 15
 ```
 
 ### Scaling Orizzontale
@@ -1028,20 +1060,51 @@ logging:
 
 ### Health Check
 
+Conforme al contratto comune di piattaforma (`BERLink/prompt/HEALTH_CONTRACT.md`).
+
+| URL | Auth | Cosa fa |
+|---|---|---|
+| `GET /api/health/live` | Pubblico | 200 se il processo e' vivo. Nessun check di dipendenze. |
+| `GET /api/health/ready` | `X-API-Key` | Verifica DB + Valkey. 503 se almeno una e' DOWN. |
+| `GET /api/health` | `X-API-Key` | Alias deprecato di `/ready`. |
+
 ```bash
-curl http://localhost:8080/actuator/health
+# Liveness (Docker HEALTHCHECK, K8s livenessProbe, monitor esterni)
+curl http://localhost:8080/api/health/live
+
+# Readiness (K8s readinessProbe, monitor di flotta con alert)
+curl -H "X-API-Key: $HEALTH_API_KEY" http://localhost:8080/api/health/ready
 ```
 
-Response:
+Configurazione chiave API (`application.yml` o env):
+
+```yaml
+health:
+  api-key: ${HEALTH_API_KEY:change-me-notifier-health-key}
+```
+
+```bash
+# Override in produzione
+export HEALTH_API_KEY=<chiave-rotabile-da-vault>
+```
+
+Response `/ready`:
 ```json
 {
   "status": "UP",
-  "components": {
-    "db": {"status": "UP"},
-    "redis": {"status": "UP"}
+  "service": "notifier-service",
+  "version": "1.0.0",
+  "timestamp": "2026-05-15T09:51:57Z",
+  "checks": {
+    "database": "UP",
+    "valkey": "UP"
   }
 }
 ```
+
+Status HTTP:
+- `/live` : sempre **200**.
+- `/ready`: **200** se `status=UP`, **503** se `DOWN`/`DEGRADED`, **401** se `X-API-Key` mancante/errato.
 
 ### Custom Metrics (Future Enhancement)
 
