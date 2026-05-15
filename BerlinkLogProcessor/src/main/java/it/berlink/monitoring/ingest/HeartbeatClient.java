@@ -40,6 +40,7 @@ public class HeartbeatClient {
     private final DiskSpool spool;
     private final ObjectMapper objectMapper;
     private final String collectorId;
+    private final String category;
     private final String statusUrl;
     private final String token;
     private final long intervalMs;
@@ -49,6 +50,7 @@ public class HeartbeatClient {
             DiskSpool spool,
             ObjectMapper objectMapper,
             @Value("${flowcenter.collector.id}") String collectorId,
+            @Value("${flowcenter.collector.category:db_queries}") String category,
             @Value("${flowcenter.central.url}") String centralUrl,
             @Value("${flowcenter.api.token}") String token,
             @Value("${flowcenter.heartbeat.interval.ms:30000}") long intervalMs) {
@@ -56,6 +58,7 @@ public class HeartbeatClient {
         this.spool = spool;
         this.objectMapper = objectMapper;
         this.collectorId = collectorId;
+        this.category = category;
         this.statusUrl = centralUrl.replaceAll("/+$", "") + "/api/collectors/status";
         this.token = token;
         this.intervalMs = intervalMs;
@@ -86,6 +89,7 @@ public class HeartbeatClient {
             ProcessorStatus status = fileProcessor.getStatus();
             HeartbeatDto dto = new HeartbeatDto(
                 collectorId,
+                category,
                 status.getLogFilePath(),
                 status.isFileExists(),
                 status.getCurrentFilePosition(),

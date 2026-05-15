@@ -8,6 +8,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  */
 public record HeartbeatDto(
     @JsonProperty("collector_id") String collectorId,
+    @JsonProperty("category") String category,
     @JsonProperty("log_file_path") String logFilePath,
     @JsonProperty("file_exists") boolean fileExists,
     @JsonProperty("current_position") long currentPosition,

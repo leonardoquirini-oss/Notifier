@@ -10,6 +10,7 @@ services:
       - FLOWCENTER_URL=http://flowcenter:8000
       - FLOWCENTER_TOKEN=0dbd19b008fc9ca5917132b818fed6d6a1e15d80489063ad
       - COLLECTOR_ID=berlink-log-processor-01
+      - COLLECTOR_CATEGORY=db_queries
       - COLLECTOR_STATE_DIR=/var/lib/collector
     volumes:
       - /opt/berlink/backend/log:/berlink/logs/:ro

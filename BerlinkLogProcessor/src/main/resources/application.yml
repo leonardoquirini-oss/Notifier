@@ -9,6 +9,7 @@ spring:
 flowcenter:
   collector:
     id: ${COLLECTOR_ID:berlink-prod}
+    category: ${COLLECTOR_CATEGORY:db_queries}
   central:
     url: ${FLOWCENTER_URL:http://flowcenter:8000}
   api:
