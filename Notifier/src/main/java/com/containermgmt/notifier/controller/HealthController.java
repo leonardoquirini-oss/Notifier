@@ -1,5 +1,6 @@
 package com.containermgmt.notifier.controller;
 
+import org.javalite.activejdbc.Base;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -10,10 +11,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 
-import javax.sql.DataSource;
 import java.sql.Connection;
 import java.time.Instant;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -32,14 +31,24 @@ public class HealthController {
     private static final String SERVICE_NAME = "notifier-service";
     private static final String SERVICE_VERSION = "1.0.0";
 
-    private final DataSource dataSource;
     private final RedisConnectionFactory redisConnectionFactory;
+
+    @Value("${spring.datasource.url}")
+    private String dbUrl;
+
+    @Value("${spring.datasource.username}")
+    private String dbUsername;
+
+    @Value("${spring.datasource.password}")
+    private String dbPassword;
+
+    @Value("${spring.datasource.driver-class-name}")
+    private String dbDriver;
 
     @Value("${health.api-key:}")
     private String healthApiKey;
 
-    public HealthController(DataSource dataSource, RedisConnectionFactory redisConnectionFactory) {
-        this.dataSource = dataSource;
+    public HealthController(RedisConnectionFactory redisConnectionFactory) {
         this.redisConnectionFactory = redisConnectionFactory;
     }
 
@@ -91,11 +100,24 @@ public class HealthController {
     }
 
     private boolean pingDatabase() {
-        try (Connection conn = dataSource.getConnection()) {
-            return conn.isValid(2);
+        boolean openedHere = false;
+        try {
+            if (!Base.hasConnection()) {
+                Base.open(dbDriver, dbUrl, dbUsername, dbPassword);
+                openedHere = true;
+            }
+            Connection conn = Base.connection();
+            return conn != null && conn.isValid(2);
         } catch (Exception e) {
             logger.warn("Health check DB failed: {}", e.getMessage());
             return false;
+        } finally {
+            if (openedHere && Base.hasConnection()) {
+                try {
+                    Base.close();
+                } catch (Exception ignore) {
+                }
+            }
         }
     }
 
