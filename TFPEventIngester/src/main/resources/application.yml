@@ -25,6 +25,11 @@ valkey:
   database: 0
   password: 
 
+# Health Check Contract (BERLink HEALTH_CONTRACT.md)
+# Chiave per /api/health/ready (X-API-Key). Override in prod via env HEALTH_API_KEY.
+health:
+  api-key: ${HEALTH_API_KEY:change-me-tfp-event-ingester-health-key}
+
 # Actuator Configuration (Health Checks)
 management:
   endpoints:

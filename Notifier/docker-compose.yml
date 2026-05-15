@@ -8,6 +8,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: berlink-email-notifier
+    hostname: berlink-email-notifier
     ports:
       - 5005:5005 
     environment:

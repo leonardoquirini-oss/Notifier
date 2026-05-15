@@ -7,6 +7,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: tfp-gateway
+    hostname: tfp-gateway
     environment:
       # Subscriber name (consumer group ID)
       SUBSCRIBER_NAME: ${SUBSCRIBER_NAME:-tfp-processor}

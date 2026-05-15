@@ -69,6 +69,10 @@ gateway:
     BERNARDINI_UNIT_POSITIONS_MESSAGE: tfp-unit-positions-stream
     BERNARDINI_ASSET_DAMAGES: tfp-asset-damages-stream    
 
+# Chiave per /api/health/ready (X-API-Key). Override in prod via env HEALTH_API_KEY.
+health:
+  api-key: ${HEALTH_API_KEY:change-me-tfp-gateway-health-key}
+
 # Valkey (Redis) Configuration
 valkey:
   host: valkey-service}
