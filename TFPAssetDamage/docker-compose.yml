@@ -7,13 +7,20 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: tfp-asset-damage-collector
+    hostname: tfp-asset-damage-collector
     restart: unless-stopped
     ports:
-      - 9229:9229  
+      - 9229:9229
+      - 3010:3000
     environment:
       # Scheduling
       - CRON_SCHEDULE=36 9 * * *
       - TZ=Europe/Rome
+
+      # Health (HEALTH_CONTRACT.md)
+      - HEALTH_PORT=3000
+      - HEALTH_API_KEY=${HEALTH_API_KEY:-tfp-health-key-2026-DO-NOT-USE-IN-PRODUCTION}
+      - APP_VERSION=1.0.0
 
       # Redis
       - REDIS_HOST=valkey-service
@@ -34,6 +41,12 @@ services:
 
       # Logging
       - LOG_LEVEL=${LOG_LEVEL:-info}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health/live"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
     networks:
       - berlink-network
     logging:

@@ -14,10 +14,12 @@ const config = require('./config');
 const logger = require('./logger');
 const redisClient = require('./redis-client');
 const { executeJob } = require('./job');
+const { startHealthServer } = require('./health');
 
 // Track if a job is currently running
 let isJobRunning = false;
 let schedulerTask = null;
+let healthServer = null;
 
 /**
  * Scheduler job wrapper with concurrent execution protection
@@ -137,6 +139,12 @@ async function gracefulShutdown(signal) {
     logger.warn('Shutdown timeout reached, forcing exit');
   }
 
+  // Stop health server
+  if (healthServer) {
+    await new Promise((resolve) => healthServer.close(resolve));
+    logger.info('Health server stopped');
+  }
+
   // Close Redis connection
   await redisClient.disconnect();
 
@@ -176,6 +184,14 @@ async function runScheduler() {
     await redisClient.connect();
   } catch (error) {
     logger.error('Failed to connect to Redis, exiting', { error: error.message });
+    process.exit(1);
+  }
+
+  // Start health endpoints (HEALTH_CONTRACT.md)
+  try {
+    healthServer = await startHealthServer();
+  } catch (error) {
+    logger.error('Failed to start health server, exiting', { error: error.message });
     process.exit(1);
   }
 

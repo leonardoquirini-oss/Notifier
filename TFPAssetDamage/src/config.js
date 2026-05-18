@@ -33,6 +33,14 @@ const config = {
 
   // Logging
   logLevel: process.env.LOG_LEVEL || 'info',
+
+  // Health endpoints (BERLink HEALTH_CONTRACT.md)
+  health: {
+    port: parseInt(process.env.HEALTH_PORT, 10) || 3000,
+    apiKey: process.env.HEALTH_API_KEY || '',
+    serviceName: 'tfp-asset-damage-collector',
+    serviceVersion: process.env.APP_VERSION || '1.0.0',
+  },
 };
 
 /**

@@ -146,6 +146,19 @@ class RedisClient {
   }
 
   /**
+   * Ping Redis. Returns true if PONG.
+   */
+  async ping() {
+    try {
+      if (!this.client) return false;
+      const pong = await this.client.ping();
+      return pong === 'PONG';
+    } catch (error) {
+      return false;
+    }
+  }
+
+  /**
    * Closes Redis connection cleanly
    */
   async disconnect() {
