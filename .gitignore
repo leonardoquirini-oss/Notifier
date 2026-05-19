@@ -28,3 +28,5 @@ node_modules/
 
 TFPGateway/target/
 TFPEventIngester/target/
+GateEventProcessor/target/
+BerlinkLogProcessor/target/
