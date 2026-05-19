@@ -1,0 +1,86 @@
+spring:
+  application:
+    name: gate-event-processor
+
+  # BERLink PostgreSQL: used to inspect evt_asset_damages before sending notifications.
+  datasource:
+    url: jdbc:postgresql://postgres-service:5432/berlinkdb
+    username: berlink
+    password: berlink
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 1
+      idle-timeout: 300000
+      max-lifetime: 1800000
+      connection-timeout: 5000
+      pool-name: BerlinkDB-Pool
+
+# Valkey (Redis) Configuration
+valkey:
+  host: valkey-service
+  port: 6379
+  database: 0
+  password:
+
+# Health Check Contract (BERLink HEALTH_CONTRACT.md)
+# Chiave per /api/health/ready (X-API-Key). Override in prod via env HEALTH_API_KEY.
+health:
+  api-key: ${HEALTH_API_KEY:change-me-gate-event-processor-health-key}
+
+# Actuator Configuration (Health Checks)
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when-authorized
+
+# Stream Configuration
+# Tutto configurabile: nome coda (key), consumer group, e tipi accettati (filter su payload.type).
+stream:
+  gate-events:
+    key: tfp-unit-events-stream
+    consumer-group: gate-event-processor-group-dev
+    allowed-types:
+      - GATE_IN
+      - GATE_OUT
+      - GATE_IN_TRAIN
+  poll-timeout-seconds: 1
+
+gates:
+  gate-terni:
+    latitude: 42.566593515583676
+    longitude: 12.60330054635772
+    radius: 500
+    notify-group: officina-terni
+  gate-fiorenzuola:
+    latitude: 44.9226023312316
+    longitude: 9.928303746032544
+    radius: 500
+    notify-group: officina-fiorenzuola
+
+# insert into c_ntf_notification_types (id_notification_type, label, icon, color) VALUES('gate_in_with_damages',    'Verificare Danni',          'calendar',  'red');
+
+# BERLink API: lookup unit (GET /api/units/search, /api/vehicles/by-plate/{plate})
+#              + notifications (POST /api/notifications/send)
+berlink:
+  api:
+    base-url: http://backend:8080
+    api-key: 0e5cfec5-ad39-45c6-b3af-92e9c77dfcf8
+    connect-timeout-ms: 5000
+    read-timeout-ms: 10000
+    cache-enabled: true
+    cache-ttl-minutes: 43200
+    cache-negative-ttl-minutes: 15
+
+# Logging Configuration
+logging:
+  level:
+    root: INFO
+    com.containermgmt.gateeventprocessor: DEBUG
+    org.springframework.data.redis: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"

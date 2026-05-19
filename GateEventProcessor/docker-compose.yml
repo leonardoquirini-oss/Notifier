@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  gateeventprocessor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gate-event-processor
+    hostname: gate-event-processor
+    
+    networks:
+      - berlink-network
+    #volumes:
+    #  - /opt/berlink/gate-event-processor/data/application.yml:/app/application.yml
+
+    restart: unless-stopped
+
+networks:
+  berlink-network:
+    external: true
+    name: berlink-dev_berlink-network

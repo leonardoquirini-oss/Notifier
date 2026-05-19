@@ -1,0 +1,33 @@
+version: '3'
+
+tasks:
+
+  stop-gep:
+    cmds:
+      - docker-compose -f docker-compose.yml stop gateeventprocessor
+    silent: true
+
+  build-gep:
+    cmds:
+      - docker-compose -f docker-compose.yml build gateeventprocessor
+    silent: true
+
+  gep:
+    cmds:
+      - task stop-gep
+      - task build-gep
+    silent: true
+
+  logs-gep:
+    cmds:
+      - docker-compose logs -f gateeventprocessor
+
+  up:
+    cmds:
+      - docker-compose -f docker-compose.yml up -d
+    silent: true
+
+  restart:
+    cmds:
+      - docker-compose down && docker-compose -f docker-compose.yml up -d
+    silent: true
