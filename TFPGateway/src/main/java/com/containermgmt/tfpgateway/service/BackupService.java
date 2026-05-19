@@ -24,11 +24,11 @@ public class BackupService {
         this.activeJDBCConfig = activeJDBCConfig;
     }
 
-    public long countForBackup(LocalDate dateFrom, LocalDate dateTo) {
+    public long countForBackup(LocalDate dateFrom, LocalDate dateTo, String eventType) {
         try {
             activeJDBCConfig.openConnection();
             StringBuilder sql = new StringBuilder("SELECT COUNT(*) AS cnt FROM evt_raw_events");
-            List<Object> params = appendDateWhere(sql, dateFrom, dateTo);
+            List<Object> params = appendFilterWhere(sql, dateFrom, dateTo, eventType);
             Object result = Base.firstCell(sql.toString(), params.toArray());
             return result != null ? ((Number) result).longValue() : 0;
         } finally {
@@ -36,7 +36,23 @@ public class BackupService {
         }
     }
 
-    public void exportAndOptionallyDelete(LocalDate dateFrom, LocalDate dateTo,
+    public List<String> getDistinctEventTypes() {
+        try {
+            activeJDBCConfig.openConnection();
+            List<String> types = new ArrayList<>();
+            List<Map<String, Object>> rows = Base.findAll(
+                    "SELECT DISTINCT event_type FROM evt_raw_events " +
+                    "WHERE event_type IS NOT NULL ORDER BY event_type");
+            for (Map<String, Object> row : rows) {
+                types.add((String) row.get("event_type"));
+            }
+            return types;
+        } finally {
+            activeJDBCConfig.closeConnection();
+        }
+    }
+
+    public void exportAndOptionallyDelete(LocalDate dateFrom, LocalDate dateTo, String eventType,
                                           String format, boolean deleteAfterBackup,
                                           int sqlCommitEvery, OutputStream out) throws IOException {
         List<Map<String, Object>> rows;
@@ -45,7 +61,7 @@ public class BackupService {
             StringBuilder sql = new StringBuilder(
                     "SELECT id_event, message_id, event_type, event_time, processed_at, created_at, " +
                     "checksum, payload::text AS payload FROM evt_raw_events");
-            List<Object> params = appendDateWhere(sql, dateFrom, dateTo);
+            List<Object> params = appendFilterWhere(sql, dateFrom, dateTo, eventType);
             sql.append(" ORDER BY event_time ASC");
             rows = Base.findAll(sql.toString(), params.toArray());
         } finally {
@@ -60,29 +76,29 @@ public class BackupService {
         }
 
         if (deleteAfterBackup) {
-            deleteRange(dateFrom, dateTo);
+            deleteRange(dateFrom, dateTo, eventType);
         }
     }
 
-    private void deleteRange(LocalDate dateFrom, LocalDate dateTo) {
+    private void deleteRange(LocalDate dateFrom, LocalDate dateTo, String eventType) {
         try {
             activeJDBCConfig.openConnection();
             Base.exec("BEGIN");
 
             StringBuilder subSql = new StringBuilder(
                     "SELECT message_id FROM evt_raw_events");
-            List<Object> subParams = appendDateWhere(subSql, dateFrom, dateTo);
+            List<Object> subParams = appendFilterWhere(subSql, dateFrom, dateTo, eventType);
             Base.exec(
                 "DELETE FROM evt_error_ingestion WHERE message_id IN (" + subSql + ")",
                 subParams.toArray()
             );
 
             StringBuilder delSql = new StringBuilder("DELETE FROM evt_raw_events");
-            List<Object> delParams = appendDateWhere(delSql, dateFrom, dateTo);
+            List<Object> delParams = appendFilterWhere(delSql, dateFrom, dateTo, eventType);
             Base.exec(delSql.toString(), delParams.toArray());
 
             Base.exec("COMMIT");
-            log.info("Backup delete completed for range {} - {}", dateFrom, dateTo);
+            log.info("Backup delete completed for range {} - {} eventType={}", dateFrom, dateTo, eventType);
         } catch (Exception e) {
             try { Base.exec("ROLLBACK"); } catch (Exception ignored) {}
             log.error("Backup delete failed, rolled back", e);
@@ -93,7 +109,7 @@ public class BackupService {
     }
 
     // Appends WHERE clause to sql and returns params list
-    private List<Object> appendDateWhere(StringBuilder sql, LocalDate dateFrom, LocalDate dateTo) {
+    private List<Object> appendFilterWhere(StringBuilder sql, LocalDate dateFrom, LocalDate dateTo, String eventType) {
         List<Object> params = new ArrayList<>();
         List<String> conditions = new ArrayList<>();
 
@@ -104,6 +120,10 @@ public class BackupService {
         if (dateTo != null) {
             conditions.add("event_time < (?::date + interval '1 day')");
             params.add(dateTo.toString());
+        }
+        if (eventType != null && !eventType.isBlank()) {
+            conditions.add("event_type = ?");
+            params.add(eventType);
         }
         if (!conditions.isEmpty()) {
             sql.append(" WHERE ").append(String.join(" AND ", conditions));

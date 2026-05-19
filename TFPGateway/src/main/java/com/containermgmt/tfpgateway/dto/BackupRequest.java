@@ -12,6 +12,8 @@ public class BackupRequest {
     @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
     private LocalDate dateTo;
 
+    private String eventType;
+
     private String format = "SQL";
 
     private boolean deleteAfterBackup;
@@ -23,6 +25,9 @@ public class BackupRequest {
 
     public LocalDate getDateTo() { return dateTo; }
     public void setDateTo(LocalDate dateTo) { this.dateTo = dateTo; }
+
+    public String getEventType() { return eventType; }
+    public void setEventType(String eventType) { this.eventType = eventType; }
 
     public String getFormat() { return format; }
     public void setFormat(String format) { this.format = format; }

@@ -110,10 +110,13 @@ public class BerlinkAttachmentService {
      * @param idDocument the BERLink document ID to delete
      */
     public void delete(Long idDocument) {
-        String url = config.getBaseUrl() + "/api/attachments/" + idDocument;
+        // hard=true: rimuove anche il file fisico oltre al record DB.
+        // Su resend evento, il payload riporta gli allegati in base64 e li re-uploada da zero,
+        // quindi non serve preservare i blob originali.
+        String url = config.getBaseUrl() + "/api/attachments/" + idDocument + "?hard=true";
         try {
             restTemplate.delete(url);
-            log.debug("Deleted BERLink attachment id_document={}", idDocument);
+            log.debug("Hard-deleted BERLink attachment id_document={}", idDocument);
         } catch (Exception e) {
             log.warn("Failed to delete BERLink attachment id_document={}: {}", idDocument, e.getMessage());
         }

@@ -15,12 +15,18 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Lookup di un identifier su BERLink. Esegue cascade su tutti gli endpoint
+ * (container search, units search con vehicles, by-plate) accumulando i match.
+ * Un identifier puo' risolversi simultaneamente come container + trailer + vehicle
+ * (es. silos = container montato su semirimorchio). Il parametro unitTypeCode
+ * resta nella signature per back-compat ma e' ignorato dalla logica.
+ */
 @Component
 @Slf4j
 public class BerlinkLookupService {
 
     private static final String CACHE_KEY_PREFIX = "unit:lookup:";
-    private static final List<String> KNOWN_TYPES = List.of("CONTAINER", "SEMITRAILER", "VEHICLE");
 
     private final RestTemplate restTemplate;
     private final BerlinkApiConfig config;
@@ -40,17 +46,7 @@ public class BerlinkLookupService {
             return LookupResult.empty();
         }
 
-        if (unitTypeCode == null || unitTypeCode.isBlank()) {
-            if (config.isCacheEnabled()) {
-                LookupResult probed = probeCacheForKnownTypes(unitNumber);
-                if (probed != null) {
-                    return probed;
-                }
-            }
-            // fall through: API call via lookupNonContainer (existing behavior)
-        }
-
-        String cacheKey = buildCacheKey(unitNumber, unitTypeCode);
+        String cacheKey = buildCacheKey(unitNumber);
 
         if (config.isCacheEnabled()) {
             LookupResult cached = readFromCache(cacheKey);
@@ -61,23 +57,46 @@ public class BerlinkLookupService {
             log.debug("Cache MISS for key={}", cacheKey);
         }
 
+        LookupResult result = LookupResult.empty();
+        result = result.merge(safeContainerLookup(unitNumber));
+        result = result.merge(safeUnitsSearchLookup(unitNumber));
+        if (result.idVehicle() == null) {
+            result = result.merge(safeVehicleByPlateLookup(unitNumber));
+        }
+
+        if (config.isCacheEnabled()) {
+            long ttl = result.hasData() ? config.getCacheTtlMinutes() : config.getCacheNegativeTtlMinutes();
+            writeToCache(cacheKey, result, ttl);
+        }
+
+        log.debug("Lookup result for unitNumber={}: container={}, idTrailer={}, idVehicle={}",
+                unitNumber, result.containerNumber(), result.idTrailer(), result.idVehicle());
+        return result;
+    }
+
+    private LookupResult safeContainerLookup(String unitNumber) {
         try {
-            LookupResult result;
-            if ("CONTAINER".equalsIgnoreCase(unitTypeCode)) {
-                result = lookupContainer(unitNumber);
-            } else {
-                result = lookupNonContainer(unitNumber);
-            }
-
-            if (config.isCacheEnabled()) {
-                long ttl = result.hasData() ? config.getCacheTtlMinutes() : config.getCacheNegativeTtlMinutes();
-                writeToCache(cacheKey, result, ttl);
-            }
-
-            return result;
+            return lookupContainer(unitNumber);
         } catch (Exception e) {
-            log.warn("BERLink lookup failed for unitNumber={}, unitTypeCode={}: {}",
-                    unitNumber, unitTypeCode, e.getMessage());
+            log.warn("BERLink container lookup failed for unitNumber={}: {}", unitNumber, e.getMessage());
+            return LookupResult.empty();
+        }
+    }
+
+    private LookupResult safeUnitsSearchLookup(String unitNumber) {
+        try {
+            return lookupViaUnitsSearch(unitNumber);
+        } catch (Exception e) {
+            log.warn("BERLink units search lookup failed for unitNumber={}: {}", unitNumber, e.getMessage());
+            return LookupResult.empty();
+        }
+    }
+
+    private LookupResult safeVehicleByPlateLookup(String unitNumber) {
+        try {
+            return lookupVehicleByPlate(unitNumber);
+        } catch (Exception e) {
+            log.warn("BERLink by-plate lookup failed for unitNumber={}: {}", unitNumber, e.getMessage());
             return LookupResult.empty();
         }
     }
@@ -142,25 +161,24 @@ public class BerlinkLookupService {
         return LookupResult.empty();
     }
 
-    private LookupResult lookupNonContainer(String unitNumber) {
+    private LookupResult lookupViaUnitsSearch(String unitNumber) {
         List<Map<String, Object>> results = searchUnits(unitNumber, true);
-        if (results != null && !results.isEmpty()) {
-            Map<String, Object> first = results.get(0);
-            String unitType = getStringValue(first, "unitType");
-            Integer id = getIntegerValue(first, "id");
-
-            if ("t".equals(unitType) && id != null) {
-                log.debug("Trailer lookup: unitNumber={} → idTrailer={}", unitNumber, id);
-                return LookupResult.ofTrailer(id);
-            }
-            if ("v".equals(unitType) && id != null) {
-                log.debug("Vehicle lookup via units/search: unitNumber={} → idVehicle={}", unitNumber, id);
-                return LookupResult.ofVehicle(id);
-            }
+        if (results == null || results.isEmpty()) {
+            return LookupResult.empty();
         }
+        Map<String, Object> first = results.get(0);
+        String unitType = getStringValue(first, "unitType");
+        Integer id = getIntegerValue(first, "id");
 
-        // Fallback: search by plate
-        return lookupVehicleByPlate(unitNumber);
+        if ("t".equals(unitType) && id != null) {
+            log.debug("Trailer lookup: unitNumber={} → idTrailer={}", unitNumber, id);
+            return LookupResult.ofTrailer(id);
+        }
+        if ("v".equals(unitType) && id != null) {
+            log.debug("Vehicle lookup via units/search: unitNumber={} → idVehicle={}", unitNumber, id);
+            return LookupResult.ofVehicle(id);
+        }
+        return LookupResult.empty();
     }
 
     private List<Map<String, Object>> searchUnits(String unitNumber, boolean includeVehicles) {
@@ -191,52 +209,34 @@ public class BerlinkLookupService {
                 .toUriString();
         log.debug("BERLink vehicle by plate: {}", url);
 
-        try {
-            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                    url, HttpMethod.GET, null,
-                    new ParameterizedTypeReference<>() {});
+        ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                url, HttpMethod.GET, null,
+                new ParameterizedTypeReference<>() {});
 
-            Map<String, Object> body = response.getBody();
-            if (body == null) {
-                return LookupResult.empty();
-            }
+        Map<String, Object> body = response.getBody();
+        if (body == null) {
+            return LookupResult.empty();
+        }
 
-            String status = getStringValue(body, "status");
-            if (!"success".equals(status)) {
-                return LookupResult.empty();
-            }
+        String status = getStringValue(body, "status");
+        if (!"success".equals(status)) {
+            return LookupResult.empty();
+        }
 
-            Object data = body.get("data");
-            if (data instanceof Map) {
-                Integer idVehicle = getIntegerValue((Map<String, Object>) data, "id_vehicle");
-                if (idVehicle != null) {
-                    log.debug("Vehicle by plate: plate={} → idVehicle={}", plateNumber, idVehicle);
-                    return LookupResult.ofVehicle(idVehicle);
-                }
+        Object data = body.get("data");
+        if (data instanceof Map) {
+            Integer idVehicle = getIntegerValue((Map<String, Object>) data, "id_vehicle");
+            if (idVehicle != null) {
+                log.debug("Vehicle by plate: plate={} → idVehicle={}", plateNumber, idVehicle);
+                return LookupResult.ofVehicle(idVehicle);
             }
-        } catch (Exception e) {
-            log.warn("Vehicle by plate lookup failed for plate={}: {}", plateNumber, e.getMessage());
         }
 
         return LookupResult.empty();
     }
 
-    private LookupResult probeCacheForKnownTypes(String unitNumber) {
-        for (String type : KNOWN_TYPES) {
-            String key = buildCacheKey(unitNumber, type);
-            LookupResult cached = readFromCache(key);
-            if (cached != null && cached.hasData()) {
-                log.debug("Cache HIT (type-probe) key={}", key);
-                return cached;
-            }
-        }
-        return null;
-    }
-
-    private String buildCacheKey(String unitNumber, String unitTypeCode) {
-        String normalizedUnit = unitNumber.trim().toUpperCase();
-        String normalizedType = (unitTypeCode != null) ? unitTypeCode.trim().toUpperCase() : "UNKNOWN";
-        return CACHE_KEY_PREFIX + normalizedType + ":" + normalizedUnit;
+    private String buildCacheKey(String unitNumber) {
+        return CACHE_KEY_PREFIX + unitNumber.trim().toUpperCase();
     }
 
     private LookupResult readFromCache(String key) {
@@ -293,6 +293,14 @@ public class BerlinkLookupService {
 
         public static LookupResult ofVehicle(Integer idVehicle) {
             return new LookupResult(null, null, idVehicle);
+        }
+
+        public LookupResult merge(LookupResult other) {
+            if (other == null) return this;
+            return new LookupResult(
+                    this.containerNumber != null ? this.containerNumber : other.containerNumber,
+                    this.idTrailer != null ? this.idTrailer : other.idTrailer,
+                    this.idVehicle != null ? this.idVehicle : other.idVehicle);
         }
 
         public boolean hasData() {

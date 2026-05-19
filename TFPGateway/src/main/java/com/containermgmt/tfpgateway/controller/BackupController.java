@@ -36,6 +36,7 @@ public class BackupController {
     @GetMapping("/backup")
     public String backupPage(Model model) {
         model.addAttribute("backupRequest", new BackupRequest());
+        model.addAttribute("eventTypes", backupService.getDistinctEventTypes());
         return "backup";
     }
 
@@ -43,9 +44,10 @@ public class BackupController {
     public void countRecords(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFrom,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateTo,
+            @RequestParam(required = false) String eventType,
             HttpServletResponse response) throws IOException {
 
-        long count = backupService.countForBackup(dateFrom, dateTo);
+        long count = backupService.countForBackup(dateFrom, dateTo, eventType);
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.getWriter().write("{\"count\":" + count + "}");
     }
@@ -66,20 +68,22 @@ public class BackupController {
 
         String fromStr = req.getDateFrom() != null ? req.getDateFrom().format(FILE_DATE) : "all";
         String toStr   = req.getDateTo()   != null ? req.getDateTo().format(FILE_DATE)   : "all";
-        String filename = "backup_" + fromStr + "_" + toStr + "." + ext;
+        String typeStr = (req.getEventType() != null && !req.getEventType().isBlank())
+                ? "_" + req.getEventType() : "";
+        String filename = "backup_" + fromStr + "_" + toStr + typeStr + "." + ext;
 
         response.setContentType(ext.equals("csv") ? "text/csv" : "application/octet-stream");
         response.setHeader(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"");
 
         try {
             backupService.exportAndOptionallyDelete(
-                    req.getDateFrom(), req.getDateTo(),
+                    req.getDateFrom(), req.getDateTo(), req.getEventType(),
                     format, req.isDeleteAfterBackup(),
                     req.getSqlCommitEvery(),
                     response.getOutputStream());
             response.getOutputStream().flush();
-            log.info("Backup exported: file={}, format={}, deleteAfterBackup={}",
-                    filename, format, req.isDeleteAfterBackup());
+            log.info("Backup exported: file={}, format={}, eventType={}, deleteAfterBackup={}",
+                    filename, format, req.getEventType(), req.isDeleteAfterBackup());
         } catch (Exception e) {
             log.error("Backup export failed", e);
             if (!response.isCommitted()) {

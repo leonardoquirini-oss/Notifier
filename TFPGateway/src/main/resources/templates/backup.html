@@ -58,6 +58,18 @@
                             </div>
                         </div>
 
+                        <!-- Queue / event_type filter -->
+                        <div class="mb-3">
+                            <label class="form-label" for="eventType">Coda (event_type)</label>
+                            <select id="eventType" name="eventType" class="form-select">
+                                <option value="">— Tutte le code —</option>
+                                <option th:each="t : ${eventTypes}"
+                                        th:value="${t}"
+                                        th:text="${t}"
+                                        th:selected="${t == backupRequest.eventType}"></option>
+                            </select>
+                        </div>
+
                         <!-- Format -->
                         <div class="mb-3">
                             <label class="form-label fw-semibold">Formato Export</label>
@@ -161,11 +173,13 @@
         }
 
         // AJAX count then show confirm dialog
-        var dateFrom = document.getElementById('dateFrom').value;
-        var dateTo   = document.getElementById('dateTo').value;
-        var params   = new URLSearchParams();
-        if (dateFrom) params.append('dateFrom', dateFrom);
-        if (dateTo)   params.append('dateTo', dateTo);
+        var dateFrom  = document.getElementById('dateFrom').value;
+        var dateTo    = document.getElementById('dateTo').value;
+        var eventType = document.getElementById('eventType').value;
+        var params    = new URLSearchParams();
+        if (dateFrom)  params.append('dateFrom', dateFrom);
+        if (dateTo)    params.append('dateTo', dateTo);
+        if (eventType) params.append('eventType', eventType);
 
         fetch('/backup/count?' + params.toString())
             .then(function(resp) { return resp.json(); })
@@ -186,17 +200,19 @@
         document.getElementById('backupForm').submit();
     }
 
-    // Live count update when dates change
+    // Live count update when filters change
     function updateCount() {
-        var dateFrom = document.getElementById('dateFrom').value;
-        var dateTo   = document.getElementById('dateTo').value;
-        if (!dateFrom && !dateTo) {
+        var dateFrom  = document.getElementById('dateFrom').value;
+        var dateTo    = document.getElementById('dateTo').value;
+        var eventType = document.getElementById('eventType').value;
+        if (!dateFrom && !dateTo && !eventType) {
             document.getElementById('recordCount').textContent = '';
             return;
         }
         var params = new URLSearchParams();
-        if (dateFrom) params.append('dateFrom', dateFrom);
-        if (dateTo)   params.append('dateTo', dateTo);
+        if (dateFrom)  params.append('dateFrom', dateFrom);
+        if (dateTo)    params.append('dateTo', dateTo);
+        if (eventType) params.append('eventType', eventType);
 
         fetch('/backup/count?' + params.toString())
             .then(function(resp) { return resp.json(); })
@@ -209,6 +225,7 @@
 
     document.getElementById('dateFrom').addEventListener('change', updateCount);
     document.getElementById('dateTo').addEventListener('change', updateCount);
+    document.getElementById('eventType').addEventListener('change', updateCount);
 
     // Show/hide SQL batch size field based on format selection
     function toggleSqlBatch() {
