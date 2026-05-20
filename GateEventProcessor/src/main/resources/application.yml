@@ -76,6 +76,15 @@ berlink:
     cache-ttl-minutes: 43200
     cache-negative-ttl-minutes: 15
 
+# WhatsApp send-message endpoint (bernardini-os).
+# token: Bearer token per header Authorization (override in prod via env WHATSAPP_TOKEN).
+whatsapp:
+  url: https://bernardini-os.fiai.pro/api/whatsapp/send-message
+  token: fiai-10ad376fb71badb1d6b5618acabaf8c480b7c5479c9c1998ef63db4384dcfba4
+  account: main
+  # true: nessuna chiamata REST, solo log. false: invio reale.
+  dry-run: true
+
 # Logging Configuration
 logging:
   level:

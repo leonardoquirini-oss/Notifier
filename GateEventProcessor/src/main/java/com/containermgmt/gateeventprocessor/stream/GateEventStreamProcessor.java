@@ -7,6 +7,7 @@ import com.containermgmt.gateeventprocessor.service.BerlinkLookupService.LookupR
 import com.containermgmt.gateeventprocessor.service.GateMatcher;
 import com.containermgmt.gateeventprocessor.service.GateMatcher.Match;
 import com.containermgmt.gateeventprocessor.service.NotificationClient;
+import com.containermgmt.gateeventprocessor.service.WhatsAppNotifier;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -36,6 +37,7 @@ public class GateEventStreamProcessor implements StreamProcessor {
     private final NotificationClient notificationClient;
     private final BerlinkLookupService berlinkLookupService;
     private final AssetDamageRepository assetDamageRepository;
+    private final WhatsAppNotifier whatsAppNotifier;
     private final String streamKey;
     private final String consumerGroup;
     private final Set<String> allowedTypes;
@@ -45,12 +47,14 @@ public class GateEventStreamProcessor implements StreamProcessor {
                                     GateMatcher gateMatcher,
                                     NotificationClient notificationClient,
                                     BerlinkLookupService berlinkLookupService,
-                                    AssetDamageRepository assetDamageRepository) {
+                                    AssetDamageRepository assetDamageRepository,
+                                    WhatsAppNotifier whatsAppNotifier) {
         this.objectMapper = objectMapper;
         this.gateMatcher = gateMatcher;
         this.notificationClient = notificationClient;
         this.berlinkLookupService = berlinkLookupService;
         this.assetDamageRepository = assetDamageRepository;
+        this.whatsAppNotifier = whatsAppNotifier;
         this.streamKey = props.getKey();
         this.consumerGroup = props.getConsumerGroup();
         this.allowedTypes = normalize(props.getAllowedTypes());
@@ -165,7 +169,10 @@ public class GateEventStreamProcessor implements StreamProcessor {
         log.info("Gate match for message_id={}: gate={}, distance={}m, group={}",
                 messageId, match.gateId(), Math.round(match.distanceMeters()), match.gate().getNotifyGroup());
 
-        notificationClient.send(match.gate().getNotifyGroup(), NOTIFICATION_TYPE, title, title, link);
+        String notifyGroup = match.gate().getNotifyGroup();
+        notificationClient.send(notifyGroup, NOTIFICATION_TYPE, title, title, link);
+
+        whatsAppNotifier.notifyGroup(notifyGroup, unitNumber);
     }
 
     static String buildLink(String unitNumber) {
