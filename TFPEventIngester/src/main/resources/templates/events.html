@@ -164,9 +164,9 @@
                         <th>Container Number</th>
                         <th>Type</th>
                         <th>Event Time</th>
-                        <th>Create Time</th>
                         <th>ID Trailer</th>
                         <th>ID Vehicle</th>
+                        <th>Allegati</th>
                     </tr>
                     </thead>
                     <tbody>
@@ -182,9 +182,27 @@
                         <td th:text="${evt['container_number']}"></td>
                         <td th:text="${evt['type']}"></td>
                         <td class="date-cell" th:text="${evt['event_time']}"></td>
-                        <td class="date-cell" th:text="${evt['create_time']}"></td>
                         <td th:text="${evt['id_trailer']}"></td>
                         <td th:text="${evt['id_vehicle']}"></td>
+                        <td>
+                            <div class="dropdown att-link att-action d-inline-block"
+                                 th:each="att : ${evt['attachments']}"
+                                 th:if="${att['id_document'] != null}">
+                                <a href="#" role="button" class="att-toggle" data-bs-toggle="dropdown"
+                                   aria-expanded="false" th:title="${att['filename']}">
+                                    <i class="bi bi-file-earmark-arrow-down"></i>
+                                    <span class="att-id" th:text="${att['id_document']}"></span>
+                                </a>
+                                <ul class="dropdown-menu">
+                                    <li><a class="dropdown-item att-action" target="_blank"
+                                           th:href="@{/events/attachments/{id}/download(id=${att['id_document']}, filename=${att['filename']}, inline=true)}">
+                                        <i class="bi bi-eye me-1"></i> Visualizza</a></li>
+                                    <li><a class="dropdown-item att-action"
+                                           th:href="@{/events/attachments/{id}/download(id=${att['id_document']}, filename=${att['filename']})}">
+                                        <i class="bi bi-download me-1"></i> Scarica</a></li>
+                                </ul>
+                            </div>
+                        </td>
                     </tr>
                     <tr th:if="${#lists.isEmpty(unitEvents)}">
                         <td colspan="11" class="text-center text-muted py-4">No events found.</td>
@@ -600,14 +618,23 @@
                                   th:text="${label}"></span>
                         </td>
                         <td>
-                            <a th:each="att : ${dmg['attachments']}"
-                               th:if="${att['id_document'] != null}"
-                               class="att-link att-action"
-                               th:href="@{/events/attachments/{id}/download(id=${att['id_document']}, filename=${att['filename']})}"
-                               th:title="${att['filename']}">
-                                <i class="bi bi-file-earmark-arrow-down"></i>
-                                <span class="att-id" th:text="${att['id_document']}"></span>
-                            </a>
+                            <div class="dropdown att-link att-action d-inline-block"
+                                 th:each="att : ${dmg['attachments']}"
+                                 th:if="${att['id_document'] != null}">
+                                <a href="#" role="button" class="att-toggle" data-bs-toggle="dropdown"
+                                   aria-expanded="false" th:title="${att['filename']}">
+                                    <i class="bi bi-file-earmark-arrow-down"></i>
+                                    <span class="att-id" th:text="${att['id_document']}"></span>
+                                </a>
+                                <ul class="dropdown-menu">
+                                    <li><a class="dropdown-item att-action" target="_blank"
+                                           th:href="@{/events/attachments/{id}/download(id=${att['id_document']}, filename=${att['filename']}, inline=true)}">
+                                        <i class="bi bi-eye me-1"></i> Visualizza</a></li>
+                                    <li><a class="dropdown-item att-action"
+                                           th:href="@{/events/attachments/{id}/download(id=${att['id_document']}, filename=${att['filename']})}">
+                                        <i class="bi bi-download me-1"></i> Scarica</a></li>
+                                </ul>
+                            </div>
                         </td>
                     </tr>
                     <tr th:if="${#lists.isEmpty(assetDamages)}">
@@ -973,9 +1000,19 @@ document.querySelectorAll('tr.detail-row').forEach(function(tr) {
     });
 });
 
-// Prevent row click when clicking attachment download links
-document.querySelectorAll('.att-action').forEach(function(a) {
-    a.addEventListener('click', function(e) { e.stopPropagation(); });
+// Row-click already ignores clicks inside .att-action (see closest() check above),
+// so no stopPropagation here — it would block Bootstrap's document listener and
+// keep the dropdown menu open after selecting an item.
+
+// Init attachment dropdowns with fixed popper strategy so the menu
+// escapes the .table-responsive overflow clipping.
+document.querySelectorAll('.att-toggle[data-bs-toggle="dropdown"]').forEach(function(el) {
+    new bootstrap.Dropdown(el, {
+        popperConfig: function(defaultConfig) {
+            defaultConfig.strategy = 'fixed';
+            return defaultConfig;
+        }
+    });
 });
 
 function openDetail(url) {

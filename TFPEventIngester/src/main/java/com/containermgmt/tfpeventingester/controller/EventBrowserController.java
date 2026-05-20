@@ -214,7 +214,8 @@ public class EventBrowserController {
 
     @GetMapping("/events/attachments/{idDocument}/download")
     public ResponseEntity<byte[]> downloadAttachment(@PathVariable Long idDocument,
-                                                      @RequestParam(required = false) String filename) {
+                                                      @RequestParam(required = false) String filename,
+                                                      @RequestParam(defaultValue = "false") boolean inline) {
         ResponseEntity<byte[]> upstream = berlinkAttachmentService.download(idDocument);
         if (upstream == null || !upstream.getStatusCode().is2xxSuccessful() || upstream.getBody() == null) {
             return ResponseEntity.notFound().build();
@@ -226,8 +227,9 @@ public class EventBrowserController {
                 ? filename
                 : "attachment-" + idDocument;
         String encoded = java.net.URLEncoder.encode(downloadName, StandardCharsets.UTF_8).replace("+", "%20");
+        String disposition = inline ? "inline" : "attachment";
         headers.add(HttpHeaders.CONTENT_DISPOSITION,
-                "attachment; filename=\"" + downloadName.replace("\"", "") + "\"; filename*=UTF-8''" + encoded);
+                disposition + "; filename=\"" + downloadName.replace("\"", "") + "\"; filename*=UTF-8''" + encoded);
         return ResponseEntity.ok().headers(headers).body(upstream.getBody());
     }
 }

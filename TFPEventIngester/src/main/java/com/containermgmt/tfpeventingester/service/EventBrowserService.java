@@ -69,9 +69,42 @@ public class EventBrowserService {
             params.add(PAGE_SIZE);
             params.add(page * PAGE_SIZE);
 
-            return Base.findAll(sql.toString(), params.toArray());
+            List<Map<String, Object>> rows = Base.findAll(sql.toString(), params.toArray());
+            attachEventAttachmentsToRows(rows);
+            return rows;
         } finally {
             Base.close();
+        }
+    }
+
+    private void attachEventAttachmentsToRows(List<Map<String, Object>> rows) {
+        if (rows.isEmpty()) return;
+
+        List<Long> ids = rows.stream()
+                .map(r -> r.get("id_unit_event"))
+                .filter(java.util.Objects::nonNull)
+                .map(o -> ((Number) o).longValue())
+                .collect(Collectors.toList());
+        if (ids.isEmpty()) {
+            for (Map<String, Object> row : rows) row.put("attachments", List.of());
+            return;
+        }
+
+        String placeholders = String.join(",", ids.stream().map(i -> "?").collect(Collectors.toList()));
+        String sql = "SELECT id_event_attachment, id_unit_event, id_document, filename " +
+                "FROM evt_event_attachments WHERE id_unit_event IN (" + placeholders + ") " +
+                "ORDER BY id_event_attachment";
+        List<Map<String, Object>> atts = Base.findAll(sql, ids.toArray());
+
+        Map<Long, List<Map<String, Object>>> grouped = new HashMap<>();
+        for (Map<String, Object> a : atts) {
+            Long key = ((Number) a.get("id_unit_event")).longValue();
+            grouped.computeIfAbsent(key, k -> new ArrayList<>()).add(a);
+        }
+        for (Map<String, Object> row : rows) {
+            Object idObj = row.get("id_unit_event");
+            Long id = idObj != null ? ((Number) idObj).longValue() : null;
+            row.put("attachments", grouped.getOrDefault(id, List.of()));
         }
     }
 

@@ -183,13 +183,41 @@ public class UnitEventStreamProcessor extends AbstractStreamProcessor {
     private Long uploadAttachment(EvtEventAttachment attachment, Object parentId, String base64Content) {
         String fileName = (String) attachment.get("filename");
         try {
-            byte[] bytes = Base64.getDecoder().decode(base64Content);
+            byte[] bytes = decodePossiblyDoubleEncoded(base64Content);
             return berlinkAttachmentService.upload(fileName, bytes, "UNIT_EVENT", parentId);
         } catch (Exception e) {
             log.warn("Failed to upload attachment fileName={}, id_unit_event={}: {}",
                     fileName, parentId, e.getMessage());
             return null;
         }
+    }
+
+    /**
+     * The unit-events producer double-encodes attachment content (base64 of base64).
+     * Decode once; if the result is still pure base64 text, decode again so BERLink
+     * receives the real file bytes instead of a base64 string.
+     */
+    private byte[] decodePossiblyDoubleEncoded(String base64Content) {
+        byte[] decoded = Base64.getDecoder().decode(base64Content);
+        if (looksLikeBase64(decoded)) {
+            try {
+                return Base64.getDecoder().decode(new String(decoded, java.nio.charset.StandardCharsets.US_ASCII).trim());
+            } catch (IllegalArgumentException ignore) {
+                // not actually double-encoded — keep the first decode
+            }
+        }
+        return decoded;
+    }
+
+    private boolean looksLikeBase64(byte[] bytes) {
+        if (bytes.length == 0) return false;
+        for (byte b : bytes) {
+            boolean valid = (b >= 'A' && b <= 'Z') || (b >= 'a' && b <= 'z')
+                    || (b >= '0' && b <= '9')
+                    || b == '+' || b == '/' || b == '=' || b == '\r' || b == '\n';
+            if (!valid) return false;
+        }
+        return true;
     }
 
     @Override
