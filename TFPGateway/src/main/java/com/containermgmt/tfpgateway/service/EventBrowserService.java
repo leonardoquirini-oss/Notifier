@@ -116,10 +116,34 @@ public class EventBrowserService {
             return 0;
         }
 
+        // Riordina gli ID selezionati per event_time ASC: il re-invio rispetta
+        // l'ordine cronologico di ricezione originale, non l'ordine di selezione UI.
+        List<Integer> orderedIds = orderIdsByEventTime(eventIds);
+
         Map<String, Object> metadata = forceMessageId ? Map.of("resend", "true") : null;
-        int count = resendInBatches(eventIds, metadata);
-        log.info("Resent {}/{} events (forceMessageId={})", count, eventIds.size(), forceMessageId);
+        int count = resendInBatches(orderedIds, metadata);
+        log.info("Resent {}/{} events (forceMessageId={})", count, orderedIds.size(), forceMessageId);
         return count;
+    }
+
+    private List<Integer> orderIdsByEventTime(List<Integer> eventIds) {
+        try {
+            activeJDBCConfig.openConnection();
+            String placeholders = String.join(",", eventIds.stream().map(x -> "?").toList());
+            String sql = "SELECT id_event FROM evt_raw_events WHERE id_event IN (" + placeholders + ") " +
+                         "ORDER BY event_time ASC";
+            List<Map<String, Object>> rows = Base.findAll(sql, eventIds.toArray());
+            List<Integer> ordered = new ArrayList<>(rows.size());
+            for (Map<String, Object> row : rows) {
+                Object v = row.get("id_event");
+                if (v instanceof Number n) {
+                    ordered.add(n.intValue());
+                }
+            }
+            return ordered;
+        } finally {
+            activeJDBCConfig.closeConnection();
+        }
     }
 
     public int resendAllByFilter(String eventType, LocalDate dateFrom, LocalDate dateTo,
@@ -133,7 +157,7 @@ public class EventBrowserService {
             StringBuilder sql = new StringBuilder("SELECT id_event FROM evt_raw_events");
             List<Object> params = new ArrayList<>();
             appendWhereClause(sql, params, eventType, dateFrom, dateTo, messageId, unitNumber, payloadType, additionalData);
-            sql.append(" ORDER BY event_time DESC");
+            sql.append(" ORDER BY event_time ASC");
 
             List<Map<String, Object>> rows = Base.findAll(sql.toString(), params.toArray());
             ids = new ArrayList<>(rows.size());
@@ -156,6 +180,114 @@ public class EventBrowserService {
         return count;
     }
 
+    /**
+     * Reinvia una lista di message_id.
+     *
+     * @param temporalOrder true = ordine cronologico (event_time ASC);
+     *                       false = ordine di presentazione (come forniti in input).
+     * @return numero di eventi effettivamente reinviati (i message_id non trovati sono ignorati).
+     */
+    public int resendByMessageIds(List<String> messageIds, boolean forceMessageId, boolean temporalOrder) {
+        if (messageIds == null || messageIds.isEmpty()) {
+            return 0;
+        }
+
+        List<String> orderedMids = temporalOrder
+                ? orderMidsByEventTime(messageIds)
+                : messageIds;
+
+        Map<String, Object> metadata = forceMessageId ? Map.of("resend", "true") : null;
+
+        int total = 0;
+        for (int i = 0; i < orderedMids.size(); i += RESEND_BATCH_SIZE) {
+            List<String> batch = orderedMids.subList(i, Math.min(i + RESEND_BATCH_SIZE, orderedMids.size()));
+            total += publishBatchByMessageId(batch, metadata, temporalOrder);
+        }
+
+        log.info("Resend by message_id list: resent {}/{} events (temporalOrder={}, forceMessageId={})",
+                total, orderedMids.size(), temporalOrder, forceMessageId);
+        return total;
+    }
+
+    private List<String> orderMidsByEventTime(List<String> messageIds) {
+        try {
+            activeJDBCConfig.openConnection();
+            String placeholders = String.join(",", messageIds.stream().map(x -> "?").toList());
+            String sql = "SELECT message_id FROM evt_raw_events WHERE message_id IN (" + placeholders + ") " +
+                         "ORDER BY event_time ASC";
+            List<Map<String, Object>> rows = Base.findAll(sql, messageIds.toArray());
+            List<String> ordered = new ArrayList<>(rows.size());
+            for (Map<String, Object> row : rows) {
+                ordered.add((String) row.get("message_id"));
+            }
+            return ordered;
+        } finally {
+            activeJDBCConfig.closeConnection();
+        }
+    }
+
+    private int publishBatchByMessageId(List<String> batchMids, Map<String, Object> metadata, boolean temporalOrder) {
+        List<Map<String, Object>> rows;
+        try {
+            activeJDBCConfig.openConnection();
+            String placeholders = String.join(",", batchMids.stream().map(x -> "?").toList());
+            StringBuilder sql = new StringBuilder(
+                    "SELECT id_event, message_id, event_type, event_time, payload::text AS payload " +
+                    "FROM evt_raw_events WHERE message_id IN (" + placeholders + ")");
+            if (temporalOrder) {
+                sql.append(" ORDER BY event_time ASC");
+            }
+            rows = Base.findAll(sql.toString(), batchMids.toArray());
+        } finally {
+            activeJDBCConfig.closeConnection();
+        }
+
+        if (temporalOrder) {
+            int count = 0;
+            for (Map<String, Object> row : rows) {
+                if (publishRow(row, metadata)) count++;
+            }
+            return count;
+        }
+
+        // Ordine di presentazione: indicizza per message_id, poi itera nell'ordine di input.
+        Map<String, Map<String, Object>> byMid = new HashMap<>(rows.size());
+        for (Map<String, Object> row : rows) {
+            byMid.put((String) row.get("message_id"), row);
+        }
+        int count = 0;
+        for (String mid : batchMids) {
+            Map<String, Object> row = byMid.get(mid);
+            if (row != null && publishRow(row, metadata)) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private boolean publishRow(Map<String, Object> row, Map<String, Object> metadata) {
+        try {
+            Object eventTimeObj = row.get("event_time");
+            Instant eventTime = null;
+            if (eventTimeObj instanceof java.sql.Timestamp ts) {
+                eventTime = ts.toInstant();
+            }
+
+            EventMessage msg = EventMessage.builder()
+                    .messageId((String) row.get("message_id"))
+                    .eventType((String) row.get("event_type"))
+                    .eventTime(eventTime)
+                    .rawPayload((String) row.get("payload"))
+                    .build();
+
+            valkeyStreamPublisher.publish(msg, metadata);
+            return true;
+        } catch (Exception e) {
+            log.warn("Failed to resend event id={}: {}", row.get("id_event"), e.getMessage());
+            return false;
+        }
+    }
+
     private int resendInBatches(List<Integer> ids, Map<String, Object> metadata) {
         if (ids == null || ids.isEmpty()) return 0;
         int total = 0;
@@ -172,7 +304,8 @@ public class EventBrowserService {
             activeJDBCConfig.openConnection();
             String placeholders = String.join(",", batchIds.stream().map(x -> "?").toList());
             String sql = "SELECT id_event, message_id, event_type, event_time, payload::text AS payload " +
-                         "FROM evt_raw_events WHERE id_event IN (" + placeholders + ")";
+                         "FROM evt_raw_events WHERE id_event IN (" + placeholders + ") " +
+                         "ORDER BY event_time ASC";
             rows = Base.findAll(sql, batchIds.toArray());
         } finally {
             activeJDBCConfig.closeConnection();
@@ -180,25 +313,7 @@ public class EventBrowserService {
 
         int count = 0;
         for (Map<String, Object> row : rows) {
-            try {
-                Object eventTimeObj = row.get("event_time");
-                Instant eventTime = null;
-                if (eventTimeObj instanceof java.sql.Timestamp ts) {
-                    eventTime = ts.toInstant();
-                }
-
-                EventMessage msg = EventMessage.builder()
-                        .messageId((String) row.get("message_id"))
-                        .eventType((String) row.get("event_type"))
-                        .eventTime(eventTime)
-                        .rawPayload((String) row.get("payload"))
-                        .build();
-
-                valkeyStreamPublisher.publish(msg, metadata);
-                count++;
-            } catch (Exception e) {
-                log.warn("Failed to resend event id={}: {}", row.get("id_event"), e.getMessage());
-            }
+            if (publishRow(row, metadata)) count++;
         }
         return count;
     }

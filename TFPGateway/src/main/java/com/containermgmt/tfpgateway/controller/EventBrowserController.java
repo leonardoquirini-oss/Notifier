@@ -18,6 +18,7 @@ import java.util.Map;
 public class EventBrowserController {
 
     private static final int PAGE_SIZE = 50;
+    private static final int MAX_RESEND_LIST = 1000;
 
     private final EventBrowserService eventBrowserService;
 
@@ -77,6 +78,56 @@ public class EventBrowserController {
                 count + " event(s) resent successfully to Valkey streams.");
 
         return "redirect:/events";
+    }
+
+    @PostMapping("/events/resend-list")
+    public String resendByMessageIds(
+            @RequestParam(required = false) String messageIds,
+            @RequestParam(required = false, defaultValue = "input") String order,
+            @RequestParam(required = false, defaultValue = "false") boolean forceMessageId,
+            RedirectAttributes redirectAttributes) {
+
+        List<String> ids = parseMessageIds(messageIds);
+
+        if (ids.isEmpty()) {
+            redirectAttributes.addFlashAttribute("errorMessage", "No message id provided.");
+            return "redirect:/events";
+        }
+        if (ids.size() > MAX_RESEND_LIST) {
+            redirectAttributes.addFlashAttribute("errorMessage",
+                    "Too many message id: " + ids.size() + " (max " + MAX_RESEND_LIST + ").");
+            return "redirect:/events";
+        }
+
+        boolean temporalOrder = "time".equalsIgnoreCase(order);
+        int count = eventBrowserService.resendByMessageIds(ids, forceMessageId, temporalOrder);
+
+        if (count == 0) {
+            redirectAttributes.addFlashAttribute("errorMessage", "No matching events found for the provided message id.");
+        } else if (count < ids.size()) {
+            redirectAttributes.addFlashAttribute("successMessage",
+                    count + "/" + ids.size() + " event(s) resent (" + (ids.size() - count) + " message id not found).");
+        } else {
+            redirectAttributes.addFlashAttribute("successMessage",
+                    count + " event(s) resent successfully to Valkey streams.");
+        }
+
+        return "redirect:/events";
+    }
+
+    private List<String> parseMessageIds(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return List.of();
+        }
+        // Una riga = un message_id. Trim, scarta righe vuote, dedup preservando l'ordine di input.
+        java.util.LinkedHashSet<String> unique = new java.util.LinkedHashSet<>();
+        for (String line : raw.split("\\R")) {
+            String mid = line.trim();
+            if (!mid.isEmpty()) {
+                unique.add(mid);
+            }
+        }
+        return new java.util.ArrayList<>(unique);
     }
 
     @PostMapping("/events/resend-all")

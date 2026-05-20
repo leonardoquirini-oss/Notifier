@@ -109,6 +109,61 @@
     <input type="hidden" id="filterAdditionalData" th:value="${additionalData}">
     <input type="hidden" id="filterTotalCount" th:value="${totalCount}">
 
+    <!-- Resend by message id list -->
+    <div class="card mb-3">
+        <div class="card-header py-2 d-flex align-items-center" style="cursor:pointer"
+             data-bs-toggle="collapse" data-bs-target="#resendListBody">
+            <span class="fw-semibold">Resend by message id list</span>
+            <small class="text-muted ms-2">(max 1000 righe)</small>
+        </div>
+        <div id="resendListBody" class="collapse">
+            <div class="card-body">
+                <div class="mb-2">
+                    <label class="form-label form-label-sm mb-1" for="midList">
+                        Message id (uno per riga)
+                    </label>
+                    <textarea id="midList" class="form-control form-control-sm" rows="6"
+                              placeholder="ID:7a5a1e02-...&#10;ID:8b6b2f13-...&#10;..."
+                              oninput="updateMidCount()"></textarea>
+                    <div class="form-text"><span id="midCount">0</span> righe</div>
+                </div>
+                <div class="d-flex flex-wrap align-items-center gap-3">
+                    <div>
+                        <label class="form-label form-label-sm mb-1 d-block">Ordine di invio</label>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="midOrder" id="orderInput" value="input" checked>
+                            <label class="form-check-label" for="orderInput">
+                                Come presentati <small class="text-muted">(ordine input)</small>
+                            </label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="radio" name="midOrder" id="orderTime" value="time">
+                            <label class="form-check-label" for="orderTime">
+                                Temporale <small class="text-muted">(event_time ASC)</small>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="midForceMessageId" value="true">
+                        <label class="form-check-label" for="midForceMessageId">
+                            Force Message Id <small class="text-muted">(metadata {resend:true})</small>
+                        </label>
+                    </div>
+                    <button type="button" class="btn btn-warning btn-sm" onclick="confirmResendList()">
+                        Resend List
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden form submitted by Resend List -->
+    <form id="resendListForm" th:action="@{/events/resend-list}" method="post" class="d-none">
+        <input type="hidden" name="messageIds" id="midListField">
+        <input type="hidden" name="order" id="midOrderField">
+        <input type="hidden" name="forceMessageId" id="midForceField">
+    </form>
+
     <!-- Resend form wraps table -->
     <form id="resendForm" th:action="@{/events/resend}" method="post">
 
@@ -393,6 +448,44 @@
         .catch(function(err) {
             showAlert('danger', 'Resend All failed: ' + err.message);
         });
+    }
+
+    /* --- Resend by message id list --- */
+    function parseMidLines() {
+        var raw = document.getElementById('midList').value;
+        var seen = {};
+        var out = [];
+        raw.split(/\r?\n/).forEach(function(line) {
+            var mid = line.trim();
+            if (mid && !seen[mid]) { seen[mid] = true; out.push(mid); }
+        });
+        return out;
+    }
+
+    function updateMidCount() {
+        document.getElementById('midCount').textContent = parseMidLines().length;
+    }
+
+    function confirmResendList() {
+        var mids = parseMidLines();
+        if (mids.length === 0) {
+            alert('Inserisci almeno un message id.');
+            return;
+        }
+        if (mids.length > 1000) {
+            alert('Troppi message id: ' + mids.length + ' (max 1000).');
+            return;
+        }
+        var order = document.querySelector('input[name="midOrder"]:checked').value;
+        var force = document.getElementById('midForceMessageId').checked;
+        var orderLabel = order === 'time' ? 'ordine temporale (event_time ASC)' : 'ordine di presentazione';
+        var meta = force ? '\n(metadata {resend:true} will be added)' : '';
+        if (confirm('Reinviare ' + mids.length + ' message id in ' + orderLabel + '?' + meta)) {
+            document.getElementById('midListField').value = mids.join('\n');
+            document.getElementById('midOrderField').value = order;
+            document.getElementById('midForceField').value = force ? 'true' : 'false';
+            document.getElementById('resendListForm').submit();
+        }
     }
 
     function confirmModalResend() {
