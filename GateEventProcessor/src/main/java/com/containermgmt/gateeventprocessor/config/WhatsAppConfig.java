@@ -18,8 +18,13 @@ import org.springframework.context.annotation.Configuration;
 public class WhatsAppConfig {
 
     private String url;
+    private String imageUrl;
     private String token;
     private String account = "main";
     /** When true, no REST call is made: requests are only logged. */
     private boolean dryRun = true;
+    /** entityType used when uploading temporary attachments to BERLink. */
+    private String tempEntityType = "document";
+    /** Validity (minutes) of the temporary attachments created for the WhatsApp links. */
+    private int tempTimeoutMinutes = 60;
 }

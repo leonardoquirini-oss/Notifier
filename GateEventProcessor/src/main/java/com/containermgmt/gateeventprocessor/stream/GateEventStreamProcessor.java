@@ -172,7 +172,25 @@ public class GateEventStreamProcessor implements StreamProcessor {
         String notifyGroup = match.gate().getNotifyGroup();
         notificationClient.send(notifyGroup, NOTIFICATION_TYPE, title, title, link);
 
-        whatsAppNotifier.notifyGroup(notifyGroup, unitNumber);
+        whatsAppNotifier.notifyGroup(notifyGroup, unitNumber, extractAttachments(payload));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<WhatsAppNotifier.EventAttachment> extractAttachments(Map<String, Object> payload) {
+        Object raw = payload.get("assetDamageAttachments");
+        if (!(raw instanceof List<?> list)) {
+            return List.of();
+        }
+        List<WhatsAppNotifier.EventAttachment> out = new java.util.ArrayList<>();
+        for (Object o : list) {
+            if (o instanceof Map<?, ?> m) {
+                String filename = stringOrNull(m.get("fileName"));
+                String content = stringOrNull(m.get("fileContent"));
+                Object sourceId = m.get("id");
+                out.add(new WhatsAppNotifier.EventAttachment(filename, content, sourceId));
+            }
+        }
+        return out;
     }
 
     static String buildLink(String unitNumber) {
