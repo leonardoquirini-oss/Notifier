@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS evt_unit_events (
     id_trailer       INTEGER,
     id_vehicle       INTEGER,
     container_number VARCHAR(50),
+    mission          VARCHAR(20),
     payload          JSONB
 ) PARTITION BY RANGE (event_time);
 

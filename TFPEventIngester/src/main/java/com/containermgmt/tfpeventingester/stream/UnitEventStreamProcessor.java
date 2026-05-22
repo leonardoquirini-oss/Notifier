@@ -5,6 +5,8 @@ import com.containermgmt.tfpeventingester.model.EvtUnitEvent;
 import com.containermgmt.tfpeventingester.service.BerlinkAttachmentService;
 import com.containermgmt.tfpeventingester.service.BerlinkLookupService;
 import com.containermgmt.tfpeventingester.service.BerlinkLookupService.LookupResult;
+import com.containermgmt.tfpeventingester.service.MissionResolutionService;
+import com.containermgmt.tfpeventingester.service.TfpMissionLookupService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -34,15 +36,22 @@ public class UnitEventStreamProcessor extends AbstractStreamProcessor {
 
     private List<AttachmentUploadContext> pendingAttachments = new ArrayList<>();
     private LastPositionExtras lastPositionExtras;
+    private String pendingTransportOrderShortCode;
     private final BerlinkAttachmentService berlinkAttachmentService;
+    private final TfpMissionLookupService tfpMissionLookupService;
+    private final MissionResolutionService missionResolutionService;
 
     public UnitEventStreamProcessor(ObjectMapper objectMapper,
                                      BerlinkLookupService berlinkLookupService,
                                      BerlinkAttachmentService berlinkAttachmentService,
+                                     TfpMissionLookupService tfpMissionLookupService,
+                                     MissionResolutionService missionResolutionService,
                                      @Value("${stream.unit-events.key}") String streamKey,
                                      @Value("${stream.unit-events.consumer-group}") String consumerGroup) {
         super(objectMapper, berlinkLookupService, streamKey, consumerGroup);
         this.berlinkAttachmentService = berlinkAttachmentService;
+        this.tfpMissionLookupService = tfpMissionLookupService;
+        this.missionResolutionService = missionResolutionService;
     }
 
     @Override
@@ -65,6 +74,7 @@ public class UnitEventStreamProcessor extends AbstractStreamProcessor {
         event.set("longitude", parseBigDecimal(payload, "longitude"));
         event.set("unit_number", getString(payload, "unitNumber"));
         event.set("unit_type_code", getString(payload, "unitTypeCode"));
+        pendingTransportOrderShortCode = getString(payload, "transportOrderShortCode");
 
         lastPositionExtras = new LastPositionExtras(
                 getString(payload, "terminalCode"),
@@ -104,6 +114,10 @@ public class UnitEventStreamProcessor extends AbstractStreamProcessor {
     @Override
     protected void saveModels(List<Model> models, LookupResult lookup) {
         Model parent = models.get(0); // EvtUnitEvent is always first
+
+        // TFP mission lookup (HTTP call kept outside the DB transaction)
+        String mission = resolveMission(parent);
+
         Base.openTransaction();
         try {
             if (lookup.hasData()) {
@@ -111,6 +125,7 @@ public class UnitEventStreamProcessor extends AbstractStreamProcessor {
                 parent.set("id_trailer", lookup.idTrailer());
                 parent.set("id_vehicle", lookup.idVehicle());
             }
+            parent.set("mission", mission);
             parent.saveIt();
             Object actualId = parent.getId();
             Object eventTime = parent.get("event_time");
@@ -141,6 +156,18 @@ public class UnitEventStreamProcessor extends AbstractStreamProcessor {
         } finally {
             pendingAttachments = new ArrayList<>();
         }
+    }
+
+    private String resolveMission(Model parent) {
+        Object eventTime = parent.get("event_time");
+        java.time.Instant instant = eventTime instanceof java.sql.Timestamp ts ? ts.toInstant() : null;
+        // Risoluzione mission tutta su DB (BERLink + TIR). Chiamata diretta TFP disabilitata:
+        // tfpMissionLookupService resta disponibile ma non viene piu' invocato.
+        return missionResolutionService.resolve(
+                (String) parent.get("unit_number"),
+                instant,
+                (String) parent.get("type"),
+                pendingTransportOrderShortCode);
     }
 
     private void upsertLastPosition(EvtUnitEvent parent) {

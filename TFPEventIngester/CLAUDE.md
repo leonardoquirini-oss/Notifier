@@ -198,6 +198,24 @@ Quando un evento viene processato, tutti i processor chiamano `BerlinkLookupServ
 
 **Gestione errori:** Se BERLink non è raggiungibile, l'evento viene salvato senza i campi di lookup (log warn). Timeout: connect 5s, read 10s.
 
+## Mission Resolution (colonna `evt_unit_events.mission`)
+
+`UnitEventStreamProcessor.resolveMission()` → `MissionResolutionService.resolve(unitNumber, eventTime, transportOrderShortCode)`. Risoluzione **tutta su DB** (BERLink `evt_unit_events` + TIR `ElencoRichieste3` via TIRConnector). La chiamata diretta a TFP (`TfpMissionLookupService`, `TfpClient`) è **disabilitata** ma il codice resta in repo (non più invocato).
+
+Il refNum si estrae da `transportOrderShortCode` (es. `id:210994+refNum:26A03044_06` → `26A03044_06`) con `extractRefNum()`.
+
+**Algoritmo** (CURR_EVT = evento corrente, non ancora salvato a DB):
+1. CURR_EVT ha `transportOrderShortCode` → `mission = refNum`. FINE.
+2. Altrimenti cerca START_EVT (`event_time <= CURR.eventTime`, stesso `unit_number`, `payload->>'type'='PICKUP' AND loadStatus='FULL'` oppure `type='BEGIN_LOAD'`, più recente). Se assente → mission null. Se presente → `BG = refNum(START_EVT)`. **Se CURR_EVT.type IN ('DROP','END_UNLOAD')** (evento di chiusura) → `mission=BG` subito, senza TIR (eredita la mission dello START). Altrimenti query TIR `SELECT DataS, DaProcessare FROM ElencoRichieste3 WHERE NumRic='<BG>'`; se `DaProcessare=0` → mission null, altrimenti (null o 1) → step 3.
+3. Cerca END_EVT dopo START_EVT (`type IN ('DROP','END_UNLOAD')`): `END>=CURR` → mission=BG; `END<CURR` → null (fra due missioni); nessun END → se `DataS<CURR` null, se `DataS>=CURR AND DaProcessare=1` → mission=BG.
+
+`DataS` (= DataConsegnaEffettiva) e `DaProcessare` vengono dalla singola query TIR del passo 2 (riusati al passo 3c). TIR irraggiungibile / non configurato → `DataS`/`DaProcessare` null (degradazione graceful).
+
+| Variabile env | Default | Descrizione |
+|---------------|---------|-------------|
+| `TIRCONNECTOR_API_URL` | http://172.28.234.122:9090 | Base URL TIRConnector |
+| `TIRCONNECTOR_API_KEY` | default-key-change-me | X-API-Key TIRConnector |
+
 ### Cache Valkey per BERLink Lookup
 
 I risultati di `BerlinkLookupService.lookupUnit()` vengono cachati in Valkey per evitare chiamate API ridondanti. La cache usa `RedisTemplate<String, String>` + `ObjectMapper` (bean gia' disponibili, zero dipendenze aggiuntive).

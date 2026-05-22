@@ -51,6 +51,24 @@ berlink:
     cache-ttl-minutes: 43200 # 30 giorni
     cache-negative-ttl-minutes: 15
 
+# TFP API Configuration (Track Fleet Platform)
+# NOTA: lookup mission diretto via TFP DISABILITATO (vedi MissionResolutionService).
+# Config mantenuta per il bean TfpMissionLookupService (non piu' invocato).
+tfp:
+  api:
+    base-url: ${TFP_API_URL:https://tfp.circletouch.eu}
+    username: ${TFP_API_USER:admin.b}
+    password: ${TFP_API_PASSWORD:TB_adm_2026.}
+    timeout: 30000
+    retry-attempts: 3
+
+# TIRConnector API Configuration (accesso DB TIR ElencoRichieste3 per risoluzione mission)
+tirconnector:
+  api:
+    base-url: ${TIRCONNECTOR_API_URL:http://172.28.234.122:9090}
+    key: ${TIRCONNECTOR_API_KEY:default-key-change-me}
+    timeout: 30000
+
 # Stream Configuration
 stream:
   unit-events:

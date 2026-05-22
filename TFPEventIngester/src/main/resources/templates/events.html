@@ -17,6 +17,11 @@
                     text-decoration: none; margin: 0 4px; font-size: 0.7rem; line-height: 1; }
         .att-link i { font-size: 1.25rem; }
         .att-link .att-id { margin-top: 2px; color: #555; }
+        #detailPayload .tok-key  { color: #0b5394; font-weight: 600; }
+        #detailPayload .tok-str  { color: #1a7f37; }
+        #detailPayload .tok-num  { color: #b35900; }
+        #detailPayload .tok-bool { color: #9b1c9b; }
+        #detailPayload .tok-null { color: #999; }
     </style>
 </head>
 <body class="bg-light">
@@ -162,6 +167,7 @@
                         <th>Unit Number</th>
                         <th>Trailer Plate</th>
                         <th>Container Number</th>
+                        <th>Mission</th>
                         <th>Type</th>
                         <th>Event Time</th>
                         <th>ID Trailer</th>
@@ -180,6 +186,7 @@
                             th:classappend="${evt['container_number'] == null and evt['id_trailer'] == null and evt['id_vehicle'] == null} ? 'table-danger'"></td>
                         <td th:text="${evt['trailer_plate']}"></td>
                         <td th:text="${evt['container_number']}"></td>
+                        <td th:text="${evt['mission']}"></td>
                         <td th:text="${evt['type']}"></td>
                         <td class="date-cell" th:text="${evt['event_time']}"></td>
                         <td th:text="${evt['id_trailer']}"></td>
@@ -205,7 +212,7 @@
                         </td>
                     </tr>
                     <tr th:if="${#lists.isEmpty(unitEvents)}">
-                        <td colspan="11" class="text-center text-muted py-4">No events found.</td>
+                        <td colspan="12" class="text-center text-muted py-4">No events found.</td>
                     </tr>
                     </tbody>
                 </table>
@@ -1075,6 +1082,7 @@ var FIELD_LABELS = {
     id_trailer: 'ID Trailer',
     id_vehicle: 'ID Vehicle',
     container_number: 'Container Number',
+    mission: 'Mission',
     filename: 'Filename',
     content_type: 'Content Type',
     size_bytes: 'Size (bytes)'
@@ -1089,7 +1097,7 @@ function buildSections(data) {
     if ('id_unit_event' in data) {
         return [
             { title: 'Event',      keys: ['id_unit_event','event_time','create_time','message_id','message_type','type'] },
-            { title: 'Unit',       keys: ['unit_number','trailer_plate','unit_type_code','id_trailer','id_vehicle','container_number'] },
+            { title: 'Unit',       keys: ['unit_number','trailer_plate','unit_type_code','id_trailer','id_vehicle','container_number','mission'] },
             { title: 'ETA',        keys: ['eta'] },
             { title: 'Position',   keys: ['latitude','longitude'], showMap: true },
             { title: 'Event Data', keys: null }
@@ -1243,14 +1251,35 @@ function renderDetail(data) {
 
     if (data.payload != null && data.payload !== '') {
         var p = document.getElementById('detailPayload');
+        var raw = data.payload;
+        // Colonna JSONB arriva wrappata: { type:'jsonb', value:'...', null:false }
+        if (raw && typeof raw === 'object' && 'value' in raw) raw = raw.value;
         try {
-            var obj = typeof data.payload === 'string' ? JSON.parse(data.payload) : data.payload;
-            p.textContent = JSON.stringify(obj, null, 2);
+            var obj = typeof raw === 'string' ? JSON.parse(raw) : raw;
+            p.innerHTML = syntaxHighlightJson(obj);
         } catch (e) {
-            p.textContent = String(data.payload);
+            p.textContent = String(raw);
         }
         document.getElementById('detailPayloadWrap').hidden = false;
     }
+}
+
+function syntaxHighlightJson(obj) {
+    var json = JSON.stringify(obj, null, 2)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return json.replace(
+        /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false)\b|\bnull\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
+        function(match) {
+            var cls = 'tok-num';
+            if (/^"/.test(match)) {
+                cls = /:$/.test(match) ? 'tok-key' : 'tok-str';
+            } else if (/^(true|false)$/.test(match)) {
+                cls = 'tok-bool';
+            } else if (match === 'null') {
+                cls = 'tok-null';
+            }
+            return '<span class="' + cls + '">' + match + '</span>';
+        });
 }
 
 document.querySelectorAll('.view-payload-btn').forEach(function(btn) {

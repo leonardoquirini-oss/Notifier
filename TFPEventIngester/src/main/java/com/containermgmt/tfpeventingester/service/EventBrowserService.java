@@ -57,7 +57,7 @@ public class EventBrowserService {
 
             StringBuilder sql = new StringBuilder(
                     "SELECT id_unit_event, message_id, message_type, type, event_time, create_time, " +
-                    "unit_number, unit_type_code, trailer_plate, " +
+                    "unit_number, unit_type_code, trailer_plate, mission, " +
                     "latitude, longitude, container_number, id_trailer, id_vehicle " +
                     "FROM evt_unit_events");
             List<Object> params = new ArrayList<>();
