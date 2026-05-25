@@ -249,40 +249,74 @@ public class EmailService {
                 }
             }
 
-            // Gestione allegato se presente
-            EmailAttachment attachment = null;
-            String attachmentId = parameters != null ? (String) parameters.get("attachment_id") : null;
+            // Gestione allegati
+            List<EmailAttachment> emailAttachments = new ArrayList<>();
 
+            // 1) Singolo attachment_id (back-compat: es. template CONDIVISIONE_FILE)
+            String attachmentId = parameters != null ? (String) parameters.get("attachment_id") : null;
             if (attachmentId != null && !attachmentId.trim().isEmpty()) {
                 try {
                     logger.info("Download attachment ID={} per template={}", attachmentId, templateId);
-                    attachment = downloadAttachment(attachmentId);
-                    logger.info("Attachment scaricato con successo: {}", attachment.getFilename());
+                    emailAttachments.add(downloadAttachment(attachmentId));
                 } catch (Exception e) {
-                    logger.error("Errore download attachment ID={}: {}. Email sarà inviata senza allegato.",
+                    logger.error("Errore download attachment ID={}: {}. Email proseguirà senza questo allegato.",
                         attachmentId, e.getMessage(), e);
-                    // Continua senza allegato invece di fallire completamente
                 }
             }
 
-            // Invia email via SMTP
-            String messageId = sendEmail(
-                toAddresses,
-                ccAddresses,
-                bccAddresses,
-                mapping.getEmailSenderName(),
-                renderedSubject,
-                bodyWithFooter,
-                template.getBoolean("is_html"),
-                attachment
-            );
+            // 2) Lista di attachment IDs (es. LIBRETTO per RICHIESTA_PRENOTAZIONE)
+            Object attachmentsObj = parameters != null ? parameters.get("attachments") : null;
+            if (attachmentsObj instanceof List) {
+                for (Object idObj : (List<?>) attachmentsObj) {
+                    if (idObj == null) continue;
+                    String id = idObj.toString().trim();
+                    if (id.isEmpty()) continue;
+                    try {
+                        logger.info("Download attachment ID={} per template={}", id, templateId);
+                        emailAttachments.add(downloadAttachment(id));
+                    } catch (Exception e) {
+                        logger.error("Errore download attachment ID={}: {}. Email proseguirà senza questo allegato.",
+                            id, e.getMessage(), e);
+                    }
+                }
+            }
+
+            // Invia email via SMTP (sceglie metodo in base al numero di allegati)
+            String messageId;
+            if (emailAttachments.size() > 1) {
+                messageId = sendEmailWithMultipleAttachments(
+                    toAddresses,
+                    ccAddresses,
+                    bccAddresses,
+                    mapping.getEmailSenderName(),
+                    null,
+                    renderedSubject,
+                    bodyWithFooter,
+                    template.getBoolean("is_html"),
+                    emailAttachments
+                );
+            } else {
+                EmailAttachment single = emailAttachments.isEmpty() ? null : emailAttachments.get(0);
+                messageId = sendEmail(
+                    toAddresses,
+                    ccAddresses,
+                    bccAddresses,
+                    mapping.getEmailSenderName(),
+                    renderedSubject,
+                    bodyWithFooter,
+                    template.getBoolean("is_html"),
+                    single
+                );
+            }
 
             // Marca log come inviato
             log.markAsSent(messageId);
 
-            logger.info("Email inviata con successo: template={}, destinatari={}, messageId={}, attachment={}",
-                template.getString("template_code"), toAddresses, messageId,
-                attachment != null ? attachment.getFilename() : "none");
+            String attachmentsSummary = emailAttachments.isEmpty()
+                ? "none"
+                : emailAttachments.stream().map(EmailAttachment::getFilename).collect(Collectors.joining(","));
+            logger.info("Email inviata con successo: template={}, destinatari={}, messageId={}, attachments=[{}]",
+                template.getString("template_code"), toAddresses, messageId, attachmentsSummary);
 
         } catch (Exception e) {
             // Marca log come fallito
