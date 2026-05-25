@@ -68,11 +68,17 @@ public class MissionResolutionService {
      * @return mission (refNum) o null se nessuna missione associata
      */
     public String resolve(String unitNumber, Instant eventTime, String currType, String currShortCode) {
+        String tag = "[mission unit=" + unitNumber + " evt=" + eventTime + " type=" + currType + "]";
+        log.debug("{} START resolve, currShortCode={}", tag, currShortCode);
+
         // 1) evento corrente con transportOrderShortCode
         if (isNotBlank(currShortCode)) {
-            return extractRefNum(currShortCode);
+            String m = extractRefNum(currShortCode);
+            log.debug("{} EXIT step1 (CURR ha transportOrderShortCode) → mission={}", tag, m);
+            return m;
         }
         if (unitNumber == null || unitNumber.isBlank() || eventTime == null) {
+            log.debug("{} EXIT input invalido → mission=null", tag);
             return null;
         }
 
@@ -80,47 +86,65 @@ public class MissionResolutionService {
         Timestamp curr = Timestamp.from(eventTime);
         List<Map<String, Object>> startRows = Base.findAll(START_SQL, unitNumber, curr);
         if (startRows.isEmpty()) {
-            return null; // 2b
-        }
-        Map<String, Object> start = startRows.get(0);
-        String bg = extractRefNum((String) start.get("short_code"));
-        if (isBlank(bg)) {
+            log.debug("{} EXIT step2b (nessun START_EVT trovato) → mission=null", tag);
             return null;
         }
+        Map<String, Object> start = startRows.get(0);
+        String startShortCode = (String) start.get("short_code");
+        String bg = extractRefNum(startShortCode);
         Timestamp startTime = (Timestamp) start.get("event_time");
+        log.debug("{} step2 START_EVT trovato: event_time={}, short_code='{}', BG='{}'",
+                tag, startTime, startShortCode, bg);
+        if (isBlank(bg)) {
+            log.debug("{} EXIT BG vuoto da START_EVT → mission=null", tag);
+            return null;
+        }
 
         // Eventi di chiusura (DROP / END_UNLOAD) ereditano la mission dello START,
         // come lo START stesso (che usa il proprio transportOrderShortCode, senza TIR).
         if (isEndEvent(currType)) {
+            log.debug("{} EXIT evento di chiusura ({}) → mission={} (eredita da START)", tag, currType, bg);
             return bg;
         }
 
         // 2a) interroga TIR per BG (DataS = DataConsegnaEffettiva, DaProcessare = flag)
         TirRow tir = queryTir(bg);
+        log.debug("{} step2a TIR per BG='{}' → {}", tag, bg, tir);
         if (tir.daProcessare != null && tir.daProcessare == 0) {
-            return null; // missione non da processare
+            log.debug("{} EXIT step2a (DaProcessare=0) → mission=null", tag);
+            return null;
         }
 
         // 3) cerca END_EVT dopo START_EVT
         List<Map<String, Object>> endRows = Base.findAll(END_SQL, unitNumber, startTime);
         if (!endRows.isEmpty()) {
             Instant end = ((Timestamp) endRows.get(0).get("event_time")).toInstant();
+            log.debug("{} step3 END_EVT trovato: event_time={}", tag, end);
             if (!end.isBefore(eventTime)) {
-                return bg;   // 3a: END >= CURR
+                log.debug("{} EXIT step3a (END>=CURR) → mission={}", tag, bg);
+                return bg;
             }
-            return null;     // 3b: END < CURR (fra due missioni)
+            log.debug("{} EXIT step3b (END<CURR, fra due missioni) → mission=null", tag);
+            return null;
         }
+        log.debug("{} step3c nessun END_EVT, valuto DataS", tag);
 
         // 3c) nessun END_EVT: usa DataS (DataConsegnaEffettiva)
         if (tir.dataS == null) {
+            log.debug("{} EXIT step3c DataS null → mission=null", tag);
             return null;
         }
         if (tir.dataS.isBefore(eventTime)) {
-            return null;     // 3c.i: consegnato prima dell'evento corrente
+            log.debug("{} EXIT step3c.i (DataS={} < CURR) → mission=null", tag, tir.dataS);
+            return null;
         }
         if (tir.daProcessare != null && tir.daProcessare == 1) {
-            return bg;       // 3c.ii: consegna >= CURR e BG da processare
+            log.debug("{} EXIT step3c.ii (DataS={} >= CURR AND DaProcessare=1) → mission={}",
+                    tag, tir.dataS, bg);
+            return bg;
         }
+        log.debug("{} EXIT step3c condizioni 3c.ii non soddisfatte (DaProcessare={}) → mission=null",
+                tag, tir.daProcessare);
         return null;
     }
 
@@ -157,6 +181,7 @@ public class MissionResolutionService {
                 return TirRow.empty();
             }
             Map<String, Object> row = rows.get(0);
+            log.debug("TIR raw row per BG='{}': {}", tirBg, row);
             return new TirRow(parseInstant(getIgnoreCase(row, "DataS")),
                     parseInteger(getIgnoreCase(row, "DaProcessare")));
         } catch (Exception e) {
@@ -185,8 +210,15 @@ public class MissionResolutionService {
         if (value instanceof Number n) {
             return n.intValue();
         }
+        if (value instanceof Boolean b) {
+            return b ? 1 : 0;
+        }
+        String s = value.toString().trim();
+        // SQL Server bit può arrivare come "true"/"false"
+        if (s.equalsIgnoreCase("true"))  return 1;
+        if (s.equalsIgnoreCase("false")) return 0;
         try {
-            return Integer.parseInt(value.toString().trim());
+            return Integer.parseInt(s);
         } catch (NumberFormatException e) {
             return null;
         }
@@ -234,6 +266,10 @@ public class MissionResolutionService {
     private record TirRow(Instant dataS, Integer daProcessare) {
         static TirRow empty() {
             return new TirRow(null, null);
+        }
+        @Override
+        public String toString() {
+            return "TirRow{DataS=" + dataS + ", DaProcessare=" + daProcessare + "}";
         }
     }
 }
