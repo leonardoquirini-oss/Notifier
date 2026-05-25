@@ -1,6 +1,7 @@
 package com.containermgmt.tfpeventingester.service;
 
 import com.containermgmt.tfpeventingester.config.DamageLabelsProperties;
+import com.containermgmt.tfpeventingester.model.EvtEventAttachment;
 import lombok.extern.slf4j.Slf4j;
 import org.javalite.activejdbc.Base;
 import org.springframework.stereotype.Service;
@@ -35,10 +36,50 @@ public class EventBrowserService {
 
     private final DataSource dataSource;
     private final Map<String, String> labelDisplayNames;
+    private final BerlinkAttachmentService berlinkAttachmentService;
 
-    public EventBrowserService(DataSource dataSource, DamageLabelsProperties damageLabelsProperties) {
+    public EventBrowserService(DataSource dataSource,
+                               DamageLabelsProperties damageLabelsProperties,
+                               BerlinkAttachmentService berlinkAttachmentService) {
         this.dataSource = dataSource;
         this.labelDisplayNames = damageLabelsProperties.buildDisplayNames();
+        this.berlinkAttachmentService = berlinkAttachmentService;
+    }
+
+    /**
+     * Hard delete di unit events selezionati: per ogni id rimuove i documenti BERLink,
+     * le righe evt_event_attachments e infine la riga evt_unit_events.
+     * @return numero di unit events effettivamente cancellati
+     */
+    public int deleteUnitEvents(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return 0;
+        }
+        try {
+            Base.open(dataSource);
+            int deleted = 0;
+            for (Long id : ids) {
+                if (id == null) continue;
+                try {
+                    for (Long idDocument : EvtEventAttachment.findIdDocumentsByUnitEventId(id)) {
+                        try {
+                            berlinkAttachmentService.delete(idDocument);
+                        } catch (Exception e) {
+                            log.warn("BERLink attachment delete failed for id_document={}: {}",
+                                    idDocument, e.getMessage());
+                        }
+                    }
+                    EvtEventAttachment.deleteByUnitEventId(id);
+                    deleted += Base.exec("DELETE FROM evt_unit_events WHERE id_unit_event = ?", id);
+                } catch (Exception e) {
+                    log.error("Errore eliminazione unit event id={}: {}", id, e.getMessage(), e);
+                }
+            }
+            log.info("Hard delete unit events: richiesti={}, cancellati={}", ids.size(), deleted);
+            return deleted;
+        } finally {
+            Base.close();
+        }
     }
 
     public int getPageSize() {

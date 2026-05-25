@@ -11,6 +11,8 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
@@ -192,6 +194,13 @@ public class EventBrowserController {
     public String getErrorPayload(@RequestParam String messageId) {
         String payload = eventBrowserService.getErrorPayload(messageId);
         return payload != null ? payload : "";
+    }
+
+    @PostMapping("/events/unit-events/delete")
+    @ResponseBody
+    public Map<String, Object> deleteUnitEvents(@RequestBody List<Long> ids) {
+        int deleted = eventBrowserService.deleteUnitEvents(ids);
+        return Map.of("requested", ids != null ? ids.size() : 0, "deleted", deleted);
     }
 
     @GetMapping("/events/unit-event-detail")

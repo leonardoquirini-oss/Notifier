@@ -156,11 +156,20 @@
                 </div>
             </form>
 
+            <!-- Bulk actions -->
+            <div class="mb-2 d-flex align-items-center gap-2">
+                <button type="button" id="evtDeleteSelectedBtn" class="btn btn-danger btn-sm" disabled>
+                    <i class="bi bi-trash"></i> Elimina Selezionati
+                </button>
+                <span class="text-muted small" id="evtSelectedCount">0 selezionati</span>
+            </div>
+
             <!-- Events table -->
             <div class="table-responsive">
-                <table class="table table-striped table-hover table-sm">
+                <table class="table table-striped table-hover table-sm" id="evtTable">
                     <thead class="table-dark">
                     <tr>
+                        <th style="width:32px"><input type="checkbox" id="evtSelectAll" class="form-check-input"></th>
                         <th>ID</th>
                         <th>Message ID</th>
                         <th>Unit Type</th>
@@ -179,6 +188,8 @@
                     <tr th:each="evt : ${unitEvents}"
                         class="detail-row" style="cursor:pointer"
                         th:data-detail-url="@{/events/unit-event-detail(id=${evt['id_unit_event']})}">
+                        <td><input type="checkbox" class="form-check-input evt-row-check"
+                                   th:value="${evt['id_unit_event']}"></td>
                         <td th:text="${evt['id_unit_event']}"></td>
                         <td class="msgid-cell" th:title="${evt['message_id']}" th:text="${evt['message_id']}"></td>
                         <td th:text="${evt['unit_type_code']}"></td>
@@ -212,7 +223,7 @@
                         </td>
                     </tr>
                     <tr th:if="${#lists.isEmpty(unitEvents)}">
-                        <td colspan="12" class="text-center text-muted py-4">No events found.</td>
+                        <td colspan="13" class="text-center text-muted py-4">No events found.</td>
                     </tr>
                     </tbody>
                 </table>
@@ -1021,6 +1032,74 @@ document.querySelectorAll('.att-toggle[data-bs-toggle="dropdown"]').forEach(func
         }
     });
 });
+
+// === Bulk delete unit events ===
+(function() {
+    var rowChecks = document.querySelectorAll('.evt-row-check');
+    var selectAll = document.getElementById('evtSelectAll');
+    var btn       = document.getElementById('evtDeleteSelectedBtn');
+    var counter   = document.getElementById('evtSelectedCount');
+    if (!btn) return;
+
+    function selectedIds() {
+        return Array.from(rowChecks)
+            .filter(function(c) { return c.checked; })
+            .map(function(c) { return parseInt(c.value, 10); })
+            .filter(function(n) { return !isNaN(n); });
+    }
+
+    function refresh() {
+        var ids = selectedIds();
+        counter.textContent = ids.length + ' selezionati';
+        btn.disabled = ids.length === 0;
+        if (selectAll) {
+            selectAll.checked = ids.length > 0 && ids.length === rowChecks.length;
+            selectAll.indeterminate = ids.length > 0 && ids.length < rowChecks.length;
+        }
+    }
+
+    rowChecks.forEach(function(c) {
+        c.addEventListener('click', function(e) { e.stopPropagation(); });
+        c.addEventListener('change', refresh);
+    });
+
+    if (selectAll) {
+        selectAll.addEventListener('click', function(e) { e.stopPropagation(); });
+        selectAll.addEventListener('change', function() {
+            rowChecks.forEach(function(c) { c.checked = selectAll.checked; });
+            refresh();
+        });
+    }
+
+    btn.addEventListener('click', function() {
+        var ids = selectedIds();
+        if (ids.length === 0) return;
+        if (!confirm('Eliminare definitivamente ' + ids.length +
+                ' evento/i e tutti gli allegati associati?\nL\'operazione è irreversibile.')) return;
+        btn.disabled = true;
+        btn.textContent = 'Eliminazione in corso...';
+        fetch('/events/unit-events/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(ids)
+        })
+        .then(function(r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+        })
+        .then(function(res) {
+            alert('Cancellati ' + res.deleted + ' di ' + res.requested + ' eventi.');
+            window.location.reload();
+        })
+        .catch(function(err) {
+            alert('Errore eliminazione: ' + err);
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-trash"></i> Elimina Selezionati';
+        });
+    });
+
+    refresh();
+})();
 
 function openDetail(url) {
     var fields = document.getElementById('detailFields');

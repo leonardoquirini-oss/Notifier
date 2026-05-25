@@ -148,8 +148,10 @@ public class MissionResolutionService {
             return TirRow.empty();
         }
         try {
+            // TIR usa il BG senza suffisso "_xx" (es. "26A01234_02" → "26A01234")
+            String tirBg = stripSuffix(bg);
             String sql = "SELECT DataS, DaProcessare FROM ElencoRichieste3 WHERE NumRic = '"
-                    + bg.replace("'", "''") + "'";
+                    + tirBg.replace("'", "''") + "'";
             List<Map<String, Object>> rows = tirConnectorClient.executeQuery(sql);
             if (rows.isEmpty()) {
                 return TirRow.empty();
@@ -209,6 +211,12 @@ public class MissionResolutionService {
             log.warn("Impossibile parsare DataS TIR: {}", value);
             return null;
         }
+    }
+
+    /** Rimuove eventuale suffisso "_xx" (es. "26A01234_02" → "26A01234"). */
+    private String stripSuffix(String bg) {
+        int idx = bg.lastIndexOf('_');
+        return idx >= 0 ? bg.substring(0, idx) : bg;
     }
 
     private boolean isEndEvent(String type) {
