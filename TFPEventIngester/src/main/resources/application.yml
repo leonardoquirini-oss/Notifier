@@ -51,6 +51,12 @@ berlink:
     cache-ttl-minutes: 43200 # 30 giorni
     cache-negative-ttl-minutes: 15
 
+# TFP Gateway (proxy per /api/events/resend)
+tfp-gateway:
+  base-url: ${TFP_GATEWAY_URL:http://tfp-gateway:8080}
+  connect-timeout-ms: 5000
+  read-timeout-ms: 30000
+
 # TFP API Configuration (Track Fleet Platform)
 # NOTA: lookup mission diretto via TFP DISABILITATO (vedi MissionResolutionService).
 # Config mantenuta per il bean TfpMissionLookupService (non piu' invocato).
@@ -121,5 +127,8 @@ logging:
     com.containermgmt.tfpeventingester: DEBUG
     org.javalite.activejdbc: INFO
     org.springframework.data.redis: INFO
+    io.lettuce: INFO
+    io.netty: INFO
+    reactor.netty: INFO
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"

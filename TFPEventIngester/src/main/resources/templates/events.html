@@ -161,6 +161,13 @@
                 <button type="button" id="evtDeleteSelectedBtn" class="btn btn-danger btn-sm" disabled>
                     <i class="bi bi-trash"></i> Elimina Selezionati
                 </button>
+                <button type="button" id="evtResendSelectedBtn" class="btn btn-warning btn-sm" disabled>
+                    <i class="bi bi-arrow-repeat"></i> Re-Invia Selezionati
+                </button>
+                <div class="form-check form-check-inline mb-0" title="Se attivo, marca il re-invio con metadata 'resend=true' sul Valkey stream: i consumer downstream possono bypassare la deduplica.">
+                    <input class="form-check-input" type="checkbox" id="evtResendForce" value="true">
+                    <label class="form-check-label small" for="evtResendForce">force (bypass dedup)</label>
+                </div>
                 <span class="text-muted small" id="evtSelectedCount">0 selezionati</span>
             </div>
 
@@ -189,7 +196,8 @@
                         class="detail-row" style="cursor:pointer"
                         th:data-detail-url="@{/events/unit-event-detail(id=${evt['id_unit_event']})}">
                         <td><input type="checkbox" class="form-check-input evt-row-check"
-                                   th:value="${evt['id_unit_event']}"></td>
+                                   th:value="${evt['id_unit_event']}"
+                                   th:data-message-id="${evt['message_id']}"></td>
                         <td th:text="${evt['id_unit_event']}"></td>
                         <td class="msgid-cell" th:title="${evt['message_id']}" th:text="${evt['message_id']}"></td>
                         <td th:text="${evt['unit_type_code']}"></td>
@@ -1033,12 +1041,13 @@ document.querySelectorAll('.att-toggle[data-bs-toggle="dropdown"]').forEach(func
     });
 });
 
-// === Bulk delete unit events ===
+// === Bulk delete / resend unit events ===
 (function() {
-    var rowChecks = document.querySelectorAll('.evt-row-check');
-    var selectAll = document.getElementById('evtSelectAll');
-    var btn       = document.getElementById('evtDeleteSelectedBtn');
-    var counter   = document.getElementById('evtSelectedCount');
+    var rowChecks  = document.querySelectorAll('.evt-row-check');
+    var selectAll  = document.getElementById('evtSelectAll');
+    var btn        = document.getElementById('evtDeleteSelectedBtn');
+    var resendBtn  = document.getElementById('evtResendSelectedBtn');
+    var counter    = document.getElementById('evtSelectedCount');
     if (!btn) return;
 
     function selectedIds() {
@@ -1048,10 +1057,18 @@ document.querySelectorAll('.att-toggle[data-bs-toggle="dropdown"]').forEach(func
             .filter(function(n) { return !isNaN(n); });
     }
 
+    function selectedMessageIds() {
+        return Array.from(rowChecks)
+            .filter(function(c) { return c.checked; })
+            .map(function(c) { return c.getAttribute('data-message-id'); })
+            .filter(function(s) { return s && s.length > 0; });
+    }
+
     function refresh() {
         var ids = selectedIds();
         counter.textContent = ids.length + ' selezionati';
         btn.disabled = ids.length === 0;
+        if (resendBtn) resendBtn.disabled = ids.length === 0;
         if (selectAll) {
             selectAll.checked = ids.length > 0 && ids.length === rowChecks.length;
             selectAll.indeterminate = ids.length > 0 && ids.length < rowChecks.length;
@@ -1097,6 +1114,44 @@ document.querySelectorAll('.att-toggle[data-bs-toggle="dropdown"]').forEach(func
             btn.innerHTML = '<i class="bi bi-trash"></i> Elimina Selezionati';
         });
     });
+
+    if (resendBtn) {
+        resendBtn.addEventListener('click', function() {
+            var mids = selectedMessageIds();
+            if (mids.length === 0) {
+                alert('Nessun message_id valido nelle righe selezionate.');
+                return;
+            }
+            var forceEl = document.getElementById('evtResendForce');
+            var force = !!(forceEl && forceEl.checked);
+            if (!confirm('Re-inviare ' + mids.length + ' evento/i sul Valkey stream del Gateway?\n' +
+                    'force=' + force + (force ? ' (bypass dedup downstream)' : ''))) return;
+            var origHtml = resendBtn.innerHTML;
+            resendBtn.disabled = true;
+            resendBtn.textContent = 'Re-invio in corso...';
+            fetch('/events/unit-events/resend', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ messageIds: mids, force: force, temporalOrder: true })
+            })
+            .then(function(r) {
+                return r.json().then(function(body) { return { ok: r.ok, status: r.status, body: body }; });
+            })
+            .then(function(res) {
+                if (!res.ok) throw new Error((res.body && res.body.error) || ('HTTP ' + res.status));
+                var notFoundCount = (res.body.notFound && res.body.notFound.length) || 0;
+                alert('Re-inviati ' + res.body.resent + ' di ' + res.body.requested + ' eventi.' +
+                      (notFoundCount > 0 ? '\nNon trovati: ' + notFoundCount : ''));
+            })
+            .catch(function(err) {
+                alert('Errore re-invio: ' + err.message);
+            })
+            .finally(function() {
+                resendBtn.innerHTML = origHtml;
+                refresh();
+            });
+        });
+    }
 
     refresh();
 })();

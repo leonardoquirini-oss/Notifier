@@ -3,6 +3,7 @@ package com.containermgmt.tfpgateway.service;
 import com.containermgmt.tfpgateway.config.ActiveJDBCConfig;
 import com.containermgmt.tfpgateway.config.GatewayProperties;
 import com.containermgmt.tfpgateway.dto.EventMessage;
+import com.containermgmt.tfpgateway.dto.ResendEventsResponse;
 
 import lombok.extern.slf4j.Slf4j;
 import org.javalite.activejdbc.Base;
@@ -12,6 +13,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 
@@ -187,6 +189,68 @@ public class EventBrowserService {
      *                       false = ordine di presentazione (come forniti in input).
      * @return numero di eventi effettivamente reinviati (i message_id non trovati sono ignorati).
      */
+    /**
+     * Variante "detailed" di {@link #resendByMessageIds}: restituisce anche
+     * la lista dei message_id non trovati. Utile per chiamate API in cui
+     * il caller (es. ingester) deve sapere quali eventi sono mancanti.
+     *
+     * Dedup degli input mantenendo l'ordine di inserimento.
+     */
+    public ResendEventsResponse resendByMessageIdsDetailed(List<String> messageIds,
+                                                            boolean forceMessageId,
+                                                            boolean temporalOrder) {
+        if (messageIds == null || messageIds.isEmpty()) {
+            return ResendEventsResponse.builder()
+                    .requested(0)
+                    .resent(0)
+                    .notFound(List.of())
+                    .build();
+        }
+
+        // Dedup preservando ordine di input.
+        List<String> uniqueMids = new ArrayList<>(new LinkedHashSet<>(messageIds));
+
+        // Identifica i message_id realmente presenti su evt_raw_events: necessario
+        // per popolare il campo notFound della response, dato che le altre fasi
+        // (publish) non distinguono tra "non trovato" e "errore di publish".
+        List<String> existingMids = filterExistingMessageIds(uniqueMids);
+        java.util.Set<String> existingSet = new java.util.HashSet<>(existingMids);
+
+        List<String> notFound = new ArrayList<>();
+        for (String mid : uniqueMids) {
+            if (!existingSet.contains(mid)) {
+                notFound.add(mid);
+            }
+        }
+
+        int resent = resendByMessageIds(existingMids, forceMessageId, temporalOrder);
+
+        return ResendEventsResponse.builder()
+                .requested(uniqueMids.size())
+                .resent(resent)
+                .notFound(notFound)
+                .build();
+    }
+
+    private List<String> filterExistingMessageIds(List<String> messageIds) {
+        List<String> existing = new ArrayList<>();
+        try {
+            activeJDBCConfig.openConnection();
+            for (int i = 0; i < messageIds.size(); i += RESEND_BATCH_SIZE) {
+                List<String> batch = messageIds.subList(i, Math.min(i + RESEND_BATCH_SIZE, messageIds.size()));
+                String placeholders = String.join(",", batch.stream().map(x -> "?").toList());
+                String sql = "SELECT message_id FROM evt_raw_events WHERE message_id IN (" + placeholders + ")";
+                List<Map<String, Object>> rows = Base.findAll(sql, batch.toArray());
+                for (Map<String, Object> row : rows) {
+                    existing.add((String) row.get("message_id"));
+                }
+            }
+        } finally {
+            activeJDBCConfig.closeConnection();
+        }
+        return existing;
+    }
+
     public int resendByMessageIds(List<String> messageIds, boolean forceMessageId, boolean temporalOrder) {
         if (messageIds == null || messageIds.isEmpty()) {
             return 0;

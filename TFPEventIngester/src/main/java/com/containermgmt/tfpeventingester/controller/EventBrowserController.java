@@ -1,9 +1,12 @@
 package com.containermgmt.tfpeventingester.controller;
 
+import com.containermgmt.tfpeventingester.config.TfpGatewayConfig;
 import com.containermgmt.tfpeventingester.service.BerlinkAttachmentService;
 import com.containermgmt.tfpeventingester.service.EventBrowserService;
 
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -15,6 +18,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.client.RestClientResponseException;
+import org.springframework.web.client.RestTemplate;
 
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
@@ -34,11 +39,17 @@ public class EventBrowserController {
 
     private final EventBrowserService eventBrowserService;
     private final BerlinkAttachmentService berlinkAttachmentService;
+    private final TfpGatewayConfig tfpGatewayConfig;
+    private final RestTemplate tfpGatewayRestTemplate;
 
     public EventBrowserController(EventBrowserService eventBrowserService,
-                                  BerlinkAttachmentService berlinkAttachmentService) {
+                                  BerlinkAttachmentService berlinkAttachmentService,
+                                  TfpGatewayConfig tfpGatewayConfig,
+                                  @Qualifier("tfpGatewayRestTemplate") RestTemplate tfpGatewayRestTemplate) {
         this.eventBrowserService = eventBrowserService;
         this.berlinkAttachmentService = berlinkAttachmentService;
+        this.tfpGatewayConfig = tfpGatewayConfig;
+        this.tfpGatewayRestTemplate = tfpGatewayRestTemplate;
     }
 
     @GetMapping("/events")
@@ -201,6 +212,44 @@ public class EventBrowserController {
     public Map<String, Object> deleteUnitEvents(@RequestBody List<Long> ids) {
         int deleted = eventBrowserService.deleteUnitEvents(ids);
         return Map.of("requested", ids != null ? ids.size() : 0, "deleted", deleted);
+    }
+
+    @PostMapping("/events/unit-events/resend")
+    @ResponseBody
+    public ResponseEntity<?> resendUnitEvents(@RequestBody Map<String, Object> body) {
+        @SuppressWarnings("unchecked")
+        List<String> messageIds = (List<String>) body.get("messageIds");
+        if (messageIds == null || messageIds.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "messageIds is required"));
+        }
+        Boolean force = body.get("force") instanceof Boolean b ? b : Boolean.TRUE;
+        Boolean temporalOrder = body.get("temporalOrder") instanceof Boolean t ? t : Boolean.TRUE;
+
+        String baseUrl = tfpGatewayConfig.getBaseUrl();
+        if (baseUrl == null || baseUrl.isBlank()) {
+            return ResponseEntity.status(500).body(Map.of("error", "tfp-gateway.base-url not configured"));
+        }
+        String url = baseUrl.replaceAll("/+$", "") + "/api/events/resend";
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        Map<String, Object> payload = Map.of(
+                "messageIds", messageIds,
+                "force", force,
+                "temporalOrder", temporalOrder
+        );
+
+        try {
+            ResponseEntity<Map> upstream = tfpGatewayRestTemplate.postForEntity(
+                    url, new HttpEntity<>(payload, headers), Map.class);
+            return ResponseEntity.status(upstream.getStatusCode()).body(upstream.getBody());
+        } catch (RestClientResponseException e) {
+            return ResponseEntity.status(e.getStatusCode())
+                    .body(Map.of("error", "Gateway error: " + e.getResponseBodyAsString()));
+        } catch (Exception e) {
+            return ResponseEntity.status(502)
+                    .body(Map.of("error", "Gateway unreachable: " + e.getMessage()));
+        }
     }
 
     @GetMapping("/events/unit-event-detail")
