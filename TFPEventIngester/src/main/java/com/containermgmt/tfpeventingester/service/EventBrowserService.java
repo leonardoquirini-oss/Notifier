@@ -291,7 +291,7 @@ public class EventBrowserService {
                     "FROM evt_asset_damages d " +
                     "LEFT JOIN evt_vehicle_damage_labels vl ON vl.id_asset_damage = d.id_asset_damage " +
                     "LEFT JOIN evt_unit_damage_labels ul ON ul.id_asset_damage = d.id_asset_damage " +
-                    "LEFT JOIN c_evt_damage_status cs ON cs.status = d.status");
+                    "LEFT JOIN c_evt_damage_status cs ON cs.id_status = d.status");
             List<Object> params = new ArrayList<>();
 
             appendAssetDamagesWhere(sql, params, messageId, tfpEventId, assetIdentifier, assetType, containerNumber,
