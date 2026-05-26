@@ -75,6 +75,8 @@
                 <input type="hidden" name="posUnlinkedOnly" th:value="${posUnlinkedOnly}">
                 <input type="hidden" name="posPage" th:value="${posCurrentPage}">
                 <!-- Preserve damages tab state -->
+                <input type="hidden" name="dmgMessageId" th:value="${dmgMessageId}">
+                <input type="hidden" name="dmgTfpEventId" th:value="${dmgTfpEventId}">
                 <input type="hidden" name="dmgAssetIdentifier" th:value="${dmgAssetIdentifier}">
                 <input type="hidden" name="dmgAssetType" th:value="${dmgAssetType}">
                 <input type="hidden" name="dmgContainerNumber" th:value="${dmgContainerNumber}">
@@ -253,6 +255,7 @@
                                posVehiclePlate=${posVehiclePlate}, posContainerNumber=${posContainerNumber},
                                posDateFrom=${posDateFromStr}, posDateTo=${posDateToStr},
                                posUnlinkedOnly=${posUnlinkedOnly}, posPage=${posCurrentPage},
+                               dmgMessageId=${dmgMessageId}, dmgTfpEventId=${dmgTfpEventId},
                                dmgAssetIdentifier=${dmgAssetIdentifier}, dmgAssetType=${dmgAssetType},
                                dmgContainerNumber=${dmgContainerNumber},
                                dmgSeverity=${dmgSeverity}, dmgStatus=${dmgStatus},
@@ -275,6 +278,7 @@
                                    posVehiclePlate=${posVehiclePlate}, posContainerNumber=${posContainerNumber},
                                    posDateFrom=${posDateFromStr}, posDateTo=${posDateToStr},
                                    posUnlinkedOnly=${posUnlinkedOnly}, posPage=${posCurrentPage},
+                                   dmgMessageId=${dmgMessageId}, dmgTfpEventId=${dmgTfpEventId},
                                    dmgAssetIdentifier=${dmgAssetIdentifier}, dmgAssetType=${dmgAssetType},
                                    dmgContainerNumber=${dmgContainerNumber},
                                    dmgSeverity=${dmgSeverity}, dmgStatus=${dmgStatus},
@@ -297,6 +301,7 @@
                                posVehiclePlate=${posVehiclePlate}, posContainerNumber=${posContainerNumber},
                                posDateFrom=${posDateFromStr}, posDateTo=${posDateToStr},
                                posUnlinkedOnly=${posUnlinkedOnly}, posPage=${posCurrentPage},
+                               dmgMessageId=${dmgMessageId}, dmgTfpEventId=${dmgTfpEventId},
                                dmgAssetIdentifier=${dmgAssetIdentifier}, dmgAssetType=${dmgAssetType},
                                dmgContainerNumber=${dmgContainerNumber},
                                dmgSeverity=${dmgSeverity}, dmgStatus=${dmgStatus},
@@ -327,6 +332,8 @@
                 <input type="hidden" name="evtUnlinkedOnly" th:value="${evtUnlinkedOnly}">
                 <input type="hidden" name="evtPage" th:value="${evtCurrentPage}">
                 <!-- Preserve damages tab state -->
+                <input type="hidden" name="dmgMessageId" th:value="${dmgMessageId}">
+                <input type="hidden" name="dmgTfpEventId" th:value="${dmgTfpEventId}">
                 <input type="hidden" name="dmgAssetIdentifier" th:value="${dmgAssetIdentifier}">
                 <input type="hidden" name="dmgAssetType" th:value="${dmgAssetType}">
                 <input type="hidden" name="dmgContainerNumber" th:value="${dmgContainerNumber}">
@@ -448,6 +455,7 @@
                                evtContainerNumber=${evtContainerNumber},
                                evtType=${evtType}, evtDateFrom=${evtDateFromStr}, evtDateTo=${evtDateToStr},
                                evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage},
+                               dmgMessageId=${dmgMessageId}, dmgTfpEventId=${dmgTfpEventId},
                                dmgAssetIdentifier=${dmgAssetIdentifier}, dmgAssetType=${dmgAssetType},
                                dmgContainerNumber=${dmgContainerNumber},
                                dmgSeverity=${dmgSeverity}, dmgStatus=${dmgStatus},
@@ -470,6 +478,7 @@
                                    evtContainerNumber=${evtContainerNumber}, evtType=${evtType},
                                    evtDateFrom=${evtDateFromStr}, evtDateTo=${evtDateToStr},
                                    evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage},
+                                   dmgMessageId=${dmgMessageId}, dmgTfpEventId=${dmgTfpEventId},
                                    dmgAssetIdentifier=${dmgAssetIdentifier}, dmgAssetType=${dmgAssetType},
                                    dmgContainerNumber=${dmgContainerNumber},
                                    dmgSeverity=${dmgSeverity}, dmgStatus=${dmgStatus},
@@ -492,6 +501,7 @@
                                evtContainerNumber=${evtContainerNumber},
                                evtType=${evtType}, evtDateFrom=${evtDateFromStr}, evtDateTo=${evtDateToStr},
                                evtUnlinkedOnly=${evtUnlinkedOnly}, evtPage=${evtCurrentPage},
+                               dmgMessageId=${dmgMessageId}, dmgTfpEventId=${dmgTfpEventId},
                                dmgAssetIdentifier=${dmgAssetIdentifier}, dmgAssetType=${dmgAssetType},
                                dmgContainerNumber=${dmgContainerNumber},
                                dmgSeverity=${dmgSeverity}, dmgStatus=${dmgStatus},
@@ -537,6 +547,16 @@
                 <input type="hidden" name="errPage" th:value="${errCurrentPage}">
 
                 <div class="row g-2 align-items-end">
+                    <div class="col-auto">
+                        <label class="form-label form-label-sm mb-0">Message ID</label>
+                        <input type="text" name="dmgMessageId" class="form-control form-control-sm"
+                               placeholder="partial match..." th:value="${dmgMessageId}" style="width:200px">
+                    </div>
+                    <div class="col-auto">
+                        <label class="form-label form-label-sm mb-0">TFP Id</label>
+                        <input type="text" name="dmgTfpEventId" class="form-control form-control-sm"
+                               placeholder="exact match" th:value="${dmgTfpEventId}" style="width:140px">
+                    </div>
                     <div class="col-auto">
                         <label class="form-label form-label-sm mb-0">Asset Identifier</label>
                         <input type="text" name="dmgAssetIdentifier" class="form-control form-control-sm"
@@ -602,13 +622,30 @@
                 </div>
             </form>
 
+            <!-- Bulk actions -->
+            <div class="mb-2 d-flex align-items-center gap-2">
+                <button type="button" id="dmgDeleteSelectedBtn" class="btn btn-danger btn-sm" disabled>
+                    <i class="bi bi-trash"></i> Elimina Selezionati
+                </button>
+                <button type="button" id="dmgResendSelectedBtn" class="btn btn-warning btn-sm" disabled>
+                    <i class="bi bi-arrow-repeat"></i> Re-Invia Selezionati
+                </button>
+                <div class="form-check form-check-inline mb-0" title="Se attivo, marca il re-invio con metadata 'resend=true' sul Valkey stream: i consumer downstream possono bypassare la deduplica.">
+                    <input class="form-check-input" type="checkbox" id="dmgResendForce" value="true">
+                    <label class="form-check-label small" for="dmgResendForce">force (bypass dedup)</label>
+                </div>
+                <span class="text-muted small" id="dmgSelectedCount">0 selezionati</span>
+            </div>
+
             <!-- Damages table -->
             <div class="table-responsive">
                 <table class="table table-striped table-hover table-sm damages-table">
                     <thead class="table-dark">
                     <tr>
+                        <th style="width:32px"><input type="checkbox" id="dmgSelectAll" class="form-check-input"></th>
                         <th>ID</th>
                         <th>Message ID</th>
+                        <th>TFP Id</th>
                         <th>Unit Type</th>
                         <th>Unit Number</th>
                         <th>Container Number</th>
@@ -626,8 +663,13 @@
                     <tr th:each="dmg : ${assetDamages}"
                         class="detail-row" style="cursor:pointer"
                         th:data-detail-url="@{/events/asset-damage-detail(id=${dmg['id_asset_damage']})}">
+                        <td><input type="checkbox" class="form-check-input dmg-row-check"
+                                   th:value="${dmg['id_asset_damage']}"
+                                   th:data-message-id="${dmg['message_id']}"
+                                   th:data-event-time="${dmg['report_time']}"></td>
                         <td th:text="${dmg['id_asset_damage']}"></td>
                         <td class="msgid-cell" th:title="${dmg['message_id']}" th:text="${dmg['message_id']}"></td>
+                        <td th:text="${dmg['tfp_event_id']}"></td>
                         <td th:text="${dmg['asset_type']}"></td>
                         <td class="unit-cell" th:title="${dmg['asset_identifier']}" th:text="${dmg['asset_identifier']}"
                             th:classappend="${dmg['container_number'] == null and dmg['id_trailer'] == null and dmg['id_vehicle'] == null} ? 'table-danger'"></td>
@@ -665,7 +707,7 @@
                         </td>
                     </tr>
                     <tr th:if="${#lists.isEmpty(assetDamages)}">
-                        <td colspan="13" class="text-center text-muted py-4">No asset damages found.</td>
+                        <td colspan="15" class="text-center text-muted py-4">No asset damages found.</td>
                     </tr>
                     </tbody>
                 </table>
@@ -677,6 +719,7 @@
                     <li class="page-item" th:classappend="${dmgCurrentPage == 0} ? 'disabled'">
                         <a class="page-link"
                            th:href="@{/events(tab='damages',
+                               dmgMessageId=${dmgMessageId}, dmgTfpEventId=${dmgTfpEventId},
                                dmgAssetIdentifier=${dmgAssetIdentifier}, dmgAssetType=${dmgAssetType},
                                dmgContainerNumber=${dmgContainerNumber},
                                dmgSeverity=${dmgSeverity}, dmgStatus=${dmgStatus},
@@ -699,6 +742,7 @@
                             th:if="${p == 0 or p == dmgTotalPages - 1 or (p >= dmgCurrentPage - 2 and p <= dmgCurrentPage + 2)}">
                             <a class="page-link"
                                th:href="@{/events(tab='damages',
+                                   dmgMessageId=${dmgMessageId}, dmgTfpEventId=${dmgTfpEventId},
                                    dmgAssetIdentifier=${dmgAssetIdentifier}, dmgAssetType=${dmgAssetType},
                                    dmgContainerNumber=${dmgContainerNumber},
                                    dmgSeverity=${dmgSeverity}, dmgStatus=${dmgStatus},
@@ -721,6 +765,7 @@
                     <li class="page-item" th:classappend="${dmgCurrentPage == dmgTotalPages - 1} ? 'disabled'">
                         <a class="page-link"
                            th:href="@{/events(tab='damages',
+                               dmgMessageId=${dmgMessageId}, dmgTfpEventId=${dmgTfpEventId},
                                dmgAssetIdentifier=${dmgAssetIdentifier}, dmgAssetType=${dmgAssetType},
                                dmgContainerNumber=${dmgContainerNumber},
                                dmgSeverity=${dmgSeverity}, dmgStatus=${dmgStatus},
@@ -769,6 +814,8 @@
                 <input type="hidden" name="posUnlinkedOnly" th:value="${posUnlinkedOnly}">
                 <input type="hidden" name="posPage" th:value="${posCurrentPage}">
                 <!-- Preserve damages tab state -->
+                <input type="hidden" name="dmgMessageId" th:value="${dmgMessageId}">
+                <input type="hidden" name="dmgTfpEventId" th:value="${dmgTfpEventId}">
                 <input type="hidden" name="dmgAssetIdentifier" th:value="${dmgAssetIdentifier}">
                 <input type="hidden" name="dmgAssetType" th:value="${dmgAssetType}">
                 <input type="hidden" name="dmgContainerNumber" th:value="${dmgContainerNumber}">
@@ -853,6 +900,7 @@
                                posVehiclePlate=${posVehiclePlate}, posContainerNumber=${posContainerNumber},
                                posDateFrom=${posDateFromStr}, posDateTo=${posDateToStr},
                                posUnlinkedOnly=${posUnlinkedOnly}, posPage=${posCurrentPage},
+                               dmgMessageId=${dmgMessageId}, dmgTfpEventId=${dmgTfpEventId},
                                dmgAssetIdentifier=${dmgAssetIdentifier}, dmgAssetType=${dmgAssetType},
                                dmgContainerNumber=${dmgContainerNumber},
                                dmgSeverity=${dmgSeverity}, dmgStatus=${dmgStatus},
@@ -875,6 +923,7 @@
                                    posVehiclePlate=${posVehiclePlate}, posContainerNumber=${posContainerNumber},
                                    posDateFrom=${posDateFromStr}, posDateTo=${posDateToStr},
                                    posUnlinkedOnly=${posUnlinkedOnly}, posPage=${posCurrentPage},
+                                   dmgMessageId=${dmgMessageId}, dmgTfpEventId=${dmgTfpEventId},
                                    dmgAssetIdentifier=${dmgAssetIdentifier}, dmgAssetType=${dmgAssetType},
                                    dmgContainerNumber=${dmgContainerNumber},
                                    dmgSeverity=${dmgSeverity}, dmgStatus=${dmgStatus},
@@ -897,6 +946,7 @@
                                posVehiclePlate=${posVehiclePlate}, posContainerNumber=${posContainerNumber},
                                posDateFrom=${posDateFromStr}, posDateTo=${posDateToStr},
                                posUnlinkedOnly=${posUnlinkedOnly}, posPage=${posCurrentPage},
+                               dmgMessageId=${dmgMessageId}, dmgTfpEventId=${dmgTfpEventId},
                                dmgAssetIdentifier=${dmgAssetIdentifier}, dmgAssetType=${dmgAssetType},
                                dmgContainerNumber=${dmgContainerNumber},
                                dmgSeverity=${dmgSeverity}, dmgStatus=${dmgStatus},
@@ -1141,7 +1191,7 @@ document.querySelectorAll('.att-toggle[data-bs-toggle="dropdown"]').forEach(func
             var origHtml = resendBtn.innerHTML;
             resendBtn.disabled = true;
             resendBtn.textContent = 'Re-invio in corso...';
-            fetch('/events/unit-events/resend', {
+            fetch('/events/resend', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ messageIds: mids, force: force, temporalOrder: true })
@@ -1153,6 +1203,132 @@ document.querySelectorAll('.att-toggle[data-bs-toggle="dropdown"]').forEach(func
                 if (!res.ok) throw new Error((res.body && res.body.error) || ('HTTP ' + res.status));
                 var notFoundCount = (res.body.notFound && res.body.notFound.length) || 0;
                 alert('Re-inviati ' + res.body.resent + ' di ' + res.body.requested + ' eventi.' +
+                      (notFoundCount > 0 ? '\nNon trovati: ' + notFoundCount : ''));
+            })
+            .catch(function(err) {
+                alert('Errore re-invio: ' + err.message);
+            })
+            .finally(function() {
+                resendBtn.innerHTML = origHtml;
+                refresh();
+            });
+        });
+    }
+
+    refresh();
+})();
+
+// === Bulk delete / resend asset damages ===
+(function() {
+    var rowChecks = document.querySelectorAll('.dmg-row-check');
+    var selectAll = document.getElementById('dmgSelectAll');
+    var btn       = document.getElementById('dmgDeleteSelectedBtn');
+    var resendBtn = document.getElementById('dmgResendSelectedBtn');
+    var counter   = document.getElementById('dmgSelectedCount');
+    if (!btn) return;
+
+    function selectedIds() {
+        return Array.from(rowChecks)
+            .filter(function(c) { return c.checked; })
+            .map(function(c) { return parseInt(c.value, 10); })
+            .filter(function(n) { return !isNaN(n); });
+    }
+
+    function selectedMessageIds() {
+        return Array.from(rowChecks)
+            .filter(function(c) { return c.checked; })
+            .map(function(c) {
+                return {
+                    mid: c.getAttribute('data-message-id'),
+                    t:   c.getAttribute('data-event-time') || ''
+                };
+            })
+            .filter(function(o) { return o.mid && o.mid.length > 0; })
+            .sort(function(a, b) {
+                if (a.t < b.t) return -1;
+                if (a.t > b.t) return 1;
+                return 0;
+            })
+            .map(function(o) { return o.mid; });
+    }
+
+    function refresh() {
+        var ids = selectedIds();
+        counter.textContent = ids.length + ' selezionati';
+        btn.disabled = ids.length === 0;
+        if (resendBtn) resendBtn.disabled = ids.length === 0;
+        if (selectAll) {
+            selectAll.checked = ids.length > 0 && ids.length === rowChecks.length;
+            selectAll.indeterminate = ids.length > 0 && ids.length < rowChecks.length;
+        }
+    }
+
+    rowChecks.forEach(function(c) {
+        c.addEventListener('click', function(e) { e.stopPropagation(); });
+        c.addEventListener('change', refresh);
+    });
+
+    if (selectAll) {
+        selectAll.addEventListener('click', function(e) { e.stopPropagation(); });
+        selectAll.addEventListener('change', function() {
+            rowChecks.forEach(function(c) { c.checked = selectAll.checked; });
+            refresh();
+        });
+    }
+
+    btn.addEventListener('click', function() {
+        var ids = selectedIds();
+        if (ids.length === 0) return;
+        if (!confirm('Eliminare definitivamente ' + ids.length +
+                ' asset damage(s) e tutti gli allegati/labels associati?\nL\'operazione è irreversibile.')) return;
+        btn.disabled = true;
+        btn.textContent = 'Eliminazione in corso...';
+        fetch('/events/asset-damages/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(ids)
+        })
+        .then(function(r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+        })
+        .then(function(res) {
+            alert('Cancellati ' + res.deleted + ' di ' + res.requested + ' damages.');
+            window.location.reload();
+        })
+        .catch(function(err) {
+            alert('Errore eliminazione: ' + err);
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-trash"></i> Elimina Selezionati';
+        });
+    });
+
+    if (resendBtn) {
+        resendBtn.addEventListener('click', function() {
+            var mids = selectedMessageIds();
+            if (mids.length === 0) {
+                alert('Nessun message_id valido nelle righe selezionate.');
+                return;
+            }
+            var forceEl = document.getElementById('dmgResendForce');
+            var force = !!(forceEl && forceEl.checked);
+            if (!confirm('Re-inviare ' + mids.length + ' damage(s) sul Valkey stream del Gateway?\n' +
+                    'force=' + force + (force ? ' (bypass dedup downstream)' : ''))) return;
+            var origHtml = resendBtn.innerHTML;
+            resendBtn.disabled = true;
+            resendBtn.textContent = 'Re-invio in corso...';
+            fetch('/events/resend', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ messageIds: mids, force: force, temporalOrder: true })
+            })
+            .then(function(r) {
+                return r.json().then(function(body) { return { ok: r.ok, status: r.status, body: body }; });
+            })
+            .then(function(res) {
+                if (!res.ok) throw new Error((res.body && res.body.error) || ('HTTP ' + res.status));
+                var notFoundCount = (res.body.notFound && res.body.notFound.length) || 0;
+                alert('Re-inviati ' + res.body.resent + ' di ' + res.body.requested + ' damages.' +
                       (notFoundCount > 0 ? '\nNon trovati: ' + notFoundCount : ''));
             })
             .catch(function(err) {

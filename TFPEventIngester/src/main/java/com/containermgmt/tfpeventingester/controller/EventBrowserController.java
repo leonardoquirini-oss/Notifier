@@ -76,6 +76,8 @@ public class EventBrowserController {
             @RequestParam(defaultValue = "false") boolean posUnlinkedOnly,
             @RequestParam(defaultValue = "0") int posPage,
             // Asset Damages filters
+            @RequestParam(required = false) String dmgMessageId,
+            @RequestParam(required = false) String dmgTfpEventId,
             @RequestParam(required = false) String dmgAssetIdentifier,
             @RequestParam(required = false) String dmgAssetType,
             @RequestParam(required = false) String dmgContainerNumber,
@@ -150,9 +152,11 @@ public class EventBrowserController {
 
         // --- Asset Damages ---
         List<Map<String, Object>> assetDamages = eventBrowserService.searchAssetDamages(
+                dmgMessageId, dmgTfpEventId,
                 dmgAssetIdentifier, dmgAssetType, dmgContainerNumber, dmgSeverity, dmgStatus,
                 dmgDateFrom, dmgDateTo, dmgUnlinkedOnly, dmgPage);
         long dmgTotalCount = eventBrowserService.countAssetDamages(
+                dmgMessageId, dmgTfpEventId,
                 dmgAssetIdentifier, dmgAssetType, dmgContainerNumber, dmgSeverity, dmgStatus,
                 dmgDateFrom, dmgDateTo, dmgUnlinkedOnly);
         int dmgTotalPages = (int) Math.ceil((double) dmgTotalCount / pageSize);
@@ -169,6 +173,8 @@ public class EventBrowserController {
         model.addAttribute("dmgStatuses", dmgStatuses);
 
         // Repopulate damage filters
+        model.addAttribute("dmgMessageId", dmgMessageId);
+        model.addAttribute("dmgTfpEventId", dmgTfpEventId);
         model.addAttribute("dmgAssetIdentifier", dmgAssetIdentifier);
         model.addAttribute("dmgAssetType", dmgAssetType);
         model.addAttribute("dmgContainerNumber", dmgContainerNumber);
@@ -214,9 +220,16 @@ public class EventBrowserController {
         return Map.of("requested", ids != null ? ids.size() : 0, "deleted", deleted);
     }
 
-    @PostMapping("/events/unit-events/resend")
+    @PostMapping("/events/asset-damages/delete")
     @ResponseBody
-    public ResponseEntity<?> resendUnitEvents(@RequestBody Map<String, Object> body) {
+    public Map<String, Object> deleteAssetDamages(@RequestBody List<Long> ids) {
+        int deleted = eventBrowserService.deleteAssetDamages(ids);
+        return Map.of("requested", ids != null ? ids.size() : 0, "deleted", deleted);
+    }
+
+    @PostMapping("/events/resend")
+    @ResponseBody
+    public ResponseEntity<?> resendEvents(@RequestBody Map<String, Object> body) {
         @SuppressWarnings("unchecked")
         List<String> messageIds = (List<String>) body.get("messageIds");
         if (messageIds == null || messageIds.isEmpty()) {

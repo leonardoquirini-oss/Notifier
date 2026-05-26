@@ -1,7 +1,10 @@
 package com.containermgmt.tfpeventingester.service;
 
 import com.containermgmt.tfpeventingester.config.DamageLabelsProperties;
+import com.containermgmt.tfpeventingester.model.EvtDamageAttachment;
 import com.containermgmt.tfpeventingester.model.EvtEventAttachment;
+import com.containermgmt.tfpeventingester.model.EvtUnitDamageLabel;
+import com.containermgmt.tfpeventingester.model.EvtVehicleDamageLabel;
 import lombok.extern.slf4j.Slf4j;
 import org.javalite.activejdbc.Base;
 import org.springframework.stereotype.Service;
@@ -76,6 +79,44 @@ public class EventBrowserService {
                 }
             }
             log.info("Hard delete unit events: richiesti={}, cancellati={}", ids.size(), deleted);
+            return deleted;
+        } finally {
+            Base.close();
+        }
+    }
+
+    /**
+     * Hard delete di asset damages selezionati: per ogni id rimuove documenti BERLink,
+     * righe evt_damage_attachment, labels (vehicle + unit) e infine la riga evt_asset_damages.
+     * @return numero di asset damages effettivamente cancellati
+     */
+    public int deleteAssetDamages(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return 0;
+        }
+        try {
+            Base.open(dataSource);
+            int deleted = 0;
+            for (Long id : ids) {
+                if (id == null) continue;
+                try {
+                    for (Long idDocument : EvtDamageAttachment.findIdDocumentsByAssetDamageId(id)) {
+                        try {
+                            berlinkAttachmentService.delete(idDocument);
+                        } catch (Exception e) {
+                            log.warn("BERLink attachment delete failed for id_document={}: {}",
+                                    idDocument, e.getMessage());
+                        }
+                    }
+                    EvtDamageAttachment.deleteByAssetDamageId(id);
+                    EvtVehicleDamageLabel.deleteByAssetDamageId(id);
+                    EvtUnitDamageLabel.deleteByAssetDamageId(id);
+                    deleted += Base.exec("DELETE FROM evt_asset_damages WHERE id_asset_damage = ?", id);
+                } catch (Exception e) {
+                    log.error("Errore eliminazione asset damage id={}: {}", id, e.getMessage(), e);
+                }
+            }
+            log.info("Hard delete asset damages: richiesti={}, cancellati={}", ids.size(), deleted);
             return deleted;
         } finally {
             Base.close();
@@ -218,7 +259,8 @@ public class EventBrowserService {
 
     // --- Asset Damages ---
 
-    public List<Map<String, Object>> searchAssetDamages(String assetIdentifier, String assetType,
+    public List<Map<String, Object>> searchAssetDamages(String messageId, String tfpEventId,
+                                                         String assetIdentifier, String assetType,
                                                          String containerNumber,
                                                          String severity, String status,
                                                          LocalDateTime dateFrom, LocalDateTime dateTo,
@@ -227,7 +269,7 @@ public class EventBrowserService {
             Base.open(dataSource);
 
             StringBuilder sql = new StringBuilder(
-                    "SELECT d.id_asset_damage, d.message_id, d.asset_type, d.asset_identifier, " +
+                    "SELECT d.id_asset_damage, d.tfp_event_id, d.message_id, d.asset_type, d.asset_identifier, " +
                     "d.severity, d.status, d.type, d.report_time, d.description, d.report_notes, " +
                     "d.container_number, d.id_trailer, d.id_vehicle, " +
                     // Vehicle label columns
@@ -248,13 +290,17 @@ public class EventBrowserService {
                     "ul.dmg_letterbox AS ul_letterbox, ul.dmg_security AS ul_security " +
                     "FROM evt_asset_damages d " +
                     "LEFT JOIN evt_vehicle_damage_labels vl ON vl.id_asset_damage = d.id_asset_damage " +
-                    "LEFT JOIN evt_unit_damage_labels ul ON ul.id_asset_damage = d.id_asset_damage");
+                    "LEFT JOIN evt_unit_damage_labels ul ON ul.id_asset_damage = d.id_asset_damage " +
+                    "LEFT JOIN c_evt_damage_status cs ON cs.status = d.status");
             List<Object> params = new ArrayList<>();
 
-            appendAssetDamagesWhere(sql, params, assetIdentifier, assetType, containerNumber,
+            appendAssetDamagesWhere(sql, params, messageId, tfpEventId, assetIdentifier, assetType, containerNumber,
                     severity, status, dateFrom, dateTo, unlinkedOnly);
 
-            sql.append(" ORDER BY d.report_time DESC NULLS LAST LIMIT ? OFFSET ?");
+            sql.append(" ORDER BY d.report_time DESC NULLS LAST, " +
+                       "d.edit_time DESC NULLS LAST, " +
+                       "d.closing_time DESC NULLS LAST, " +
+                       "cs.status_order DESC NULLS LAST LIMIT ? OFFSET ?");
             params.add(PAGE_SIZE);
             params.add(page * PAGE_SIZE);
 
@@ -312,7 +358,8 @@ public class EventBrowserService {
         }
     }
 
-    public long countAssetDamages(String assetIdentifier, String assetType, String containerNumber,
+    public long countAssetDamages(String messageId, String tfpEventId,
+                                   String assetIdentifier, String assetType, String containerNumber,
                                    String severity, String status,
                                    LocalDateTime dateFrom, LocalDateTime dateTo, boolean unlinkedOnly) {
         try {
@@ -321,7 +368,7 @@ public class EventBrowserService {
             StringBuilder sql = new StringBuilder("SELECT COUNT(*) AS cnt FROM evt_asset_damages d");
             List<Object> params = new ArrayList<>();
 
-            appendAssetDamagesWhere(sql, params, assetIdentifier, assetType, containerNumber,
+            appendAssetDamagesWhere(sql, params, messageId, tfpEventId, assetIdentifier, assetType, containerNumber,
                     severity, status, dateFrom, dateTo, unlinkedOnly);
 
             Object result = Base.firstCell(sql.toString(), params.toArray());
@@ -569,11 +616,25 @@ public class EventBrowserService {
     }
 
     private void appendAssetDamagesWhere(StringBuilder sql, List<Object> params,
+                                          String messageId, String tfpEventId,
                                           String assetIdentifier, String assetType, String containerNumber,
                                           String severity, String status,
                                           LocalDateTime dateFrom, LocalDateTime dateTo, boolean unlinkedOnly) {
         List<String> conditions = new ArrayList<>();
 
+        if (messageId != null && !messageId.isBlank()) {
+            conditions.add("d.message_id ILIKE ?");
+            params.add("%" + messageId.trim() + "%");
+        }
+        if (tfpEventId != null && !tfpEventId.isBlank()) {
+            try {
+                long tfpId = Long.parseLong(tfpEventId.trim());
+                conditions.add("d.tfp_event_id = ?");
+                params.add(tfpId);
+            } catch (NumberFormatException ignored) {
+                // skip malformed value
+            }
+        }
         if (assetIdentifier != null && !assetIdentifier.isBlank()) {
             conditions.add("d.asset_identifier ILIKE ?");
             params.add("%" + assetIdentifier.trim() + "%");
