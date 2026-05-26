@@ -197,7 +197,8 @@
                         th:data-detail-url="@{/events/unit-event-detail(id=${evt['id_unit_event']})}">
                         <td><input type="checkbox" class="form-check-input evt-row-check"
                                    th:value="${evt['id_unit_event']}"
-                                   th:data-message-id="${evt['message_id']}"></td>
+                                   th:data-message-id="${evt['message_id']}"
+                                   th:data-event-time="${evt['event_time']}"></td>
                         <td th:text="${evt['id_unit_event']}"></td>
                         <td class="msgid-cell" th:title="${evt['message_id']}" th:text="${evt['message_id']}"></td>
                         <td th:text="${evt['unit_type_code']}"></td>
@@ -1060,8 +1061,19 @@ document.querySelectorAll('.att-toggle[data-bs-toggle="dropdown"]').forEach(func
     function selectedMessageIds() {
         return Array.from(rowChecks)
             .filter(function(c) { return c.checked; })
-            .map(function(c) { return c.getAttribute('data-message-id'); })
-            .filter(function(s) { return s && s.length > 0; });
+            .map(function(c) {
+                return {
+                    mid: c.getAttribute('data-message-id'),
+                    t:   c.getAttribute('data-event-time') || ''
+                };
+            })
+            .filter(function(o) { return o.mid && o.mid.length > 0; })
+            .sort(function(a, b) {
+                if (a.t < b.t) return -1;
+                if (a.t > b.t) return 1;
+                return 0;
+            })
+            .map(function(o) { return o.mid; });
     }
 
     function refresh() {
