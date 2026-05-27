@@ -108,6 +108,7 @@ public class AssetDamageStreamProcessor extends AbstractStreamProcessor {
         damage.set("description", getString(payload, "description"));
         damage.set("report_notes", getString(payload, "reportNotes"));
         damage.set("closing_user_id", getLong(payload, "closingUserId"));
+        damage.set("closing_notes", getString(payload, "closingNotes"));
         damage.set("asset_identifier", getString(payload, "assetIdentifier"));
 
         List<Model> models = new ArrayList<>();
