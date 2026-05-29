@@ -6,11 +6,12 @@ notifications:
 
     # Attachment Sharing Event
     - stream: "events-stream"
-      event-type: attachment:share                
-      template-code: "CONDIVISIONE_FILE"          
-      consumer-group: "notifier-group"  
-      auto-ack: true      
+      event-type: attachment:share
+      template-code: "CONDIVISIONE_FILE"
+      consumer-group: "notifier-group"
+      auto-ack: true
       single-mail: true                           # Utilizza il template ma non la lista distribuzione (invio email singolo)
+      whatsapp: true                              # Se l'evento contiene "phone", invia anche su WhatsApp (link download ?token=)
 
     # Invio di email generica
     - stream: "events-stream"

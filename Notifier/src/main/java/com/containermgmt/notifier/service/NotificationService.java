@@ -38,6 +38,9 @@ public class NotificationService {
     private TemplateRenderer templateRenderer;
 
     @Autowired
+    private WhatsAppNotifier whatsAppNotifier;
+
+    @Autowired
     private ObjectMapper objectMapper;
 
     /**
@@ -68,6 +71,22 @@ public class NotificationService {
                 return;
             }
 
+            // Converte i dati dell'evento in variabili per il template/canali
+            // Usa eventToContext() che preserva la struttura di array e oggetti nested
+            Map<String, Object> variables = templateRenderer.eventToContext(event.getPayload());
+
+            // Canale WhatsApp (se abilitato sul mapping e l'evento porta un campo "phone")
+            if (mapping.isWhatsapp()) {
+                whatsAppNotifier.maybeShare(variables);
+            }
+
+            // Single-mail senza email destinatario (es. condivisione solo via WhatsApp): salta email
+            if (mapping.isSingleMail() && !hasSingleMailEmail(variables)) {
+                logger.info("Single-mail event senza email destinatario, skip invio email (messageId={})",
+                    event.getMessageId());
+                return;
+            }
+
             // Carica template dal database
             EmailTemplate template = EmailTemplate.findByCode(mapping.getTemplateCode());
 
@@ -76,10 +95,6 @@ public class NotificationService {
                     mapping.getTemplateCode());
                 return;
             }
-
-            // Converte i dati dell'evento in variabili per il template
-            // Usa eventToContext() che preserva la struttura di array e oggetti nested
-            Map<String, Object> variables = templateRenderer.eventToContext(event.getPayload());
 
             logger.debug("Extracted {} variables from event", variables.size());
             log.info("###DEBUG###  variables : {}",variables);
@@ -103,6 +118,23 @@ public class NotificationService {
             // Non rilanciare l'eccezione per permettere l'ACK del messaggio
             // Il log in email_send_log conterrà già l'errore
         }
+    }
+
+    /**
+     * Verifica se l'evento single-mail contiene un indirizzo email destinatario nei parametri.
+     * Se assente (es. condivisione solo via WhatsApp), l'invio email va saltato.
+     *
+     * @param variables contesto evento (chiave "parameters" -> Map con email)
+     * @return true se presente un email non vuota
+     */
+    @SuppressWarnings("unchecked")
+    private boolean hasSingleMailEmail(Map<String, Object> variables) {
+        Object parametersObj = variables != null ? variables.get("parameters") : null;
+        if (!(parametersObj instanceof Map)) {
+            return false;
+        }
+        Object email = ((Map<String, Object>) parametersObj).get("email");
+        return email != null && !email.toString().isBlank();
     }
 
     /**

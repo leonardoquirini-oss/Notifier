@@ -98,6 +98,13 @@ public class NotificationConfigProperties {
          */
         private boolean directEmail = false;
 
+        /**
+         * Se true, oltre all'email viene inviato anche un messaggio WhatsApp quando l'evento
+         * contiene un campo "phone" nei parametri. Usato dalla condivisione allegati
+         * (attachment:share). Il link al file usa il download permanente con ?token=.
+         */
+        private boolean whatsapp = false;
+
     }
 
 }

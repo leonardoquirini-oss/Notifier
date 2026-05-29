@@ -52,12 +52,38 @@ email:
     Per assistenza contattare: support@gruppobernardini.it
 
 # Backend API Configuration
+# Usata internamente (EmailService) per scaricare/eliminare allegati via hostname docker.
 backend:
   api:
-    url: http://backend:8080                        # URL di BERLink BE
+    url: http://backend:8080                        # URL di BERLink BE (hostname INTERNO docker)
     api-key: 0e5cfec5-ad39-45c6-b3af-92e9c77dfcf8   # API Key per automazione
     attachments:
       download-endpoint: /api/attachments/{id}/download
+
+# BERLink API raggiungibile DALL'ESTERNO (servizio WhatsApp).
+# base-url: URL pubblico di BERLink (NON http://backend:8080 interno).
+# api-key: chiave accettata da QUELLA istanza, usata come ?token nel link download allegato.
+# base-url e api-key devono appartenere alla STESSA istanza.
+berlink:
+  api:
+    base-url: http://192.168.0.12:8090
+    api-key: d2c6aba0-3779-4bca-82ae-e731f35a3ec4
+
+# WhatsApp Configuration (bernardini-os)
+# Usata per la condivisione allegati (evento attachment:share con campo "phone").
+# image-url: allegato con estensione immagine. file-url: allegato generico/documento.
+# token: Bearer per header Authorization.
+# Il link download dell'allegato si costruisce da berlink.api (base-url + api-key).
+# dry-run=true: nessuna chiamata REST, solo log.
+whatsapp:
+  # url: messaggio testo. image-url: immagine. file-url: documento/file generico.
+  url: https://bernardini-os.fiai.pro/api/whatsapp/send-message
+  image-url: https://bernardini-os.fiai.pro/api/whatsapp/send-image
+  file-url: https://bernardini-os.fiai.pro/api/whatsapp/send-document
+  token: fiai-10ad376fb71badb1d6b5618acabaf8c480b7c5479c9c1998ef63db4384dcfba4
+  account: main
+  # true: nessuna chiamata REST, solo log. false: invio reale.
+  dry-run: false
 
 # Valkey (Redis) Configuration
 valkey:
