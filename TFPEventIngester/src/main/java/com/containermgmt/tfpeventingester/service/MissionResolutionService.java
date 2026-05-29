@@ -102,7 +102,19 @@ public class MissionResolutionService {
 
         // Eventi di chiusura (DROP / END_UNLOAD) ereditano la mission dello START,
         // come lo START stesso (che usa il proprio transportOrderShortCode, senza TIR).
+        // Ma solo se non c'e' gia' un END piu' vecchio tra START e questo evento: in tal
+        // caso il ciclo aperto dallo START era gia' chiuso e questo evento appartiene a un
+        // ciclo successivo privo di START → niente mission.
         if (isEndEvent(currType)) {
+            List<Map<String, Object>> priorEndRows = Base.findAll(END_SQL, unitNumber, startTime);
+            if (!priorEndRows.isEmpty()) {
+                Instant priorEnd = ((Timestamp) priorEndRows.get(0).get("event_time")).toInstant();
+                if (priorEnd.isBefore(eventTime)) {
+                    log.debug("{} EXIT evento di chiusura ma END precedente ({}) < CURR → mission=null (ciclo gia' chiuso)",
+                            tag, priorEnd);
+                    return null;
+                }
+            }
             log.debug("{} EXIT evento di chiusura ({}) → mission={} (eredita da START)", tag, currType, bg);
             return bg;
         }
