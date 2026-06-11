@@ -37,7 +37,7 @@ public class EventBrowserService {
 
     public List<Map<String, Object>> searchEvents(String eventType, LocalDate dateFrom,
                                                     LocalDate dateTo, String messageId,
-                                                    String unitNumber, String payloadType,
+                                                    String unitNumber, String plate, String payloadType,
                                                     String additionalData, int page) {
         try {
             activeJDBCConfig.openConnection();
@@ -48,7 +48,7 @@ public class EventBrowserService {
                     "payload::text AS payload_full FROM evt_raw_events");
             List<Object> params = new ArrayList<>();
 
-            appendWhereClause(sql, params, eventType, dateFrom, dateTo, messageId, unitNumber, payloadType, additionalData);
+            appendWhereClause(sql, params, eventType, dateFrom, dateTo, messageId, unitNumber, plate, payloadType, additionalData);
 
             sql.append(" ORDER BY event_time DESC LIMIT ? OFFSET ?");
             params.add(PAGE_SIZE);
@@ -75,14 +75,14 @@ public class EventBrowserService {
     }
 
     public long countEvents(String eventType, LocalDate dateFrom, LocalDate dateTo, String messageId,
-                            String unitNumber, String payloadType, String additionalData) {
+                            String unitNumber, String plate, String payloadType, String additionalData) {
         try {
             activeJDBCConfig.openConnection();
 
             StringBuilder sql = new StringBuilder("SELECT COUNT(*) AS cnt FROM evt_raw_events");
             List<Object> params = new ArrayList<>();
 
-            appendWhereClause(sql, params, eventType, dateFrom, dateTo, messageId, unitNumber, payloadType, additionalData);
+            appendWhereClause(sql, params, eventType, dateFrom, dateTo, messageId, unitNumber, plate, payloadType, additionalData);
 
             Object result = Base.firstCell(sql.toString(), params.toArray());
             return result != null ? ((Number) result).longValue() : 0;
@@ -149,7 +149,7 @@ public class EventBrowserService {
     }
 
     public int resendAllByFilter(String eventType, LocalDate dateFrom, LocalDate dateTo,
-                                 String messageId, String unitNumber, String payloadType,
+                                 String messageId, String unitNumber, String plate, String payloadType,
                                  String additionalData, boolean forceMessageId) {
         // Phase 1: load only IDs (cheap, no payloads) per evitare OOM su volumi grandi.
         List<Integer> ids;
@@ -158,7 +158,7 @@ public class EventBrowserService {
 
             StringBuilder sql = new StringBuilder("SELECT id_event FROM evt_raw_events");
             List<Object> params = new ArrayList<>();
-            appendWhereClause(sql, params, eventType, dateFrom, dateTo, messageId, unitNumber, payloadType, additionalData);
+            appendWhereClause(sql, params, eventType, dateFrom, dateTo, messageId, unitNumber, plate, payloadType, additionalData);
             sql.append(" ORDER BY event_time ASC");
 
             List<Map<String, Object>> rows = Base.findAll(sql.toString(), params.toArray());
@@ -177,8 +177,8 @@ public class EventBrowserService {
         Map<String, Object> metadata = forceMessageId ? Map.of("resend", "true") : null;
         int count = resendInBatches(ids, metadata);
 
-        log.info("Resend all by filter: resent {}/{} events (eventType={}, dateFrom={}, dateTo={}, messageId={}, unitNumber={}, payloadType={}, additionalData={}, forceMessageId={})",
-                count, ids.size(), eventType, dateFrom, dateTo, messageId, unitNumber, payloadType, additionalData, forceMessageId);
+        log.info("Resend all by filter: resent {}/{} events (eventType={}, dateFrom={}, dateTo={}, messageId={}, unitNumber={}, plate={}, payloadType={}, additionalData={}, forceMessageId={})",
+                count, ids.size(), eventType, dateFrom, dateTo, messageId, unitNumber, plate, payloadType, additionalData, forceMessageId);
         return count;
     }
 
@@ -384,7 +384,7 @@ public class EventBrowserService {
 
     private void appendWhereClause(StringBuilder sql, List<Object> params,
                                     String eventType, LocalDate dateFrom, LocalDate dateTo,
-                                    String messageId, String unitNumber, String payloadType,
+                                    String messageId, String unitNumber, String plate, String payloadType,
                                     String additionalData) {
         List<String> conditions = new ArrayList<>();
 
@@ -407,6 +407,10 @@ public class EventBrowserService {
         if (unitNumber != null && !unitNumber.isBlank()) {
             conditions.add("payload->>'unitNumber' ILIKE ?");
             params.add("%" + unitNumber + "%");
+        }
+        if (plate != null && !plate.isBlank()) {
+            conditions.add("payload->>'vehiclePlate' ILIKE ?");
+            params.add("%" + plate + "%");
         }
         if (payloadType != null && !payloadType.isBlank()) {
             conditions.add("payload->>'type' ILIKE ?");

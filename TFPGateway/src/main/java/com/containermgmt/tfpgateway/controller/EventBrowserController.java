@@ -33,13 +33,14 @@ public class EventBrowserController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateTo,
             @RequestParam(required = false) String messageId,
             @RequestParam(required = false) String unitNumber,
+            @RequestParam(required = false) String plate,
             @RequestParam(required = false) String payloadType,
             @RequestParam(required = false) String additionalData,
             @RequestParam(defaultValue = "0") int page,
             Model model) {
 
-        List<Map<String, Object>> events = eventBrowserService.searchEvents(eventType, dateFrom, dateTo, messageId, unitNumber, payloadType, additionalData, page);
-        long totalCount = eventBrowserService.countEvents(eventType, dateFrom, dateTo, messageId, unitNumber, payloadType, additionalData);
+        List<Map<String, Object>> events = eventBrowserService.searchEvents(eventType, dateFrom, dateTo, messageId, unitNumber, plate, payloadType, additionalData, page);
+        long totalCount = eventBrowserService.countEvents(eventType, dateFrom, dateTo, messageId, unitNumber, plate, payloadType, additionalData);
         List<String> eventTypes = eventBrowserService.getDistinctEventTypes();
 
         int totalPages = (int) Math.ceil((double) totalCount / PAGE_SIZE);
@@ -56,6 +57,7 @@ public class EventBrowserController {
         model.addAttribute("dateTo", dateTo);
         model.addAttribute("messageId", messageId);
         model.addAttribute("unitNumber", unitNumber);
+        model.addAttribute("plate", plate);
         model.addAttribute("payloadType", payloadType);
         model.addAttribute("additionalData", additionalData);
 
@@ -137,12 +139,13 @@ public class EventBrowserController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateTo,
             @RequestParam(required = false) String messageId,
             @RequestParam(required = false) String unitNumber,
+            @RequestParam(required = false) String plate,
             @RequestParam(required = false) String payloadType,
             @RequestParam(required = false) String additionalData,
             @RequestParam(required = false, defaultValue = "false") boolean forceMessageId,
             RedirectAttributes redirectAttributes) {
 
-        int count = eventBrowserService.resendAllByFilter(eventType, dateFrom, dateTo, messageId, unitNumber, payloadType, additionalData, forceMessageId);
+        int count = eventBrowserService.resendAllByFilter(eventType, dateFrom, dateTo, messageId, unitNumber, plate, payloadType, additionalData, forceMessageId);
 
         if (count == 0) {
             redirectAttributes.addFlashAttribute("errorMessage", "No events matched the filter criteria.");

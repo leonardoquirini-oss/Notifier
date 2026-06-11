@@ -83,6 +83,11 @@
                        placeholder="payload.unitNumber..." th:value="${unitNumber}" style="width:180px">
             </div>
             <div class="col-auto">
+                <label class="form-label form-label-sm mb-0">Plate</label>
+                <input type="text" name="plate" class="form-control form-control-sm"
+                       placeholder="payload.vehiclePlate..." th:value="${plate}" style="width:160px">
+            </div>
+            <div class="col-auto">
                 <label class="form-label form-label-sm mb-0">Type (payload)</label>
                 <input type="text" name="payloadType" class="form-control form-control-sm"
                        placeholder="payload.type..." th:value="${payloadType}" style="width:160px">
@@ -105,6 +110,7 @@
     <input type="hidden" id="filterDateTo" th:value="${dateTo}">
     <input type="hidden" id="filterMessageId" th:value="${messageId}">
     <input type="hidden" id="filterUnitNumber" th:value="${unitNumber}">
+    <input type="hidden" id="filterPlate" th:value="${plate}">
     <input type="hidden" id="filterPayloadType" th:value="${payloadType}">
     <input type="hidden" id="filterAdditionalData" th:value="${additionalData}">
     <input type="hidden" id="filterTotalCount" th:value="${totalCount}">
@@ -284,7 +290,7 @@
         <ul class="pagination pagination-sm justify-content-center">
             <li class="page-item" th:classappend="${currentPage == 0} ? 'disabled'">
                 <a class="page-link"
-                   th:href="@{/events(eventType=${selectedEventType}, dateFrom=${dateFrom}, dateTo=${dateTo}, messageId=${messageId}, unitNumber=${unitNumber}, payloadType=${payloadType}, additionalData=${additionalData}, page=${currentPage - 1})}">
+                   th:href="@{/events(eventType=${selectedEventType}, dateFrom=${dateFrom}, dateTo=${dateTo}, messageId=${messageId}, unitNumber=${unitNumber}, plate=${plate}, payloadType=${payloadType}, additionalData=${additionalData}, page=${currentPage - 1})}">
                     &laquo;
                 </a>
             </li>
@@ -292,13 +298,13 @@
                 <li class="page-item" th:classappend="${p == currentPage} ? 'active'"
                     th:if="${p == 0 or p == totalPages - 1 or (p >= currentPage - 2 and p <= currentPage + 2)}">
                     <a class="page-link"
-                       th:href="@{/events(eventType=${selectedEventType}, dateFrom=${dateFrom}, dateTo=${dateTo}, messageId=${messageId}, unitNumber=${unitNumber}, payloadType=${payloadType}, additionalData=${additionalData}, page=${p})}"
+                       th:href="@{/events(eventType=${selectedEventType}, dateFrom=${dateFrom}, dateTo=${dateTo}, messageId=${messageId}, unitNumber=${unitNumber}, plate=${plate}, payloadType=${payloadType}, additionalData=${additionalData}, page=${p})}"
                        th:text="${p + 1}"></a>
                 </li>
             </th:block>
             <li class="page-item" th:classappend="${currentPage == totalPages - 1} ? 'disabled'">
                 <a class="page-link"
-                   th:href="@{/events(eventType=${selectedEventType}, dateFrom=${dateFrom}, dateTo=${dateTo}, messageId=${messageId}, unitNumber=${unitNumber}, payloadType=${payloadType}, additionalData=${additionalData}, page=${currentPage + 1})}">
+                   th:href="@{/events(eventType=${selectedEventType}, dateFrom=${dateFrom}, dateTo=${dateTo}, messageId=${messageId}, unitNumber=${unitNumber}, plate=${plate}, payloadType=${payloadType}, additionalData=${additionalData}, page=${currentPage + 1})}">
                     &raquo;
                 </a>
             </li>
@@ -421,6 +427,7 @@
         var dateTo = document.getElementById('filterDateTo').value;
         var messageId = document.getElementById('filterMessageId').value;
         var unitNumber = document.getElementById('filterUnitNumber').value;
+        var plate = document.getElementById('filterPlate').value;
         var payloadType = document.getElementById('filterPayloadType').value;
         var additionalData = document.getElementById('filterAdditionalData').value;
         if (eventType) params.append('eventType', eventType);
@@ -428,6 +435,7 @@
         if (dateTo) params.append('dateTo', dateTo);
         if (messageId) params.append('messageId', messageId);
         if (unitNumber) params.append('unitNumber', unitNumber);
+        if (plate) params.append('plate', plate);
         if (payloadType) params.append('payloadType', payloadType);
         if (additionalData) params.append('additionalData', additionalData);
         if (forceMessageId) params.append('forceMessageId', 'true');
