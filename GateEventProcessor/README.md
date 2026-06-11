@@ -74,7 +74,7 @@ Nessuna persistenza locale: il processore legge il DB BERLink in sola lettura pe
 Per ogni record letto dallo stream:
 
 1. **Parse fields**: `message_id`, `event_type`, `payload` (JSON string).
-2. **Type filter**: `payload.type` deve essere in `stream.gate-events.allowed-types` (case-insensitive). Altrimenti scarta + ack.
+2. **Type filter**: `payload.type` deve essere in `stream.unit-events.allowed-types` (case-insensitive). Altrimenti scarta + ack.
 3. **BERLink lookup**: chiama `BerlinkLookupService.lookupUnit(payload.unitNumber, payload.unitTypeCode)`. Risultato loggato (`containerNumber`, `idTrailer`, `idVehicle`). Failover graceful: se BERLink è giù il flusso prosegue, il lookup ritorna empty.
 4. **Geo-match**: estrae `payload.latitude` / `payload.longitude`; `GateMatcher` calcola la distanza haversine verso ogni gate e restituisce il più vicino entro `radius` (metri). Se nessun match → scarta + ack.
 5. **Damage check**: `AssetDamageRepository.hasUnresolvedOpenDamage(payload.unitNumber)`. Esegue la query (vedi sotto). Se `false` → niente notifica.
@@ -171,7 +171,7 @@ health:
 
 # Stream consumato
 stream:
-  gate-events:
+  unit-events:
     key: tfp-unit-events-stream            # nome coda Valkey
     consumer-group: gate-event-processor-group-dev
     allowed-types:                          # filtro su payload.type
@@ -209,9 +209,9 @@ berlink:
 
 | Chiave | Componente |
 |--------|-----------|
-| `stream.gate-events.key` | nome stream consumato |
-| `stream.gate-events.consumer-group` | consumer group Valkey |
-| `stream.gate-events.allowed-types` | whitelist `payload.type` |
+| `stream.unit-events.key` | nome stream consumato |
+| `stream.unit-events.consumer-group` | consumer group Valkey |
+| `stream.unit-events.allowed-types` | whitelist `payload.type` |
 | `stream.poll-timeout-seconds` | poll timeout del listener |
 | `gates.<id>.latitude/longitude` | centro del gate |
 | `gates.<id>.radius` | raggio in metri |
@@ -238,7 +238,7 @@ GateEventProcessor/
     │   ├── GateEventProcessorApplication.java
     │   ├── config/
     │   │   ├── BerlinkApiConfig.java         # berlink.api props + berlinkRestTemplate
-    │   │   ├── GateEventProperties.java      # stream.gate-events.*
+    │   │   ├── GateEventProperties.java      # stream.unit-events.*
     │   │   ├── GatesProperties.java          # gates.* map
     │   │   ├── JacksonConfig.java
     │   │   └── ValkeyConfig.java
@@ -338,7 +338,7 @@ Restart del container, niente codice da toccare.
 
 ```yaml
 stream:
-  gate-events:
+  unit-events:
     allowed-types:
       - GATE_IN
       - GATE_OUT
@@ -349,7 +349,7 @@ stream:
 
 ```yaml
 stream:
-  gate-events:
+  unit-events:
     key: another-stream-name
     consumer-group: another-group
 ```

@@ -26,7 +26,7 @@ import java.util.Set;
  * geomatches against configured gates, and forwards a notification when inside a gate.
  */
 @Component
-@ConditionalOnProperty("stream.gate-events.key")
+@ConditionalOnProperty("stream.unit-events.key")
 @Slf4j
 public class GateEventStreamProcessor implements StreamProcessor {
 
@@ -61,7 +61,7 @@ public class GateEventStreamProcessor implements StreamProcessor {
         log.info("GateEventStreamProcessor configured: stream={}, group={}, allowedTypes={}",
                 streamKey, consumerGroup, allowedTypes);
         if (allowedTypes.isEmpty()) {
-            log.warn("stream.gate-events.allowed-types is empty: every message will be skipped");
+            log.warn("stream.unit-events.allowed-types is empty: every message will be skipped");
         }
     }
 
@@ -157,7 +157,8 @@ public class GateEventStreamProcessor implements StreamProcessor {
             log.debug("Skipping message_id={}: payload.unitNumber missing, cannot check damages", messageId);
             return;
         }
-        if (!assetDamageRepository.hasUnresolvedOpenDamage(unitNumber)) {
+        List<Long> damageIds = assetDamageRepository.findUnresolvedOpenDamageIds(unitNumber);
+        if (damageIds.isEmpty()) {
             log.info("No unresolved OPEN damage for asset_identifier={}, skipping notification (message_id={})",
                     unitNumber, messageId);
             return;
@@ -172,7 +173,11 @@ public class GateEventStreamProcessor implements StreamProcessor {
         String notifyGroup = match.gate().getNotifyGroup();
         notificationClient.send(notifyGroup, NOTIFICATION_TYPE, title, title, link);
 
-        whatsAppNotifier.notifyGroup(notifyGroup, payloadType, unitNumber, extractAttachments(payload));
+        List<AssetDamageRepository.DamageAttachment> damageAttachments =
+                assetDamageRepository.findAttachmentsByDamageIds(damageIds);
+
+        whatsAppNotifier.notifyGroup(notifyGroup, payloadType, unitNumber,
+                extractAttachments(payload), damageAttachments);
     }
 
     @SuppressWarnings("unchecked")

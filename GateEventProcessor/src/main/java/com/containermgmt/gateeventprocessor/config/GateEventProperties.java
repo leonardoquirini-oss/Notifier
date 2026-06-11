@@ -7,7 +7,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import java.util.Collections;
 import java.util.List;
 
-@ConfigurationProperties(prefix = "stream.gate-events")
+@ConfigurationProperties(prefix = "stream.unit-events")
 @Getter
 @Setter
 public class GateEventProperties {

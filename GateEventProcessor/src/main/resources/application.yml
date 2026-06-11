@@ -41,13 +41,12 @@ management:
 # Stream Configuration
 # Tutto configurabile: nome coda (key), consumer group, e tipi accettati (filter su payload.type).
 stream:
-  gate-events:
+  unit-events:
     key: tfp-unit-events-stream
     consumer-group: gate-event-processor-group-dev
     allowed-types:
       - GATE_IN
-      - GATE_OUT
-      - GATE_IN_TRAIN
+      - GATE_OUT      
   poll-timeout-seconds: 1
 
 gates:

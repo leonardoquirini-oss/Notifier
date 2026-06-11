@@ -65,7 +65,9 @@ public class WhatsAppNotifier {
         this.objectMapper = objectMapper;
     }
 
-    public void notifyGroup(String groupCode, String eventType, String unitNumber, List<EventAttachment> eventAttachments) {
+    public void notifyGroup(String groupCode, String eventType, String unitNumber,
+                            List<EventAttachment> eventAttachments,
+                            List<com.containermgmt.gateeventprocessor.repository.AssetDamageRepository.DamageAttachment> damageAttachments) {
         List<String> phones = groupRepository.findPhoneNumbersByGroupCode(groupCode);
         if (phones.isEmpty()) {
             log.info("WhatsApp: no phone numbers found for group_code={}, nothing to send (unit={})",
@@ -95,6 +97,14 @@ public class WhatsAppNotifier {
             sendTextMessage(phone, text);
             for (TempAttachment att : tempAttachments) {
                 sendAttachmentMessage(phone, att, unitNumber);
+            }
+            if (damageAttachments != null) {
+                for (var att : damageAttachments) {
+                    if (att.idDocument() == null) {
+                        continue;
+                    }
+                    sendDocumentMessage(phone, att.idDocument(), unitNumber);
+                }
             }
         }
     }
@@ -212,6 +222,22 @@ public class WhatsAppNotifier {
     private String buildDownloadUrl(Long tempId) {
         String token = berlinkApiConfig.getApiKey() == null ? "" : berlinkApiConfig.getApiKey();
         return trimBase() + "/api/attachments/temporary/" + tempId + "/download?token="
+                + URLEncoder.encode(token, StandardCharsets.UTF_8);
+    }
+
+    /** Sends an existing BERLink document (evt_damage_attachment.id_document) via its permanent download URL. */
+    private void sendDocumentMessage(String phone, Long idDocument, String unitNumber) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("phone", phone);
+        body.put("text", unitNumber);
+        body.put("url", buildDocumentDownloadUrl(idDocument));
+        body.put("caption", unitNumber);
+        dispatch(whatsAppConfig.getImageUrl(), body);
+    }
+
+    private String buildDocumentDownloadUrl(Long idDocument) {
+        String token = berlinkApiConfig.getApiKey() == null ? "" : berlinkApiConfig.getApiKey();
+        return trimBase() + "/api/attachments/" + idDocument + "/download?token="
                 + URLEncoder.encode(token, StandardCharsets.UTF_8);
     }
 

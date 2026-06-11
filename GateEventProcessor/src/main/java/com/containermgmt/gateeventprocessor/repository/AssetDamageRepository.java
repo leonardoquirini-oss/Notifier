@@ -4,6 +4,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
+import java.util.stream.Collectors;
+
 /**
  * Reads from BERLink evt_asset_damages.
  */
@@ -12,14 +15,14 @@ import org.springframework.stereotype.Repository;
 public class AssetDamageRepository {
 
     /**
-     * Returns true if there is at least one OPEN damage row for the given asset_identifier
+     * Returns the id_asset_damage of every OPEN damage row for the given asset_identifier
      * whose tfp_event_id has no matching REPAIRED / UNDER_REPAIR row.
      *
      * OPEN rows with tfp_event_id IS NULL are treated as orphan (no closure possible),
      * therefore they also trigger the notification.
      */
-    private static final String QUERY = """
-            SELECT 1
+    private static final String UNRESOLVED_IDS_QUERY = """
+            SELECT d.id_asset_damage
             FROM evt_asset_damages d
             WHERE d.asset_identifier = ?
               AND d.status = 'OPEN'
@@ -32,7 +35,6 @@ public class AssetDamageRepository {
                           AND d2.status IN ('REPAIRED', 'UNDER_REPAIR')
                    )
               )
-            LIMIT 1
             """;
 
     private final JdbcTemplate jdbc;
@@ -41,19 +43,51 @@ public class AssetDamageRepository {
         this.jdbc = jdbc;
     }
 
-    public boolean hasUnresolvedOpenDamage(String assetIdentifier) {
+    /** Attachment of a damage row, stored as a BERLink document reference (id_document). */
+    public record DamageAttachment(Long idDocument, String filename) {
+    }
+
+    /**
+     * Returns the id_asset_damage of every unresolved OPEN damage for the asset.
+     * Empty list means no damage (skip notification) or query failure.
+     */
+    public List<Long> findUnresolvedOpenDamageIds(String assetIdentifier) {
         if (assetIdentifier == null || assetIdentifier.isBlank()) {
-            return false;
+            return List.of();
         }
         try {
-            Integer found = jdbc.query(QUERY,
-                    rs -> rs.next() ? rs.getInt(1) : null,
+            return jdbc.query(UNRESOLVED_IDS_QUERY,
+                    (rs, rowNum) -> rs.getLong("id_asset_damage"),
                     assetIdentifier);
-            return found != null;
         } catch (Exception e) {
-            log.error("hasUnresolvedOpenDamage query failed for asset_identifier={}: {}",
+            log.error("findUnresolvedOpenDamageIds query failed for asset_identifier={}: {}",
                     assetIdentifier, e.getMessage());
-            return false;
+            return List.of();
+        }
+    }
+
+    /**
+     * Returns the attachments (id_document + filename) of the given damage rows.
+     * Rows with id_document IS NULL (failed upload) are excluded.
+     */
+    public List<DamageAttachment> findAttachmentsByDamageIds(List<Long> damageIds) {
+        if (damageIds == null || damageIds.isEmpty()) {
+            return List.of();
+        }
+        String placeholders = damageIds.stream().map(id -> "?").collect(Collectors.joining(","));
+        String sql = "SELECT id_document, filename "
+                + "FROM evt_damage_attachment "
+                + "WHERE id_asset_damage IN (" + placeholders + ") "
+                + "  AND id_document IS NOT NULL "
+                + "ORDER BY id_damage_attachment";
+        try {
+            return jdbc.query(sql,
+                    (rs, rowNum) -> new DamageAttachment(rs.getLong("id_document"), rs.getString("filename")),
+                    damageIds.toArray());
+        } catch (Exception e) {
+            log.error("findAttachmentsByDamageIds query failed for damageIds={}: {}",
+                    damageIds, e.getMessage());
+            return List.of();
         }
     }
 }
