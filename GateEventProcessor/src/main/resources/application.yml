@@ -46,19 +46,28 @@ stream:
     consumer-group: gate-event-processor-group-dev
     allowed-types:
       - GATE_IN
-      - GATE_OUT      
+      - GATE_OUT
+  # Position events: geofencing su vehiclePlate, notifica max 1/giorno per targa (Valkey-tracked).
+  position-events:
+    key: tfp-unit-positions-stream
+    consumer-group: gate-event-processor-position-group-dev
   poll-timeout-seconds: 1
 
 gates:
-  gate-terni:
-    latitude: 42.566593515583676
-    longitude: 12.60330054635772
-    radius: 500
+  gate-terni-bernardini:
+    latitude: 42.566552831546794
+    longitude: 12.603510778047223
+    radius: 60
     notify-group: officina-terni
-  gate-fiorenzuola:
-    latitude: 44.9226023312316
-    longitude: 9.928303746032544
-    radius: 500
+  gate-fiorenzuola-terminal:
+    latitude: 44.923319944473654
+    longitude: 9.92723207089062
+    radius: 100
+    notify-group: officina-fiorenzuola
+  gate-fiorenzuola-tagliaferri:
+    latitude: 44.91694338967841
+    longitude: 9.936515169335621
+    radius: 35
     notify-group: officina-fiorenzuola
 
 # insert into c_ntf_notification_types (id_notification_type, label, icon, color) VALUES('gate_in_with_damages',    'Verificare Danni',          'calendar',  'red');
