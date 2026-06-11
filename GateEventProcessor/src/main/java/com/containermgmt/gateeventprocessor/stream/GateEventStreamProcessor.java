@@ -163,7 +163,7 @@ public class GateEventStreamProcessor implements StreamProcessor {
             return;
         }
 
-        String title = buildTitle(unitNumber, trailerPlate);
+        String title = buildTitle(payloadType, unitNumber, trailerPlate);
         String link = buildLink(unitNumber);
 
         log.info("Gate match for message_id={}: gate={}, distance={}m, group={}",
@@ -172,7 +172,7 @@ public class GateEventStreamProcessor implements StreamProcessor {
         String notifyGroup = match.gate().getNotifyGroup();
         notificationClient.send(notifyGroup, NOTIFICATION_TYPE, title, title, link);
 
-        whatsAppNotifier.notifyGroup(notifyGroup, unitNumber, extractAttachments(payload));
+        whatsAppNotifier.notifyGroup(notifyGroup, payloadType, unitNumber, extractAttachments(payload));
     }
 
     @SuppressWarnings("unchecked")
@@ -204,8 +204,14 @@ public class GateEventStreamProcessor implements StreamProcessor {
         return "/gestione-danni?unit=" + URLEncoder.encode(sanitized, StandardCharsets.UTF_8);
     }
 
-    static String buildTitle(String unitNumber, String trailerPlate) {
-        StringBuilder sb = new StringBuilder("Ingresso ");
+    static String buildTitle(String eventType, String unitNumber, String trailerPlate) {
+        StringBuilder sb = new StringBuilder();
+        String type = eventType != null ? eventType.trim().toUpperCase(Locale.ROOT) : null;
+        if ("GATE_IN".equals(type)) {
+            sb.append("Ingresso ");
+        } else if ("GATE_OUT".equals(type)) {
+            sb.append("Uscita ");
+        }
         if (unitNumber != null && !unitNumber.isEmpty()) {
             sb.append("Unita ").append(unitNumber).append(' ');
         }

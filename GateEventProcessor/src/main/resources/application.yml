@@ -81,8 +81,10 @@ berlink:
 # token: Bearer token per header Authorization (override in prod via env WHATSAPP_TOKEN).
 whatsapp:
   # url: messaggio testo. image-url: messaggio con allegato/immagine.
-  url: https://bernardini-os.fiai.pro/api/whatsapp/send-message
-  image-url: https://bernardini-os.fiai.pro/api/whatsapp/send-image
+  url: http://192.168.0.14:3120/api/whatsapp/send-message
+  image-url: http://192.168.0.14:3120/api/whatsapp/send-image
+  #url: https://bernardini-os.fiai.pro/api/whatsapp/send-message
+  #image-url: https://bernardini-os.fiai.pro/api/whatsapp/send-image
   token: fiai-10ad376fb71badb1d6b5618acabaf8c480b7c5479c9c1998ef63db4384dcfba4
   account: main
   # true: nessuna chiamata REST, solo log. false: invio reale.

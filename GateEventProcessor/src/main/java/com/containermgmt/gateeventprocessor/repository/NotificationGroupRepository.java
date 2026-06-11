@@ -22,6 +22,8 @@ public class NotificationGroupRepository {
             WHERE g.group_code = ?
               AND e.phone_number IS NOT NULL
               AND e.phone_number <> ''
+              AND e.delete_date IS NULL
+              AND e.id_user_status IN ('CREATED', 'ENABLED')
             """;
 
     private final JdbcTemplate jdbc;

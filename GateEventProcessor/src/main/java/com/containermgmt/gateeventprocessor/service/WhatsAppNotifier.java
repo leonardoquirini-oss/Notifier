@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -64,7 +65,7 @@ public class WhatsAppNotifier {
         this.objectMapper = objectMapper;
     }
 
-    public void notifyGroup(String groupCode, String unitNumber, List<EventAttachment> eventAttachments) {
+    public void notifyGroup(String groupCode, String eventType, String unitNumber, List<EventAttachment> eventAttachments) {
         List<String> phones = groupRepository.findPhoneNumbersByGroupCode(groupCode);
         if (phones.isEmpty()) {
             log.info("WhatsApp: no phone numbers found for group_code={}, nothing to send (unit={})",
@@ -79,7 +80,16 @@ public class WhatsAppNotifier {
 
         List<TempAttachment> tempAttachments = createTemporaryAttachments(eventAttachments, unitNumber);
 
-        String text = "Ingresso unita' " + unitNumber + " con segnalazioni";
+        String type = eventType != null ? eventType.trim().toUpperCase(Locale.ROOT) : null;
+        String prefix;
+        if ("GATE_IN".equals(type)) {
+            prefix = "Ingresso ";
+        } else if ("GATE_OUT".equals(type)) {
+            prefix = "Uscita ";
+        } else {
+            prefix = "";
+        }
+        String text = prefix + "Unita " + unitNumber + " con segnalazioni";
 
         for (String phone : phones) {
             sendTextMessage(phone, text);
