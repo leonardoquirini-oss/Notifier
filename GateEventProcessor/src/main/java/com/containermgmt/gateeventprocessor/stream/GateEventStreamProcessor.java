@@ -4,6 +4,7 @@ import com.containermgmt.gateeventprocessor.config.GateEventProperties;
 import com.containermgmt.gateeventprocessor.repository.AssetDamageRepository;
 import com.containermgmt.gateeventprocessor.service.BerlinkLookupService;
 import com.containermgmt.gateeventprocessor.service.BerlinkLookupService.LookupResult;
+import com.containermgmt.gateeventprocessor.service.DamageDetailService;
 import com.containermgmt.gateeventprocessor.service.GateMatcher;
 import com.containermgmt.gateeventprocessor.service.GateMatcher.Match;
 import com.containermgmt.gateeventprocessor.service.NotificationClient;
@@ -38,6 +39,7 @@ public class GateEventStreamProcessor implements StreamProcessor {
     private final BerlinkLookupService berlinkLookupService;
     private final AssetDamageRepository assetDamageRepository;
     private final WhatsAppNotifier whatsAppNotifier;
+    private final DamageDetailService damageDetailService;
     private final String streamKey;
     private final String consumerGroup;
     private final Set<String> allowedTypes;
@@ -48,13 +50,15 @@ public class GateEventStreamProcessor implements StreamProcessor {
                                     NotificationClient notificationClient,
                                     BerlinkLookupService berlinkLookupService,
                                     AssetDamageRepository assetDamageRepository,
-                                    WhatsAppNotifier whatsAppNotifier) {
+                                    WhatsAppNotifier whatsAppNotifier,
+                                    DamageDetailService damageDetailService) {
         this.objectMapper = objectMapper;
         this.gateMatcher = gateMatcher;
         this.notificationClient = notificationClient;
         this.berlinkLookupService = berlinkLookupService;
         this.assetDamageRepository = assetDamageRepository;
         this.whatsAppNotifier = whatsAppNotifier;
+        this.damageDetailService = damageDetailService;
         this.streamKey = props.getKey();
         this.consumerGroup = props.getConsumerGroup();
         this.allowedTypes = normalize(props.getAllowedTypes());
@@ -175,9 +179,11 @@ public class GateEventStreamProcessor implements StreamProcessor {
 
         List<AssetDamageRepository.DamageAttachment> damageAttachments =
                 assetDamageRepository.findAttachmentsByDamageIds(damageIds);
+        List<WhatsAppNotifier.DamageInfo> damageInfos =
+                damageDetailService.buildDamageInfos(damageIds);
 
-        whatsAppNotifier.notifyGroup(notifyGroup, payloadType, unitNumber,
-                extractAttachments(payload), damageAttachments);
+        whatsAppNotifier.notifyGroup(notifyGroup, payloadType, unitNumber, match.gate().getLabel(),
+                extractAttachments(payload), damageAttachments, damageInfos);
     }
 
     @SuppressWarnings("unchecked")

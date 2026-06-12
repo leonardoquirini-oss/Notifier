@@ -1,5 +1,6 @@
 package com.containermgmt.gateeventprocessor;
 
+import com.containermgmt.gateeventprocessor.config.DamageLabelsProperties;
 import com.containermgmt.gateeventprocessor.config.GateEventProperties;
 import com.containermgmt.gateeventprocessor.config.GatesProperties;
 import com.containermgmt.gateeventprocessor.config.PositionEventProperties;
@@ -11,7 +12,8 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 @EnableConfigurationProperties({
         GateEventProperties.class,
         GatesProperties.class,
-        PositionEventProperties.class
+        PositionEventProperties.class,
+        DamageLabelsProperties.class
 })
 public class GateEventProcessorApplication {
 

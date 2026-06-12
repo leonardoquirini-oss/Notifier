@@ -52,6 +52,9 @@ public class WhatsAppNotifier {
     /** An attachment carried in the event: original filename + base64 file content (+ source id for logs). */
     public record EventAttachment(String filename, String base64Content, Object sourceId) {}
 
+    /** A damage section for the notification text: resolved checklist labels + opening notes. */
+    public record DamageInfo(List<String> checklistLabels, String reportNotes) {}
+
     /** A temporary attachment created for this notification: temp id + original filename. */
     private record TempAttachment(Long id, String filename) {}
 
@@ -65,9 +68,15 @@ public class WhatsAppNotifier {
         this.objectMapper = objectMapper;
     }
 
-    public void notifyGroup(String groupCode, String eventType, String unitNumber,
+    public void notifyGroup(String groupCode, String eventType, String unitNumber, String gateLabel,
                             List<EventAttachment> eventAttachments,
-                            List<com.containermgmt.gateeventprocessor.repository.AssetDamageRepository.DamageAttachment> damageAttachments) {
+                            List<com.containermgmt.gateeventprocessor.repository.AssetDamageRepository.DamageAttachment> damageAttachments,
+                            List<DamageInfo> damageInfos) {
+        log.info("WhatsApp.notifyGroup ENTER: group_code={}, eventType={}, unit={}, gateLabel={}, eventAttachments={}, damageAttachments={}, damageInfos={}",
+                groupCode, eventType, unitNumber, gateLabel,
+                eventAttachments != null ? eventAttachments.size() : 0,
+                damageAttachments != null ? damageAttachments.size() : 0,
+                damageInfos != null ? damageInfos.size() : 0);
         List<String> phones = groupRepository.findPhoneNumbersByGroupCode(groupCode);
         if (phones.isEmpty()) {
             log.info("WhatsApp: no phone numbers found for group_code={}, nothing to send (unit={})",
@@ -82,16 +91,21 @@ public class WhatsAppNotifier {
 
         List<TempAttachment> tempAttachments = createTemporaryAttachments(eventAttachments, unitNumber);
 
-        String type = eventType != null ? eventType.trim().toUpperCase(Locale.ROOT) : null;
-        String prefix;
+        String type = eventType != null ? eventType.trim().toUpperCase(Locale.ROOT) : "";
+        
+        log.info("###DEBUG### type: {}", type);
+
+        String prefix = "";
         if ("GATE_IN".equals(type)) {
             prefix = "Ingresso ";
         } else if ("GATE_OUT".equals(type)) {
             prefix = "Uscita ";
-        } else {
-            prefix = "";
+        } else if (type.length() > 0 ) {
+            prefix = type + " ";
         }
-        String text = prefix + "Unita " + unitNumber + " con segnalazioni";
+
+        String text = buildText(prefix, unitNumber, gateLabel, damageInfos);
+        log.info("WhatsApp: built text message (eventType={} -> prefix='{}'): \"{}\"", eventType, prefix, text);
 
         for (String phone : phones) {
             sendTextMessage(phone, text);
@@ -107,6 +121,44 @@ public class WhatsAppNotifier {
                 }
             }
         }
+    }
+
+    private static String bold(String text) {
+        String input = text != null ? text.trim() : "";
+        return ((input.length() > 0 ) ? "*" : "") + input + ((input.length() > 0 ) ? "*" : "");        
+    }
+
+    private static String italic(String text) {
+        String input = text != null ? text.trim() : "";
+        return ((input.length() > 0 ) ? "_" : "") + input + ((input.length() > 0 ) ? "_" : "");        
+    }
+
+    /**
+     * Composes the WhatsApp text: header line + gate label + one section per open damage
+     * (its resolved checklist labels and opening notes).
+     */
+    private static String buildText(String prefix, String unitNumber, String gateLabel, List<DamageInfo> damageInfos) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(prefix).append("Unita ").append( bold(unitNumber) ).append(" con segnalazioni");
+
+        if (gateLabel != null && !gateLabel.isBlank()) {
+            sb.append("\nGate: ").append( bold(gateLabel) );
+        }
+
+        if (damageInfos != null && !damageInfos.isEmpty()) {
+            int i = 1;
+            for (DamageInfo d : damageInfos) {
+                sb.append("\nSegnalazione #").append(i++).append(":");
+                List<String> checklist = d.checklistLabels();
+                if (checklist != null && !checklist.isEmpty()) {
+                    sb.append("\n - Checklist: ").append(String.join(", ", checklist));
+                }
+                if (d.reportNotes() != null && !d.reportNotes().isBlank()) {
+                    sb.append("\n - Note: ").append(bold(d.reportNotes().trim()));
+                }
+            }
+        }
+        return sb.toString();
     }
 
     /**
@@ -203,6 +255,7 @@ public class WhatsAppNotifier {
     }
 
     private void sendTextMessage(String phone, String text) {
+        log.info("WhatsApp.sendTextMessage: phone={}, text=\"{}\"", phone, text);
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("phone", phone);
         body.put("text", text);

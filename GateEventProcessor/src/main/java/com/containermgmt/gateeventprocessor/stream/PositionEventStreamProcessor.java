@@ -3,6 +3,7 @@ package com.containermgmt.gateeventprocessor.stream;
 import com.containermgmt.gateeventprocessor.config.PositionEventProperties;
 import com.containermgmt.gateeventprocessor.repository.AssetDamageRepository;
 import com.containermgmt.gateeventprocessor.service.DailyNotificationThrottle;
+import com.containermgmt.gateeventprocessor.service.DamageDetailService;
 import com.containermgmt.gateeventprocessor.service.GateMatcher;
 import com.containermgmt.gateeventprocessor.service.GateMatcher.Match;
 import com.containermgmt.gateeventprocessor.service.NotificationClient;
@@ -36,6 +37,7 @@ public class PositionEventStreamProcessor implements StreamProcessor {
     private final AssetDamageRepository assetDamageRepository;
     private final WhatsAppNotifier whatsAppNotifier;
     private final DailyNotificationThrottle dailyThrottle;
+    private final DamageDetailService damageDetailService;
     private final String streamKey;
     private final String consumerGroup;
 
@@ -45,13 +47,15 @@ public class PositionEventStreamProcessor implements StreamProcessor {
                                         NotificationClient notificationClient,
                                         AssetDamageRepository assetDamageRepository,
                                         WhatsAppNotifier whatsAppNotifier,
-                                        DailyNotificationThrottle dailyThrottle) {
+                                        DailyNotificationThrottle dailyThrottle,
+                                        DamageDetailService damageDetailService) {
         this.objectMapper = objectMapper;
         this.gateMatcher = gateMatcher;
         this.notificationClient = notificationClient;
         this.assetDamageRepository = assetDamageRepository;
         this.whatsAppNotifier = whatsAppNotifier;
         this.dailyThrottle = dailyThrottle;
+        this.damageDetailService = damageDetailService;
         this.streamKey = props.getKey();
         this.consumerGroup = props.getConsumerGroup();
         log.info("PositionEventStreamProcessor configured: stream={}, group={}", streamKey, consumerGroup);
@@ -97,6 +101,7 @@ public class PositionEventStreamProcessor implements StreamProcessor {
     @SuppressWarnings("unchecked")
     protected void handlePositionEvent(String messageId, Map<String, Object> payload) {
         String vehiclePlate = stringOrNull(payload.get("vehiclePlate"));
+        log.info("PositionEvent ENTER: message_id={}, vehiclePlate={}", messageId, vehiclePlate);
         if (vehiclePlate == null || vehiclePlate.isBlank()) {
             log.debug("Skipping position message_id={}: payload.vehiclePlate missing", messageId);
             return;
@@ -149,12 +154,17 @@ public class PositionEventStreamProcessor implements StreamProcessor {
         log.info("Position gate match for message_id={}: plate={}, gate={}, distance={}m, group={}",
                 messageId, vehiclePlate, match.gateId(), Math.round(match.distanceMeters()), notifyGroup);
 
+        log.info("PositionEvent NOTIFY: plate={}, group={}, damageIds={}, title=\"{}\"",
+                vehiclePlate, notifyGroup, damageIds, title);
         notificationClient.send(notifyGroup, NOTIFICATION_TYPE, title, title, link);
 
         List<AssetDamageRepository.DamageAttachment> damageAttachments =
                 assetDamageRepository.findAttachmentsByDamageIds(damageIds);
+        List<WhatsAppNotifier.DamageInfo> damageInfos =
+                damageDetailService.buildDamageInfos(damageIds);
 
-        whatsAppNotifier.notifyGroup(notifyGroup, null, vehiclePlate, List.of(), damageAttachments);
+        whatsAppNotifier.notifyGroup(notifyGroup, null, vehiclePlate, match.gate().getLabel(),
+                List.of(), damageAttachments, damageInfos);
     }
 
     static String buildLink(String identifier) {

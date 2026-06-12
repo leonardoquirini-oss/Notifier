@@ -28,6 +28,8 @@ public class GatesProperties {
     @Getter
     @Setter
     public static class GateDefinition {
+        /** Human-readable gate name, shown in the notification text. */
+        private String label;
         /** Gate centre latitude (decimal degrees). */
         private double latitude;
         /** Gate centre longitude (decimal degrees). */
