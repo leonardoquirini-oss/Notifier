@@ -4,6 +4,7 @@ import com.containermgmt.tfpgateway.config.ActiveJDBCConfig;
 import com.containermgmt.tfpgateway.config.GatewayProperties;
 import com.containermgmt.tfpgateway.dto.EventMessage;
 import com.containermgmt.tfpgateway.dto.ResendEventsResponse;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import lombok.extern.slf4j.Slf4j;
 import org.javalite.activejdbc.Base;
@@ -11,6 +12,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -26,13 +28,69 @@ public class EventBrowserService {
     private final ActiveJDBCConfig activeJDBCConfig;
     private final ValkeyStreamPublisher valkeyStreamPublisher;
     private final GatewayProperties gatewayProperties;
+    private final EventProcessorService eventProcessorService;
+    private final ObjectMapper objectMapper;
 
     public EventBrowserService(ActiveJDBCConfig activeJDBCConfig,
                                ValkeyStreamPublisher valkeyStreamPublisher,
-                               GatewayProperties gatewayProperties) {
+                               GatewayProperties gatewayProperties,
+                               EventProcessorService eventProcessorService,
+                               ObjectMapper objectMapper) {
         this.activeJDBCConfig = activeJDBCConfig;
         this.valkeyStreamPublisher = valkeyStreamPublisher;
         this.gatewayProperties = gatewayProperties;
+        this.eventProcessorService = eventProcessorService;
+        this.objectMapper = objectMapper;
+    }
+
+    /**
+     * Crea (upsert) un nuovo evento a partire dai dati editati nella UI (clone-from-existing).
+     * <p>
+     * {@code processed_at} viene impostato uguale a {@code event_time}, come richiesto dalla UI.
+     * Il payload deve essere JSON valido (colonna JSONB).
+     *
+     * @param messageId   message_id del nuovo evento (obbligatorio, chiave di dedup/upsert)
+     * @param eventType   event_type ereditato dall'evento sorgente (determina lo stream Valkey)
+     * @param eventTimeIso event_time in formato ISO-8601 instant (es. {@code 2026-06-16T12:30:00.000Z})
+     * @param payload     payload JSON come testo (validato)
+     * @param send        se {@code true} pubblica anche sul Valkey stream
+     * @throws IllegalArgumentException se input mancanti/non validi (payload non JSON, data non valida)
+     */
+    public void createEvent(String messageId, String eventType, String eventTimeIso,
+                            String payload, boolean send) {
+        if (messageId == null || messageId.isBlank()) {
+            throw new IllegalArgumentException("Message Id is required.");
+        }
+        if (eventType == null || eventType.isBlank()) {
+            throw new IllegalArgumentException("Event Type is required.");
+        }
+        if (payload == null || payload.isBlank()) {
+            throw new IllegalArgumentException("Payload is required.");
+        }
+
+        // Valida che il payload sia JSON ben formato (la colonna e' JSONB).
+        try {
+            objectMapper.readTree(payload);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Payload is not valid JSON: " + e.getMessage());
+        }
+
+        Instant eventTime;
+        try {
+            eventTime = Instant.parse(eventTimeIso);
+        } catch (DateTimeParseException | NullPointerException e) {
+            throw new IllegalArgumentException("Event Time is missing or invalid (expected ISO-8601 instant).");
+        }
+
+        EventMessage msg = EventMessage.builder()
+                .messageId(messageId.trim())
+                .eventType(eventType.trim())
+                .eventTime(eventTime)
+                .rawPayload(payload)
+                .build();
+
+        // processed_at = event_time, come richiesto dalla UI.
+        eventProcessorService.saveManualEvent(msg, eventTime, send);
     }
 
     public List<Map<String, Object>> searchEvents(String eventType, LocalDate dateFrom,

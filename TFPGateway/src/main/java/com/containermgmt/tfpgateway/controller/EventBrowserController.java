@@ -3,11 +3,13 @@ package com.containermgmt.tfpgateway.controller;
 import com.containermgmt.tfpgateway.service.EventBrowserService;
 
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.time.LocalDate;
@@ -130,6 +132,31 @@ public class EventBrowserController {
             }
         }
         return new java.util.ArrayList<>(unique);
+    }
+
+    /**
+     * Crea un nuovo evento a partire da uno esistente (clone-from-existing dalla detail modal).
+     * Chiamata AJAX dalla UI: ritorna JSON. SAVE -> send=false; SAVE & SEND -> send=true.
+     */
+    @PostMapping("/events/create")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> createEvent(
+            @RequestParam String messageId,
+            @RequestParam String eventType,
+            @RequestParam String eventTime,
+            @RequestParam String payload,
+            @RequestParam(required = false, defaultValue = "false") boolean send) {
+
+        try {
+            eventBrowserService.createEvent(messageId, eventType, eventTime, payload, send);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+
+        String msg = send
+                ? "Event saved and sent to Valkey streams."
+                : "Event saved.";
+        return ResponseEntity.ok(Map.of("message", msg));
     }
 
     @PostMapping("/events/resend-all")

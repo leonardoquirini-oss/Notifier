@@ -279,7 +279,52 @@
                         </div>
                         <button type="button" class="btn btn-warning btn-sm" onclick="confirmModalResend()">Resend Event</button>
                     </form>
-                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-primary btn-sm" onclick="openCloneModal()">Create New From This</button>
+                        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Clone / Create New Event Modal -->
+    <div class="modal fade" id="cloneEventModal" tabindex="-1" aria-labelledby="cloneEventLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="cloneEventLabel">Create New Event</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="cloneError" class="alert alert-danger d-none" role="alert"></div>
+                    <div class="mb-3">
+                        <label class="form-label form-label-sm mb-1" for="cloneEventType">Event Type</label>
+                        <input type="text" class="form-control form-control-sm" id="cloneEventType" readonly>
+                        <div class="form-text">Ereditato dall'evento sorgente (determina lo stream Valkey).</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label form-label-sm mb-1" for="cloneMessageId">Message ID <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control form-control-sm" id="cloneMessageId"
+                               placeholder="es. ID:nuovo-uuid..." required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label form-label-sm mb-1" for="cloneEventTime">Event Time <span class="text-danger">*</span></label>
+                        <input type="datetime-local" step="0.001" class="form-control form-control-sm" id="cloneEventTime" required>
+                        <div class="form-text">Usato anche come <code>processed_at</code>.</div>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label form-label-sm mb-1" for="clonePayload">Payload (JSON)</label>
+                        <textarea class="form-control form-control-sm font-monospace" id="clonePayload" rows="14"
+                                  style="font-size:0.8rem"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer justify-content-between">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-primary btn-sm" onclick="submitClone(false)">SAVE</button>
+                        <button type="button" class="btn btn-success btn-sm" onclick="submitClone(true)">SAVE &amp; SEND</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -506,6 +551,82 @@
         }
     }
 
+    /* --- Clone / Create New Event --- */
+    var cloneSource = null;
+
+    function toDatetimeLocalValue(raw) {
+        var d = raw ? new Date(raw) : new Date();
+        if (isNaN(d.getTime())) d = new Date();
+        var p = function(n, l) { return String(n).padStart(l || 2, '0'); };
+        return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) +
+            'T' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds()) +
+            '.' + p(d.getMilliseconds(), 3);
+    }
+
+    function openCloneModal() {
+        if (!cloneSource) return;
+        document.getElementById('cloneError').classList.add('d-none');
+        document.getElementById('cloneEventType').value = cloneSource.eventType;
+        document.getElementById('cloneMessageId').value = '';
+        document.getElementById('cloneEventTime').value = toDatetimeLocalValue(cloneSource.eventTime);
+
+        // Pretty-print payload when valid JSON, else show raw text.
+        var payload = cloneSource.payload || '';
+        try { payload = JSON.stringify(JSON.parse(payload), null, 2); } catch (e) { /* keep raw */ }
+        document.getElementById('clonePayload').value = payload;
+
+        var detail = bootstrap.Modal.getInstance(document.getElementById('eventDetailModal'));
+        if (detail) detail.hide();
+        new bootstrap.Modal(document.getElementById('cloneEventModal')).show();
+    }
+
+    function showCloneError(msg) {
+        var el = document.getElementById('cloneError');
+        el.textContent = msg;
+        el.classList.remove('d-none');
+    }
+
+    function submitClone(send) {
+        var messageId = document.getElementById('cloneMessageId').value.trim();
+        var eventType = document.getElementById('cloneEventType').value;
+        var eventTimeRaw = document.getElementById('cloneEventTime').value;
+        var payload = document.getElementById('clonePayload').value;
+
+        if (!messageId) { showCloneError('Message Id is required.'); return; }
+        if (!eventTimeRaw) { showCloneError('Event Time is required.'); return; }
+
+        var d = new Date(eventTimeRaw);
+        if (isNaN(d.getTime())) { showCloneError('Event Time is invalid.'); return; }
+        var eventTimeIso = d.toISOString();
+
+        var action = send ? 'save and SEND to Valkey' : 'save';
+        if (!confirm('Create new event (' + messageId + ') and ' + action + '?')) return;
+
+        var params = new URLSearchParams();
+        params.append('messageId', messageId);
+        params.append('eventType', eventType);
+        params.append('eventTime', eventTimeIso);
+        params.append('payload', payload);
+        params.append('send', send ? 'true' : 'false');
+
+        fetch(/*[[@{/events/create}]]*/ '/events/create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params.toString()
+        })
+        .then(function(resp) {
+            return resp.json().then(function(body) { return { ok: resp.ok, body: body }; });
+        })
+        .then(function(res) {
+            if (!res.ok) { showCloneError(res.body.error || 'Create failed.'); return; }
+            bootstrap.Modal.getInstance(document.getElementById('cloneEventModal')).hide();
+            showAlert('success', res.body.message || 'Event saved.');
+        })
+        .catch(function(err) {
+            showCloneError('Create failed: ' + err.message);
+        });
+    }
+
     /* --- Detail Modal --- */
     function showDetail(tr) {
         document.getElementById('modalId').textContent = tr.dataset.id;
@@ -516,6 +637,13 @@
         document.getElementById('modalAdditionalData').textContent = tr.dataset.additionalData || '';
 
         document.getElementById('modalSelectedId').value = tr.dataset.id;
+
+        // Source snapshot used by the Clone / Create New flow.
+        cloneSource = {
+            eventType: tr.dataset.type || '',
+            eventTime: tr.dataset.eventTime || '',
+            payload: tr.dataset.payload || ''
+        };
 
         var raw = tr.dataset.payload || '';
         try {

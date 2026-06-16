@@ -106,8 +106,26 @@ Per riferimento rapido, gli altri endpoint esposti dal servizio (UI + API miste)
 | POST | `/events/resend` | UI form: reinvio per `id_event` selezionati in lista. |
 | POST | `/events/resend-list` | UI form: reinvio per lista di `message_id` (textarea). |
 | POST | `/events/resend-all` | UI form: reinvio di tutti gli eventi che matchano un filtro. |
+| POST | `/events/create` | UI AJAX: crea (upsert) un nuovo evento clonato da uno esistente. Vedi sotto. |
 | GET | `/gateway` | UI configurazione runtime + status listener. |
 | GET | `/statistics` | UI dashboard statistiche. |
+
+### POST `/events/create` (UI AJAX)
+
+Crea un nuovo evento a partire da uno esistente (clone-from-existing dalla detail modal). Esegue upsert su `evt_raw_events` (idempotente su `message_id`) e, opzionalmente, pubblica sul Valkey stream del relativo `event_type`.
+
+`Content-Type: application/x-www-form-urlencoded`
+
+| Param | Type | Required | Default | Descrizione |
+|---|---|---|---|---|
+| `messageId` | `string` | si | — | `message_id` del nuovo evento (chiave di dedup/upsert). |
+| `eventType` | `string` | si | — | Ereditato dall'evento sorgente; determina lo stream Valkey. |
+| `eventTime` | `string` | si | — | ISO-8601 instant (es. `2026-06-16T12:30:00.000Z`). Usato anche come `processed_at`. |
+| `payload` | `string` | si | — | Payload JSON (validato; colonna JSONB). |
+| `send` | `boolean` | no | `false` | Se `true` pubblica anche sul Valkey stream (SAVE & SEND). |
+
+Response `200 OK`: `{ "message": "Event saved." }` (o `"...saved and sent to Valkey streams."`).
+Response `400 Bad Request`: `{ "error": "<motivo>" }` (payload non JSON, campi mancanti, data non valida).
 
 ### Gateway lifecycle (AJAX/JSON)
 

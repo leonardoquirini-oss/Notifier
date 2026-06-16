@@ -72,8 +72,9 @@ public class UnitEventStreamProcessor extends AbstractStreamProcessor {
         event.set("create_time", parseTimestamp(payload, "createTime"));
         event.set("latitude", parseBigDecimal(payload, "latitude"));
         event.set("longitude", parseBigDecimal(payload, "longitude"));
-        event.set("unit_number", getString(payload, "unitNumber"));
-        event.set("unit_type_code", getString(payload, "unitTypeCode"));
+        String unitNumber = getString(payload, "unitNumber");
+        event.set("unit_number", unitNumber);
+        event.set("unit_type_code", resolveUnitTypeCode(unitNumber, getString(payload, "unitTypeCode")));
         pendingTransportOrderShortCode = getString(payload, "transportOrderShortCode");
 
         lastPositionExtras = new LastPositionExtras(
@@ -190,11 +191,9 @@ public class UnitEventStreamProcessor extends AbstractStreamProcessor {
         String fullEmpty    = lastPositionExtras != null ? lastPositionExtras.fullEmpty()    : null;
         String operatorCode = lastPositionExtras != null ? lastPositionExtras.operatorCode() : null;
         Object eta          = lastPositionExtras != null ? lastPositionExtras.eta()          : null;
-        Object unitTypeCode = resolveLastPositionUnitTypeCode(
-                (String) parent.get("unit_number"), parent.get("unit_type_code"));
         Base.exec(sql,
                 parent.get("unit_number"),
-                unitTypeCode,
+                parent.get("unit_type_code"),
                 parent.get("message_type"),
                 parent.getId(),
                 parent.get("event_time"),
@@ -210,7 +209,7 @@ public class UnitEventStreamProcessor extends AbstractStreamProcessor {
         );
     }
 
-    private Object resolveLastPositionUnitTypeCode(String unitNumber, Object current) {
+    private Object resolveUnitTypeCode(String unitNumber, Object current) {
         if (unitNumber == null) {
             return current;
         }

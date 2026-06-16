@@ -58,7 +58,7 @@ public class EventProcessorService {
 
         try {
             activeJDBCConfig.openConnection();
-            upsertRawEvent(eventMessage);
+            upsertRawEvent(eventMessage, Timestamp.from(Instant.now()));
             dispatchToHandler(eventMessage);
         } catch (EventProcessingException e) {
             throw e;
@@ -75,11 +75,10 @@ public class EventProcessorService {
         valkeyStreamPublisher.publish(eventMessage);
     }
 
-    private void upsertRawEvent(EventMessage eventMessage) {
+    private void upsertRawEvent(EventMessage eventMessage, Timestamp processedAt) {
         Timestamp eventTime = eventMessage.getEventTime() != null
                 ? Timestamp.from(eventMessage.getEventTime())
                 : null;
-        Timestamp processedAt = Timestamp.from(Instant.now());
         String checksum = md5Hex(eventMessage.getRawPayload());
 
         Base.exec(UPSERT_SQL,
@@ -92,6 +91,34 @@ public class EventProcessorService {
 
         log.trace(" -- Upserted raw event: messageId={}, type={}",
                 eventMessage.getMessageId(), eventMessage.getEventType());
+    }
+
+    /**
+     * Persiste un evento creato/modificato manualmente dalla UI (clone-from-existing).
+     * <p>
+     * A differenza di {@link #processEvent}, NON dispatcha all'handler specifico:
+     * esegue solo l'upsert su {@code evt_raw_events} con un {@code processed_at}
+     * esplicito (la UI usa lo stesso valore di {@code event_time}) e, se richiesto,
+     * pubblica l'evento sul Valkey stream di competenza.
+     *
+     * @param eventMessage evento da salvare (messageId, eventType, eventTime, rawPayload)
+     * @param processedAt  valore da scrivere in {@code processed_at}
+     * @param publishToValkey se {@code true} ripubblica l'evento sul Valkey stream
+     */
+    public void saveManualEvent(EventMessage eventMessage, Instant processedAt, boolean publishToValkey) {
+        try {
+            activeJDBCConfig.openConnection();
+            upsertRawEvent(eventMessage, Timestamp.from(processedAt));
+        } finally {
+            activeJDBCConfig.closeConnection();
+        }
+
+        log.info("Manual event saved: messageId={}, type={}, send={}",
+                eventMessage.getMessageId(), eventMessage.getEventType(), publishToValkey);
+
+        if (publishToValkey) {
+            valkeyStreamPublisher.publish(eventMessage);
+        }
     }
 
     private static String md5Hex(String input) {
