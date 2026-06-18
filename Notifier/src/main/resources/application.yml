@@ -43,6 +43,12 @@ spring:
 
 # Email Sender Configuration
 email:
+  # API key valide per l'endpoint REST POST /email (header X-API-Key).
+  # Lista: può contenere più chiavi. Default file = una chiave.
+  # Override in prod via env EMAIL_API_KEYS (valori multipli separati da virgola).
+  api:
+    keys: 
+      - test_3fb44709-46e6-4725-b8de-b7e3993e0363
   from:
     address: noreply@gruppobernardini.it
     name: "BERLink"
