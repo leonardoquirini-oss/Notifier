@@ -9,6 +9,7 @@ import com.containermgmt.gateeventprocessor.service.GateMatcher;
 import com.containermgmt.gateeventprocessor.service.GateMatcher.Match;
 import com.containermgmt.gateeventprocessor.service.NotificationClient;
 import com.containermgmt.gateeventprocessor.service.WhatsAppNotifier;
+import com.containermgmt.gateeventprocessor.service.WindowNotificationThrottle;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -16,6 +17,7 @@ import org.springframework.stereotype.Component;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -40,9 +42,11 @@ public class GateEventStreamProcessor implements StreamProcessor {
     private final AssetDamageRepository assetDamageRepository;
     private final WhatsAppNotifier whatsAppNotifier;
     private final DamageDetailService damageDetailService;
+    private final WindowNotificationThrottle throttle;
     private final String streamKey;
     private final String consumerGroup;
     private final Set<String> allowedTypes;
+    private final Duration throttleWindow;
 
     public GateEventStreamProcessor(ObjectMapper objectMapper,
                                     GateEventProperties props,
@@ -51,7 +55,8 @@ public class GateEventStreamProcessor implements StreamProcessor {
                                     BerlinkLookupService berlinkLookupService,
                                     AssetDamageRepository assetDamageRepository,
                                     WhatsAppNotifier whatsAppNotifier,
-                                    DamageDetailService damageDetailService) {
+                                    DamageDetailService damageDetailService,
+                                    WindowNotificationThrottle throttle) {
         this.objectMapper = objectMapper;
         this.gateMatcher = gateMatcher;
         this.notificationClient = notificationClient;
@@ -59,9 +64,11 @@ public class GateEventStreamProcessor implements StreamProcessor {
         this.assetDamageRepository = assetDamageRepository;
         this.whatsAppNotifier = whatsAppNotifier;
         this.damageDetailService = damageDetailService;
+        this.throttle = throttle;
         this.streamKey = props.getKey();
         this.consumerGroup = props.getConsumerGroup();
         this.allowedTypes = normalize(props.getAllowedTypes());
+        this.throttleWindow = props.getThrottleWindow();
         log.info("GateEventStreamProcessor configured: stream={}, group={}, allowedTypes={}",
                 streamKey, consumerGroup, allowedTypes);
         if (allowedTypes.isEmpty()) {
@@ -165,6 +172,14 @@ public class GateEventStreamProcessor implements StreamProcessor {
         if (damageIds.isEmpty()) {
             log.info("No unresolved OPEN damage for asset_identifier={}, skipping notification (message_id={})",
                     unitNumber, messageId);
+            return;
+        }
+
+        // Suppress duplicate notifications when the same unit re-enters the same gate within the window.
+        String throttleKey = unitNumber.trim().toUpperCase(Locale.ROOT) + ":" + match.gateId();
+        if (!throttle.tryAcquire(throttleKey, throttleWindow)) {
+            log.info("Gate notification already sent within window for unit={} gate={}, skipping (message_id={})",
+                    unitNumber, match.gateId(), messageId);
             return;
         }
 
