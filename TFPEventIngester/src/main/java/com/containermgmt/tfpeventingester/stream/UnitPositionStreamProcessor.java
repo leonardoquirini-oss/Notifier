@@ -2,8 +2,10 @@ package com.containermgmt.tfpeventingester.stream;
 
 import com.containermgmt.tfpeventingester.model.EvtUnitPosition;
 import com.containermgmt.tfpeventingester.service.BerlinkLookupService;
+import com.containermgmt.tfpeventingester.service.BerlinkLookupService.LookupResult;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.javalite.activejdbc.Base;
 import org.javalite.activejdbc.Model;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -72,6 +74,46 @@ public class UnitPositionStreamProcessor extends AbstractStreamProcessor {
             models.add(evt);
         }
         return models;
+    }
+
+    /**
+     * Persists each position then upserts evt_unit_last_position. The conditional
+     * UPSERT (event_time > stored) keeps only the most recent position even when the
+     * unitPositions[] array is unordered. Wrapped in a single transaction so the
+     * position rows and the last-position row commit atomically.
+     */
+    @Override
+    protected void saveModels(List<Model> models, LookupResult lookup) {
+        Base.openTransaction();
+        try {
+            for (Model model : models) {
+                Object containerNumber = null;
+                if (lookup.hasData()) {
+                    containerNumber = lookup.containerNumber();
+                    model.set("container_number", containerNumber);
+                    model.set("id_trailer", lookup.idTrailer());
+                    model.set("id_vehicle", lookup.idVehicle());
+                }
+                model.saveIt();
+                LastPositionUpserter.upsert(
+                        model.get("unit_number"),
+                        model.get("unit_type_code"),
+                        model.get("message_type"),
+                        null,                          // id_unit_event: positions have no parent event
+                        model.get("position_time"),
+                        model.get("latitude"),
+                        model.get("longitude"),
+                        containerNumber,
+                        null, null, null,              // terminal_code, full_empty, operator_code: not in positions
+                        null,                          // event_type: not in positions
+                        null,                          // eta: not in positions
+                        model.get("message_id"));
+            }
+            Base.commitTransaction();
+        } catch (Exception e) {
+            Base.rollbackTransaction();
+            throw e;
+        }
     }
 
     @Override

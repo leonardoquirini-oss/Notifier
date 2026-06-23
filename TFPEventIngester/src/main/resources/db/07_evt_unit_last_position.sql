@@ -14,5 +14,7 @@ CREATE TABLE IF NOT EXISTS evt_unit_last_position (
     full_empty       VARCHAR(10),
     operator_code    VARCHAR(100),
     event_type       VARCHAR(50),
+    eta              TIMESTAMP,
+    message_id       VARCHAR(255),
     updated_at       TIMESTAMP
 );

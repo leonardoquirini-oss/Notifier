@@ -89,9 +89,27 @@ Valkey Streams                      TFPEventIngester
 - **StreamProcessor**: Strategy interface con `streamKey()`, `consumerGroup()`, `process(fields)`
 - **AbstractStreamProcessor**: Template Method base class. Il metodo `process()` (final) gestisce: validazione message_id, dedup/resend, parsing JSON, chiamata a `buildModel()`, BERLink lookup + enrichment, save. Su resend riuscito, cancella i record da `evt_error_ingestion` per quel `message_id`. I subclass implementano solo `buildModel()`, `existsByMessageId()`, `deleteByMessageId()`, `processorName()`. Include helper comuni (`getString`, `parseTimestamp`, `parseBigDecimal`, `parseResendFlag`, `getBoolean`, `getInteger`, `getLong`). Stream key e consumer group sono iniettati nel costruttore via `@Value`. Hook methods `getUnitNumberFromPayload()` e `getUnitTypeCodeFromPayload()` per customizzare i campi passati al BERLink lookup (default: `unitNumber`/`unitTypeCode`).
 - **StreamListenerOrchestrator**: Inietta `List<StreamProcessor>` e `DataSource` (HikariCP pool), crea consumer group e listener per ciascuno. Per ogni messaggio: `Base.open(dataSource)` prende una connessione dal pool, `Base.close()` la restituisce. Poll timeout configurabile via `stream.poll-timeout-seconds`. I messaggi falliti restano nel PEL (non vengono acknowledged su errore). Su errore, salva un record in `evt_error_ingestion` con `message_id`, timestamp e messaggio d'errore (troncato a 4000 char). Il salvataggio errore e' wrappato in try-catch per non mascherare l'eccezione originale.
-- **UnitEventStreamProcessor**: Implementa `buildModel()` per mappare payload su `EvtUnitEvent`. Salva anche il JSON raw del payload nella colonna `payload` (JSONB). Stream key da `stream.unit-events.key`.
-- **UnitPositionStreamProcessor**: Implementa `buildModel()` per estrarre primo elemento di `unitPositions[]` e mappare su `EvtUnitPosition`. Stream key da `stream.unit-positions.key`.
+- **UnitEventStreamProcessor**: Implementa `buildModel()` per mappare payload su `EvtUnitEvent`. Salva anche il JSON raw del payload nella colonna `payload` (JSONB). Stream key da `stream.unit-events.key`. Dopo il save fa l'upsert su `evt_unit_last_position` via `LastPositionUpserter` (vedi sotto).
+- **UnitPositionStreamProcessor**: Override di `buildModels()` per produrre un `EvtUnitPosition` per ogni elemento di `unitPositions[]` (campo `pos_index` 1..n). Stream key da `stream.unit-positions.key`. Override di `saveModels()`: salva le posizioni e fa l'upsert su `evt_unit_last_position` (via `LastPositionUpserter`) per ognuna, tutto in una singola transazione. Per le posizioni `event_time` = `position_time`; `id_unit_event`, `terminal_code`, `full_empty`, `operator_code`, `event_type`, `eta` sono null (non presenti nel payload positions).
 - **AssetDamageStreamProcessor**: Consuma `tfp-asset-damages-stream` (stream key da `stream.asset-damages.key`). Override di `buildModels()` per produrre `EvtAssetDamage` + label model (`EvtVehicleDamageLabel` o `EvtUnitDamageLabel` a seconda di `assetType`). Override di `getUnitNumberFromPayload()` → `assetIdentifier` e `getUnitTypeCodeFromPayload()` → mappa `UNIT` → `CONTAINER`. Cascade delete su resend: chiama `DELETE /api/attachments/{id}` su BERLink per ogni allegato con `id_document` non-null, poi cancella i record `evt_damage_attachment`, label associate e infine il record principale. Allegati con `id_document = null` (upload precedente fallito) vengono ignorati silenziosamente. I tag in `assetDamageLabels[]` vengono pivotati in colonne booleane sulla tabella label appropriata.
+
+## Tabella evt_unit_last_position
+
+Tabella "stato corrente": **una riga per `unit_number`** (PK) con l'ultima posizione nota di ogni unit. DDL reference in `src/main/resources/db/07_evt_unit_last_position.sql` (table gia' esistente in DB; file solo documentazione).
+
+**Alimentata da due stream**, entrambi via `LastPositionUpserter.upsert(...)`:
+- `tfp-unit-events-stream` → `UnitEventStreamProcessor` (event_type `BERNARDINI_UNIT_EVENTS`): `event_time` = `eventTime`, popola anche `terminal_code`, `full_empty`, `operator_code`, `eta`, `event_type` (= `type`), `id_unit_event` (= id del record `evt_unit_events`).
+- `tfp-unit-positions-stream` → `UnitPositionStreamProcessor` (event_type `BERNARDINI_UNIT_POSITIONS_MESSAGE` / `BERNARDINI_PROD_UNIT_POSITION_MESSAGE`): `event_time` = `position_time`; gli extra (`terminal_code`, `full_empty`, `operator_code`, `eta`, `event_type`, `id_unit_event`) sono null.
+
+**`LastPositionUpserter`** (classe condivisa, package `stream/`): incapsula l'UPSERT raw SQL via `Base.exec()` (no model ActiveJDBC). Va invocato dentro una transazione ActiveJDBC aperta. No-op se `unit_number` e' null (e' la PK).
+
+**Logica UPSERT** (identica per entrambi gli stream):
+```sql
+INSERT INTO evt_unit_last_position (...) VALUES (...)
+ON CONFLICT (unit_number) DO UPDATE SET ...
+WHERE EXCLUDED.event_time > evt_unit_last_position.event_time
+```
+Update **condizionale**: la riga viene aggiornata solo se l'`event_time` in arrivo e' strettamente piu' recente di quello memorizzato. Tiene quindi sempre la posizione piu' recente, a prescindere da out-of-order, da quale stream arriva, o dall'ordine degli elementi nell'array `unitPositions[]` (il processor positions fa l'upsert per ogni posizione e il WHERE lascia vincere la piu' recente).
 
 ## Configurazione
 
