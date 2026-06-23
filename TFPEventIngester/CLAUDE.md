@@ -318,6 +318,32 @@ curl http://localhost:8080/actuator/metrics/hikaricp.connections.idle
 curl http://localhost:8080/actuator/metrics/hikaricp.connections.max
 ```
 
+## UI Web (Thymeleaf)
+
+L'app espone una UI Thymeleaf con menu hamburger (dropdown Bootstrap `dropdown-menu-end`, in alto a destra) per navigare tra le pagine:
+
+| Pagina | Route | Descrizione |
+|--------|-------|-------------|
+| Event Browser | `/events` | Browser eventi/posizioni/danni/errori (`events.html`, `EventBrowserController`) |
+| Geofencing | `/geofencing` | Gestione mappe e punti geofence (`geofencing.html`, `GeofencingController`) |
+
+### Geofencing
+
+Pagina con mappa Leaflet (tile OpenStreetMap online) per definire piu' "mappe" (gruppi nominati di punti). Per ogni mappa si gestiscono punti `(label, lat, lon, raggio in metri)` visualizzati come marker + cerchio (raggio reale in metri). Lista punti editabile nella colonna sinistra (add/edit/remove), mappa a destra. Click sulla mappa precompila lat/lon del nuovo punto.
+
+**Persistenza SQLite separata dal Postgres primario.** `GeofencingDbConfig` crea un `DataSource` SQLite dedicato (HikariCP, pool size 1, `PRAGMA foreign_keys=ON`) + `JdbcTemplate geofencingJdbcTemplate` — NON usa ActiveJDBC ne' il DataSource Postgres (evita conflitti col binding thread-local di `Base.open`). Schema (`geo_map`, `geo_point`) creato in `@PostConstruct`. `GeofencingService` fa il CRUD via JdbcTemplate.
+
+| Proprieta' / env | Default | Descrizione |
+|------------------|---------|-------------|
+| `geofencing.db-path` / `GEOFENCING_DB_PATH` | `./data/geofencing.db` | Path file SQLite (in Docker: `/app/data/geofencing.db`, volume `geofencing-data`) |
+
+**REST API** (`GeofencingController`, JSON): `GET/POST /geofencing/api/maps`, `PUT/DELETE /geofencing/api/maps/{id}`, `GET/POST /geofencing/api/maps/{id}/points`, `PUT/DELETE /geofencing/api/points/{id}`. Errori di validazione (lat/lon range, raggio>0, nome obbligatorio) → HTTP 400 con `{error}`.
+
+```bash
+# Ispeziona il DB SQLite
+sqlite3 ./data/geofencing.db 'SELECT * FROM geo_map; SELECT * FROM geo_point;'
+```
+
 ---
 
 ## For Claude Code

@@ -25,8 +25,10 @@ RUN apk add --no-cache curl
 # Copy JAR from builder stage
 COPY --from=builder /app/target/tfp-event-ingester-*.jar app.jar
 
-# Create non-root user for security
-RUN addgroup -S tfpeventingester && adduser -S tfpeventingester -G tfpeventingester
+# Create non-root user for security + writable dir per il DB SQLite Geofencing
+RUN addgroup -S tfpeventingester && adduser -S tfpeventingester -G tfpeventingester \
+    && mkdir -p /app/data && chown -R tfpeventingester:tfpeventingester /app/data
+ENV GEOFENCING_DB_PATH=/app/data/geofencing.db
 USER tfpeventingester
 
 # Expose actuator port (for health checks)

@@ -53,25 +53,7 @@ stream:
     consumer-group: gate-event-processor-position-group-dev
   poll-timeout-seconds: 1
 
-gates:
-  gate-terni-bernardini:
-    label: TR-BERNARDINI
-    latitude: 42.566552831546794
-    longitude: 12.603510778047223
-    radius: 60
-    notify-group: officina-terni
-  gate-fiorenzuola-terminal:
-    label: FIO-TERMINAL
-    latitude: 44.923319944473654
-    longitude: 9.92723207089062
-    radius: 100
-    notify-group: officina-fiorenzuola
-  gate-fiorenzuola-tagliaferri:
-    label: FIO-TAGLIAFERRI
-    latitude: 44.91694338967841
-    longitude: 9.936515169335621
-    radius: 35
-    notify-group: officina-fiorenzuola
+# Gates are loaded from BERLink DB table wrk_gates (notify-group resolved via ntf_notification_groups.group_code).
 
 # insert into c_ntf_notification_types (id_notification_type, label, icon, color) VALUES('gate_in_with_damages',    'Verificare Danni',          'calendar',  'red');
 

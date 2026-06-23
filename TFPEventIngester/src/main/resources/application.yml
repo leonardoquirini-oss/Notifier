@@ -17,6 +17,10 @@ spring:
       connection-timeout: 5000
       pool-name: ActiveJDBC-Pool
 
+# Geofencing (SQLite, datasource separato dal Postgres primario)
+geofencing:
+  db-path: ${GEOFENCING_DB_PATH:./data/geofencing.db}
+
 # Valkey (Redis) Configuration
 valkey:
   host: valkey-service

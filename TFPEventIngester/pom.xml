@@ -67,6 +67,13 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- SQLite Driver (persistenza Geofencing, datasource separato) -->
+        <dependency>
+            <groupId>org.xerial</groupId>
+            <artifactId>sqlite-jdbc</artifactId>
+            <version>3.45.3.0</version>
+        </dependency>
+
         <!-- ActiveJDBC ORM -->
         <dependency>
             <groupId>org.javalite</groupId>

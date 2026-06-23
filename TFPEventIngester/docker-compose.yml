@@ -13,8 +13,13 @@ services:
       - berlink-network
     volumes:
       - /opt/berlink/tfp-event-ingester/data/application.yml:/app/application.yml
-      
+      # Persistenza DB SQLite Geofencing (sopravvive ai restart/rebuild)
+      - geofencing-data:/app/data
+
     restart: unless-stopped
+
+volumes:
+  geofencing-data:
 
 networks:
   berlink-network:

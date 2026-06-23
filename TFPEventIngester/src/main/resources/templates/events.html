@@ -27,7 +27,21 @@
 <body class="bg-light">
 <div class="container-fluid py-3">
 
-    <h4 class="mb-3">TFP Event Ingester &mdash; Event Browser</h4>
+    <!-- Header + hamburger -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0">TFP Event Ingester &mdash; Event Browser</h4>
+        <div class="dropdown">
+            <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="dropdown" title="Menu">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
+                    <path fill-rule="evenodd" d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5m0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5"/>
+                </svg>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+                <li><a class="dropdown-item active" href="/events">Event Browser</a></li>
+                <li><a class="dropdown-item" href="/geofencing">Geofencing</a></li>
+            </ul>
+        </div>
+    </div>
 
     <!-- Nav Tabs -->
     <ul class="nav nav-tabs mb-3" role="tablist">
@@ -1475,6 +1489,69 @@ function buildSectionBlock(title) {
     return wrap;
 }
 
+function buildAddToMapControls(data) {
+    var lat = parseFloat(data.latitude), lon = parseFloat(data.longitude);
+    if (isNaN(lat) || isNaN(lon)) return null;
+    var col = document.createElement('div');
+    col.className = 'col-md-4';
+    col.innerHTML =
+        '<div class="small text-muted">Aggiungi a mappa Geofencing</div>' +
+        '<div class="input-group input-group-sm">' +
+        '  <select class="form-select form-select-sm gf-map-select"><option value="">(seleziona mappa)</option></select>' +
+        '  <button class="btn btn-outline-primary gf-add-btn" type="button">Aggiungi alla mappa</button>' +
+        '</div>' +
+        '<div class="small gf-add-msg mt-1"></div>';
+    var sel = col.querySelector('.gf-map-select');
+    var btn = col.querySelector('.gf-add-btn');
+    var msg = col.querySelector('.gf-add-msg');
+
+    fetch('/geofencing/api/maps')
+        .then(function(r) { return r.json(); })
+        .then(function(maps) {
+            (maps || []).forEach(function(m) {
+                var o = document.createElement('option');
+                o.value = m.id; o.textContent = m.name;
+                sel.appendChild(o);
+            });
+        })
+        .catch(function() {
+            msg.className = 'small gf-add-msg mt-1 text-danger';
+            msg.textContent = 'Mappe non disponibili';
+        });
+
+    btn.addEventListener('click', function() {
+        if (!sel.value) {
+            msg.className = 'small gf-add-msg mt-1 text-danger';
+            msg.textContent = 'Seleziona una mappa';
+            return;
+        }
+        var label = [data.unit_number, data.type].filter(function(x) {
+            return x !== null && x !== undefined && x !== '';
+        }).join(' - ');
+        btn.disabled = true;
+        msg.className = 'small gf-add-msg mt-1 text-muted';
+        msg.textContent = 'Invio...';
+        fetch('/geofencing/api/maps/' + encodeURIComponent(sel.value) + '/points', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ label: label, latitude: lat, longitude: lon, radiusM: 1, color: '#dc3545' })
+        }).then(function(r) {
+            if (!r.ok) return r.json().then(function(j) { throw new Error(j.error || r.statusText); });
+            return r.json();
+        }).then(function() {
+            msg.className = 'small gf-add-msg mt-1 text-success';
+            msg.textContent = 'Aggiunto a "' + sel.options[sel.selectedIndex].text + '"';
+            btn.disabled = false;
+        }).catch(function(e) {
+            msg.className = 'small gf-add-msg mt-1 text-danger';
+            msg.textContent = 'Errore: ' + e.message;
+            btn.disabled = false;
+        });
+    });
+
+    return col;
+}
+
 function renderDetail(data) {
     var fields = document.getElementById('detailFields');
     fields.className = '';
@@ -1492,8 +1569,9 @@ function renderDetail(data) {
         });
         if (keys.length === 0 && !sec.showMap) return;
         var block = buildSectionBlock(sec.title);
+        var row = null;
         if (keys.length > 0) {
-            var row = document.createElement('div');
+            row = document.createElement('div');
             row.className = 'row g-3';
             keys.forEach(function(k) {
                 used[k] = 1;
@@ -1502,6 +1580,11 @@ function renderDetail(data) {
             block.appendChild(row);
         }
         if (sec.showMap) {
+            // Sulla stessa riga di lat/lon: dropdown mappe + "Aggiungi alla mappa"
+            if (typeof row !== 'undefined' && row) {
+                var ctrl = buildAddToMapControls(data);
+                if (ctrl) row.appendChild(ctrl);
+            }
             var mapHost = document.createElement('div');
             mapHost.className = 'mt-3';
             mapHost.id = 'detailMapHost';
