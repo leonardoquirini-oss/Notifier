@@ -19,7 +19,7 @@ public class AssetDamageRepository {
 
     /**
      * Returns the id_asset_damage of every OPEN damage row for the given asset_identifier
-     * whose tfp_event_id has no matching REPAIRED / UNDER_REPAIR row.
+     * whose tfp_event_id has no matching REPAIRED / UNDER_REPAIR / WONT_REPAIR row.
      *
      * OPEN rows with tfp_event_id IS NULL are treated as orphan (no closure possible),
      * therefore they also trigger the notification.
@@ -35,7 +35,7 @@ public class AssetDamageRepository {
                         SELECT 1
                         FROM evt_asset_damages d2
                         WHERE d2.tfp_event_id = d.tfp_event_id
-                          AND d2.status IN ('REPAIRED', 'UNDER_REPAIR')
+                          AND d2.status IN ('REPAIRED', 'UNDER_REPAIR', 'WONT_REPAIR')
                    )
               )
             """;
