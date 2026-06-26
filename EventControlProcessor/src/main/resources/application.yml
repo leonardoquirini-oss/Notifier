@@ -50,6 +50,16 @@ control:
       group-code: ""          # TODO: gruppo destinatario notifica
       notification-type: missing_end_load
       email-recipients: []    # usato solo se 'email' tra i channels
+    missing-end-unload:
+      enabled: true
+      grace-hours: 6
+      lookback-hours: 48
+      tolerance-meters: 200
+      channels:
+        - berlink
+      group-code: ""          # TODO: gruppo destinatario notifica
+      notification-type: missing_end_unload
+      email-recipients: []
 
 berlink:
   api:
