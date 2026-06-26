@@ -1,0 +1,33 @@
+version: '3'
+
+tasks:
+
+  stop-ecp:
+    cmds:
+      - docker-compose -f docker-compose.yml stop eventcontrolprocessor
+    silent: true
+
+  build-ecp:
+    cmds:
+      - docker-compose -f docker-compose.yml build eventcontrolprocessor
+    silent: true
+
+  ecp:
+    cmds:
+      - task stop-ecp
+      - task build-ecp
+    silent: true
+
+  logs-ecp:
+    cmds:
+      - docker-compose logs -f eventcontrolprocessor
+
+  up:
+    cmds:
+      - docker-compose -f docker-compose.yml up -d
+    silent: true
+
+  restart:
+    cmds:
+      - docker-compose down && docker-compose -f docker-compose.yml up -d
+    silent: true

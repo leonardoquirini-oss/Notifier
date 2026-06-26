@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  eventcontrolprocessor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: event-control-processor
+    hostname: event-control-processor
+
+    networks:
+      - berlink-network
+    #volumes:
+    #  - /opt/berlink/event-control-processor/data/application.yml:/app/application.yml
+
+    restart: unless-stopped
+
+networks:
+  berlink-network:
+    external: true
+    name: berlink-dev_berlink-network

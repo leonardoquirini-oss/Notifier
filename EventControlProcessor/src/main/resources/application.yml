@@ -1,0 +1,79 @@
+spring:
+  application:
+    name: event-control-processor
+
+  datasource:
+    url: jdbc:postgresql://postgres-service:5432/berlinkdb
+    username: berlink
+    password: berlink
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 1
+      idle-timeout: 300000
+      max-lifetime: 1800000
+      connection-timeout: 5000
+      pool-name: BerlinkDB-Pool
+
+valkey:
+  host: valkey-service
+  port: 6379
+  database: 0
+  password:
+
+health:
+  api-key: ${HEALTH_API_KEY:change-me-event-control-processor-health-key}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when-authorized
+
+# Control engine: scheduled rule evaluation
+control:
+  enabled: true
+  # every 15 minutes
+  poll-cron: "0 * * * * *"
+  rules:
+    missing-end-load:
+      enabled: true
+      grace-hours: 6
+      lookback-hours: 48
+      tolerance-meters: 200
+      # channels: any of [berlink, whatsapp, email] -- da decidere con l'utente
+      channels:
+        - berlink
+      group-code: ""          # TODO: gruppo destinatario notifica
+      notification-type: missing_end_load
+      email-recipients: []    # usato solo se 'email' tra i channels
+
+berlink:
+  api:
+    base-url: http://192.168.0.39:8090
+    api-key: d2c6aba0-3779-4bca-82ae-e731f35a3ec4
+    connect-timeout-ms: 5000
+    read-timeout-ms: 10000
+
+whatsapp:
+  url: http://192.168.0.14:3120/api/whatsapp/send-message
+  token: fiai-10ad376fb71badb1d6b5618acabaf8c480b7c5479c9c1998ef63db4384dcfba4
+  account: main
+  dry-run: true
+
+notifier:
+  base-url: http://notifier-service:8080
+  api-key: ${NOTIFIER_API_KEY:}
+  from-address:
+  sender-name: BERLink Control
+
+logging:
+  level:
+    root: INFO
+    com.containermgmt.eventcontrolprocessor: DEBUG
+    org.springframework.data.redis: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
