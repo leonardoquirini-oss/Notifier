@@ -980,9 +980,24 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="detailModalLabel">Record Detail</h5>
+                <div id="detailExportWrap" class="dropdown ms-auto me-2" hidden>
+                    <button type="button" id="detailExportSqlBtn" class="btn btn-sm btn-outline-secondary dropdown-toggle"
+                            data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="bi bi-filetype-sql"></i> Export SQL
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><button type="button" class="dropdown-item" id="detailExportCopy">
+                            <i class="bi bi-clipboard"></i> Copia negli appunti
+                        </button></li>
+                        <li><button type="button" class="dropdown-item" id="detailExportDownload">
+                            <i class="bi bi-download"></i> Scarica file
+                        </button></li>
+                    </ul>
+                </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
+                <div id="detailExportMsg" class="alert alert-warning py-1 px-2 small mb-2" hidden></div>
                 <div id="detailFields"></div>
                 <div id="detailLabelsWrap" class="mb-3" hidden>
                     <h6>Active Labels</h6>
@@ -1082,6 +1097,67 @@ function renderDetailMapInline(hostId, lat, lon) {
 
 document.getElementById('detailModal').addEventListener('hidden.bs.modal', function() {
     if (detailMap) { detailMap.remove(); detailMap = null; }
+});
+
+function fetchExportSql() {
+    var msgId = document.getElementById('detailExportSqlBtn').dataset.messageId;
+    var alertBox = document.getElementById('detailExportMsg');
+    alertBox.hidden = true;
+    if (!msgId) return Promise.resolve(null);
+    return fetch('/events/raw-event-sql?messageId=' + encodeURIComponent(msgId))
+        .then(function(r) {
+            if (r.status === 404) {
+                alertBox.textContent = 'No raw event stored for this message.';
+                alertBox.hidden = false;
+                return null;
+            }
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.text().then(function(text) {
+                return { sql: text, name: 'raw-event-' + msgId.replace(/[^A-Za-z0-9_.-]/g, '_') + '.sql' };
+            });
+        })
+        .catch(function(err) {
+            alertBox.textContent = 'Export error: ' + err.message;
+            alertBox.hidden = false;
+            return null;
+        });
+}
+
+document.getElementById('detailExportCopy').addEventListener('click', function() {
+    fetchExportSql().then(function(res) {
+        if (!res) return;
+        navigator.clipboard.writeText(res.sql)
+            .then(function() {
+                var alertBox = document.getElementById('detailExportMsg');
+                alertBox.className = 'alert alert-success py-1 px-2 small mb-2';
+                alertBox.textContent = 'SQL copiato negli appunti.';
+                alertBox.hidden = false;
+                setTimeout(function() {
+                    alertBox.hidden = true;
+                    alertBox.className = 'alert alert-warning py-1 px-2 small mb-2';
+                }, 2000);
+            })
+            .catch(function(err) {
+                var alertBox = document.getElementById('detailExportMsg');
+                alertBox.textContent = 'Copy error: ' + err.message;
+                alertBox.hidden = false;
+            });
+    });
+});
+
+document.getElementById('detailExportDownload').addEventListener('click', function() {
+    fetchExportSql().then(function(res) {
+        if (!res) return;
+        var blob = new Blob([res.sql], { type: 'application/sql' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = res.name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+    });
 });
 
 document.querySelectorAll('tr.detail-row').forEach(function(tr) {
@@ -1364,6 +1440,8 @@ function openDetail(url) {
     document.getElementById('detailLabelsWrap').hidden = true;
     document.getElementById('detailAttachmentsWrap').hidden = true;
     document.getElementById('detailPayloadWrap').hidden = true;
+    document.getElementById('detailExportWrap').hidden = true;
+    document.getElementById('detailExportMsg').hidden = true;
     new bootstrap.Modal(document.getElementById('detailModal')).show();
 
     fetch(url)
@@ -1556,6 +1634,15 @@ function renderDetail(data) {
     var fields = document.getElementById('detailFields');
     fields.className = '';
     fields.innerHTML = '';
+
+    var exportWrap = document.getElementById('detailExportWrap');
+    document.getElementById('detailExportMsg').hidden = true;
+    if (data.message_id) {
+        document.getElementById('detailExportSqlBtn').dataset.messageId = data.message_id;
+        exportWrap.hidden = false;
+    } else {
+        exportWrap.hidden = true;
+    }
 
     var SKIP = { payload: 1, activeLabels: 1, attachments: 1 };
     var sections = buildSections(data);

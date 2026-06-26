@@ -213,6 +213,20 @@ public class EventBrowserController {
         return payload != null ? payload : "";
     }
 
+    @GetMapping("/events/raw-event-sql")
+    public ResponseEntity<byte[]> exportRawEventSql(@RequestParam String messageId) {
+        String sql = eventBrowserService.exportRawEventSql(messageId);
+        if (sql == null) {
+            return ResponseEntity.notFound().build();
+        }
+        String safe = messageId.replaceAll("[^A-Za-z0-9_.-]", "_");
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType("application/sql"));
+        headers.add(HttpHeaders.CONTENT_DISPOSITION,
+                "attachment; filename=\"raw-event-" + safe + ".sql\"");
+        return ResponseEntity.ok().headers(headers).body(sql.getBytes(StandardCharsets.UTF_8));
+    }
+
     @PostMapping("/events/unit-events/delete")
     @ResponseBody
     public Map<String, Object> deleteUnitEvents(@RequestBody List<Long> ids) {

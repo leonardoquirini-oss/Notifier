@@ -527,6 +527,60 @@ public class EventBrowserService {
         }
     }
 
+    // --- Raw event SQL export ---
+
+    /**
+     * Builds an idempotent INSERT statement for the raw event row identified by {@code messageId},
+     * so it can be re-inserted into another DB. Returns null if no row matches.
+     */
+    public String exportRawEventSql(String messageId) {
+        if (messageId == null || messageId.isBlank()) return null;
+        try {
+            Base.open(dataSource);
+            List<Map<String, Object>> rows = Base.findAll(
+                    "SELECT id_event, event_type, event_time, payload::text AS payload, " +
+                    "processed_at, created_at, message_id, checksum, additional_data " +
+                    "FROM evt_raw_events WHERE message_id = ?", messageId);
+            if (rows.isEmpty()) return null;
+            Map<String, Object> r = rows.get(0);
+
+            StringBuilder sb = new StringBuilder();
+            sb.append("INSERT INTO evt_raw_events ")
+              .append("(id_event, event_type, event_time, payload, processed_at, created_at, ")
+              .append("message_id, checksum, additional_data)\n")
+              .append("VALUES (\n")
+              .append("    ").append(numLiteral(r.get("id_event"))).append(",\n")
+              .append("    ").append(strLiteral(r.get("event_type"))).append(",\n")
+              .append("    ").append(tsLiteral(r.get("event_time"))).append(",\n")
+              .append("    ").append(jsonbLiteral(r.get("payload"))).append(",\n")
+              .append("    ").append(tsLiteral(r.get("processed_at"))).append(",\n")
+              .append("    ").append(tsLiteral(r.get("created_at"))).append(",\n")
+              .append("    ").append(strLiteral(r.get("message_id"))).append(",\n")
+              .append("    ").append(strLiteral(r.get("checksum"))).append(",\n")
+              .append("    ").append(strLiteral(r.get("additional_data"))).append("\n")
+              .append(")\nON CONFLICT (message_id) DO NOTHING;\n");
+            return sb.toString();
+        } finally {
+            Base.close();
+        }
+    }
+
+    private static String numLiteral(Object v) {
+        return v == null ? "NULL" : v.toString();
+    }
+
+    private static String strLiteral(Object v) {
+        return v == null ? "NULL" : "'" + v.toString().replace("'", "''") + "'";
+    }
+
+    private static String tsLiteral(Object v) {
+        return v == null ? "NULL" : "'" + v.toString().replace("'", "''") + "'::timestamptz";
+    }
+
+    private static String jsonbLiteral(Object v) {
+        return v == null ? "NULL" : "'" + v.toString().replace("'", "''") + "'::jsonb";
+    }
+
     // --- Where clause builders ---
 
     private void appendUnitEventsWhere(StringBuilder sql, List<Object> params,
