@@ -4,7 +4,8 @@ CREATE TABLE evt_event_attachments (
   event_time timestamp NOT NULL,
   path varchar(250),
   filename varchar(250),
-  id_document integer
+  id_document integer,
+  tfp_attachment_id integer  -- attachments[i].id del payload TFP; spesso null alla sorgente, non univoco
 );
 ALTER TABLE evt_event_attachments ADD CONSTRAINT pk_event_attachment PRIMARY KEY (id_event_attachment);
 ALTER TABLE evt_event_attachments ADD CONSTRAINT fk_attach_unit_event FOREIGN KEY (id_unit_event,event_time) REFERENCES evt_unit_events (id_unit_event,event_time);

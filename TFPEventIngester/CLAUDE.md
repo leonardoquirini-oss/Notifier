@@ -93,6 +93,42 @@ Valkey Streams                      TFPEventIngester
 - **UnitPositionStreamProcessor**: Override di `buildModels()` per produrre un `EvtUnitPosition` per ogni elemento di `unitPositions[]` (campo `pos_index` 1..n). Stream key da `stream.unit-positions.key`. Override di `saveModels()`: salva le posizioni e fa l'upsert su `evt_unit_last_position` (via `LastPositionUpserter`) per ognuna, tutto in una singola transazione. Per le posizioni `event_time` = `position_time`; `id_unit_event`, `terminal_code`, `full_empty`, `operator_code`, `event_type`, `eta` sono null (non presenti nel payload positions).
 - **AssetDamageStreamProcessor**: Consuma `tfp-asset-damages-stream` (stream key da `stream.asset-damages.key`). Override di `buildModels()` per produrre `EvtAssetDamage` + label model (`EvtVehicleDamageLabel` o `EvtUnitDamageLabel` a seconda di `assetType`). Override di `getUnitNumberFromPayload()` → `assetIdentifier` e `getUnitTypeCodeFromPayload()` → mappa `UNIT` → `CONTAINER`. Cascade delete su resend: chiama `DELETE /api/attachments/{id}` su BERLink per ogni allegato con `id_document` non-null, poi cancella i record `evt_damage_attachment`, label associate e infine il record principale. Allegati con `id_document = null` (upload precedente fallito) vengono ignorati silenziosamente. I tag in `assetDamageLabels[]` vengono pivotati in colonne booleane sulla tabella label appropriata.
 
+## Allegati: colonna `tfp_attachment_id`
+
+Entrambe le tabelle allegato conservano l'id dell'allegato lato TFP:
+
+| Tabella | Popolata da | Campo del payload |
+|---------|-------------|-------------------|
+| `evt_event_attachments` | `UnitEventStreamProcessor` | `attachments[i].id` |
+| `evt_damage_attachment` | `AssetDamageStreamProcessor` | `assetDamageAttachments[i].id` |
+
+Due proprieta' controintuitive, entrambe verificate sui dati:
+
+- **E' spesso NULL.** TFP invia `"id": null` per una quota rilevante degli allegati (a inizio 2026-07: 1193 elementi su 2195 sugli unit event, 949 su 2078 sui damage). Non e' un difetto di ingestion e nessun backfill puo' recuperarlo: il dato non arriva proprio.
+- **Non e' univoco, e non va vincolato.** TFP rimanda lo stesso danno come messaggi distinti; ogni copia genera un `evt_asset_damages` diverso con gli stessi allegati. Percio' lo stesso `tfp_attachment_id` compare su piu' `id_asset_damage` (es. l'id `3325` su tre damage). Nessun UNIQUE, nessuna assunzione di unicita' nelle query.
+
+### `id_document`: da non confondere con `tfp_attachment_id`
+
+`tfp_attachment_id` e' l'id nel sistema **di origine** (TFP). `id_document` e' l'id nel repository **di destinazione** (BERLink): e' letteralmente `attachments.id_attachment`, restituito da `POST /api/attachments/upload` e letto da `BerlinkAttachmentService.upload()` (campo `data.id_attachment`).
+
+E' quindi l'id con cui si torna al file:
+
+```
+GET    /api/attachments/{id_document}/download   # scarica il file
+GET    /api/attachments/{id_document}            # metadati
+DELETE /api/attachments/{id_document}            # usato dal cascade delete su resend
+```
+
+Solo i path che finiscono in `/download` accettano il fallback `?token=<api-key>` al posto dell'header `X-API-Key` (link diretti da browser). Alternativa senza passare dalle tabelle allegato: `GET /api/attachments/entity/UNIT_EVENT/{id_unit_event}` (o `ASSET_DAMAGE/{id_asset_damage}`).
+
+**`id_document` NULL ha due cause distinte e indistinguibili a posteriori:**
+1. `fileContent` era null o vuoto → l'upload non e' mai partito (`UnitEventStreamProcessor:144`). E' il caso di tutti gli allegati storici pre-feature.
+2. L'upload e' fallito → `uploadAttachment()` logga un warn e ritorna null, ma la riga viene salvata comunque.
+
+Il cascade delete su resend chiama `DELETE /api/attachments/{id}` solo per gli allegati con `id_document` non-null: se l'upload era fallito, su BERLink non c'e' nulla da cancellare.
+
+**Backfill dello storico:** `BERLink/database/migration/2.5.1_tfp_attachment_id.sql`, idempotente. La mappatura riga ↔ elemento dell'array e' **posizionale** (`row_number()` sulla PK ↔ `WITH ORDINALITY`), perche' ne' `filename` ne' `path` sono chiavi valide (sui damage esistono duplicati e path NULL). La migration verifica l'assunzione in un pre-flight e aborta se non regge. Sorgenti: `evt_unit_events.payload` per gli eventi, `evt_raw_events.payload` per i damage (`evt_asset_damages` non ha colonna `payload`). Applicare **prima** di deployare il codice: ActiveJDBC risolve le colonne a runtime.
+
 ## Tabella evt_unit_last_position
 
 Tabella "stato corrente": **una riga per `unit_number`** (PK) con l'ultima posizione nota di ogni unit. DDL reference in `src/main/resources/db/07_evt_unit_last_position.sql` (table gia' esistente in DB; file solo documentazione).
@@ -125,8 +161,8 @@ Update **condizionale**: la riga viene aggiornata solo se l'`event_time` in arri
 | `VALKEY_HOST` | valkey-service | Host Valkey |
 | `VALKEY_PORT` | 6379 | Porta Valkey |
 | `VALKEY_PASSWORD` | (vuoto) | Password Valkey |
-| `BERLINK_API_URL` | http://backend:8081 | URL base BERLink API |
-| `BERLINK_API_KEY` | (vuoto) | API Key per autenticazione BERLink |
+
+> ⚠️ `BERLINK_API_URL` e `BERLINK_API_KEY` **non sono env var**: `berlink.api.base-url` (`http://backend:8080`) e `berlink.api.api-key` sono **hardcoded** in `application.yml` senza placeholder `${}`, quindi impostarle nell'ambiente non ha alcun effetto. La chiave viene validata dal backend contro la tabella `api_keys`. Da sistemare: esternalizzare la chiave (oggi e' un segreto committato in repo).
 
 ### Proprieta' applicative (application.yml)
 
@@ -135,7 +171,7 @@ Update **condizionale**: la riga viene aggiornata solo se l'`event_time` in arri
 | `berlink.api.connect-timeout-ms` | 5000 | Timeout connessione BERLink API (ms) |
 | `berlink.api.read-timeout-ms` | 10000 | Timeout lettura BERLink API (ms) |
 | `berlink.api.cache-enabled` | true | Abilita/disabilita cache Valkey per lookup |
-| `berlink.api.cache-ttl-minutes` | 60 | TTL cache per risultati positivi (minuti) |
+| `berlink.api.cache-ttl-minutes` | 43200 | TTL cache per risultati positivi (minuti, 30 giorni) |
 | `berlink.api.cache-negative-ttl-minutes` | 15 | TTL cache per risultati "not found" (minuti) |
 | `stream.unit-events.key` | tfp-unit-events-stream | Stream key per unit events |
 | `stream.unit-events.consumer-group` | tfp-event-ingester-group | Consumer group per unit events |
@@ -207,14 +243,23 @@ I messaggi sullo stream Valkey hanno questi campi (pubblicati da TFPGateway):
 
 ## BERLink Lookup
 
-Quando un evento viene processato, tutti i processor chiamano `BerlinkLookupService` per arricchire l'evento con `container_number`, `id_trailer` o `id_vehicle` dal backend BERLink. I campi passati al lookup sono configurabili via hook methods in `AbstractStreamProcessor` (`getUnitNumberFromPayload()`, `getUnitTypeCodeFromPayload()`). `AssetDamageStreamProcessor` usa `assetIdentifier` come unitNumber e mappa `UNIT` → `CONTAINER` per il unitTypeCode.
+Quando un evento viene processato, tutti i processor chiamano `BerlinkLookupService.lookupUnit(unitNumber, unitTypeCode)` per arricchire l'evento con `container_number`, `id_trailer` e `id_vehicle` dal backend BERLink. I campi passati al lookup sono configurabili via hook methods in `AbstractStreamProcessor` (`getUnitNumberFromPayload()`, `getUnitTypeCodeFromPayload()`). `AssetDamageStreamProcessor` usa `assetIdentifier` come unitNumber e mappa `UNIT` → `CONTAINER` per il unitTypeCode.
 
-**Logica:**
-- `unit_type_code == "CONTAINER"` → `GET /api/units/search?q={unit_number}&limit=1` → salva `cassa` in `container_number`
-- Altrimenti → `GET /api/units/search?q={unit_number}&limit=1&includeVehicles=true` → `unitType="t"` salva `id_trailer`, `unitType="v"` salva `id_vehicle`
-- Fallback per non-container: `GET /api/vehicles/by-plate/{unit_number}` → salva `id_vehicle`
+**`unitTypeCode` e' ignorato dalla logica** (resta nella signature solo per back-compat). Non esiste piu' nessun branch container-vs-altro: il lookup e' una **cascade** che interroga gli endpoint in sequenza e **accumula** i match in un `LookupResult` (record immutabile, `merge()` = primo-non-null vince). Un singolo identifier puo' quindi risolversi contemporaneamente come container + trailer + vehicle — caso tipico del **silos**, che a seconda di come l'operatore apre la segnalazione arriva come `assetType=UNIT` o `assetType=TRAILER` pur essendo lo stesso asset fisico.
 
-**Gestione errori:** Se BERLink non è raggiungibile, l'evento viene salvato senza i campi di lookup (log warn). Timeout: connect 5s, read 10s.
+**Cascade** (`lookupUnit()`):
+1. `lookupContainer()` → `GET /api/units/search?q={formatted}&limit=1`, accetta solo `unitType="c"` → salva `cassa` in `container_number`. Il numero e' normalizzato da `formatContainerNumberForSearch()` (`GBTU0281810` → `GBTU*28181.0`, `BRND00042` → `BRND*42`).
+2. `lookupViaUnitsSearch()` → `GET /api/units/search?q={raw}&limit=1&includeVehicles=true` → `unitType="t"` salva `id_trailer`, `unitType="v"` salva `id_vehicle`.
+3. Fallback trailer, **solo se `id_trailer` e' ancora null** → `GET /api/trailers/search-by-plate?plate={raw}` → salva `id_trailer`.
+4. Fallback vehicle, **solo se `id_vehicle` e' ancora null** → `GET /api/vehicles/by-plate/{raw}` → salva `id_vehicle`.
+
+**Perche' serve il fallback trailer (step 3).** `UnitController.search` lato backend concatena le sorgenti in ordine fisso — container → trailer → vehicle — e si ferma appena `limit` e' saturo. Con `limit=1`, se un container matcha (la ricerca e' substring `%q%` su `cassa`), consuma l'unico slot e `flt_trailers` non viene mai interrogato; `lookupViaUnitsSearch` ritorna vuoto perche' `unitType="c"`. Senza lo step 3 il trailer resta invisibile. I silos in `flt_trailers` hanno **targa italiana reale** (`AD 24208`), non codici container: gli step 3 e 4 passano quindi `unitNumber` **raw**, non formattato; il match lato backend e' gia' case/space-insensitive.
+
+**Perche' `search-by-plate` e non `by-plate` per i trailer:** `search-by-plate` risponde `200` con `data: null` sui miss, mentre `by-plate` risponde `404`. Il miss e' il caso comune (ogni container e ogni veicolo processato), e il 404 genererebbe una `HttpClientErrorException` + `log.warn` a ogni evento.
+
+**Parsing risposta:** gli endpoint `by-plate` / `search-by-plate` rispondono con l'involucro `ApiResponse` — `{"success": true, "data": {...}}`. **Non c'e' nessun campo `status` di primo livello.** L'helper condiviso `fetchIdByPlate(url, idField)` verifica `success == true` ed estrae `data.<idField>` (`id_trailer` / `id_vehicle`, che sono i nomi colonna prodotti da `Model.toMap()` di ActiveJDBC).
+
+**Gestione errori:** ogni step della cascade e' wrappato in un `safeXxxLookup()` con try-catch. Se BERLink non è raggiungibile, l'evento viene salvato senza i campi di lookup (log warn). Timeout: connect 5s, read 10s.
 
 ## Mission Resolution (colonna `evt_unit_events.mission`)
 
@@ -238,40 +283,44 @@ Il refNum si estrae da `transportOrderShortCode` (es. `id:210994+refNum:26A03044
 
 I risultati di `BerlinkLookupService.lookupUnit()` vengono cachati in Valkey per evitare chiamate API ridondanti. La cache usa `RedisTemplate<String, String>` + `ObjectMapper` (bean gia' disponibili, zero dipendenze aggiuntive).
 
-**Formato chiave:** `unit:lookup:{UNIT_TYPE_CODE}:{UNIT_NUMBER}` (normalizzato uppercase/trimmed)
+**Formato chiave:** `unit:lookup:{UNIT_NUMBER}` (normalizzato uppercase/trimmed). La chiave **non** include il unitTypeCode: la cascade e' type-agnostic, quindi lo stesso identifier produce sempre lo stesso `LookupResult` a prescindere dal tipo dichiarato nel payload.
+
+**Valore:** JSON del record `LookupResult` → `{"containerNumber": ..., "idTrailer": ..., "idVehicle": ...}`.
 
 **Strategia TTL:**
 | Scenario | Cache? | TTL |
 |----------|--------|-----|
-| Lookup riuscito (hasData=true) | Si | 60 min (configurabile) |
-| Lookup senza match (not found) | Si | 15 min (configurabile) |
+| Lookup riuscito (hasData=true) | Si | `cache-ttl-minutes` |
+| Lookup senza match (not found) | Si | `cache-negative-ttl-minutes` |
 | Eccezione API (timeout, 5xx) | No | - |
 | Input null/blank | No | - |
 
 **Proprieta' configurazione:**
-| Proprieta' | Default | Descrizione |
-|------------|---------|-------------|
-| `berlink.api.cache-enabled` | true | Abilita/disabilita cache lookup |
-| `berlink.api.cache-ttl-minutes` | 60 | TTL per risultati positivi (minuti) |
-| `berlink.api.cache-negative-ttl-minutes` | 15 | TTL per risultati "not found" (minuti) |
+| Proprieta' | Default codice | Valore in `application.yml` | Descrizione |
+|------------|----------------|------------------------------|-------------|
+| `berlink.api.cache-enabled` | true | true | Abilita/disabilita cache lookup |
+| `berlink.api.cache-ttl-minutes` | 60 | **43200** (30 giorni) | TTL per risultati positivi (minuti) |
+| `berlink.api.cache-negative-ttl-minutes` | 15 | 15 | TTL per risultati "not found" (minuti) |
 
 **Degradazione graceful:** Ogni operazione cache e' wrappata in try-catch. Se Valkey non e' raggiungibile, il lookup prosegue normalmente con chiamata API diretta (log warn).
+
+> **Attenzione ai deploy che cambiano la logica di lookup.** Con `cache-ttl-minutes` a 30 giorni, le entry gia' in Valkey sopravvivono a lungo e contengono il risultato calcolato dalla cascade **vecchia**. Dopo una modifica a `BerlinkLookupService` la cache va invalidata, altrimenti il nuovo comportamento sembra non funzionare.
 
 **Comandi operativi:**
 ```bash
 # Verifica cache hit
-redis-cli GET "unit:lookup:CONTAINER:GBTU0281810"
+redis-cli GET "unit:lookup:GBTU0281810"
 
 # Verifica TTL
-redis-cli TTL "unit:lookup:CONTAINER:GBTU0281810"
+redis-cli TTL "unit:lookup:GBTU0281810"
 
 # Conta chiavi cache
 redis-cli KEYS "unit:lookup:*" | wc -l
 
 # Invalida cache per una unit specifica
-redis-cli DEL "unit:lookup:CONTAINER:GBTU0281810"
+redis-cli DEL "unit:lookup:GBTU0281810"
 
-# Invalida tutta la cache lookup
+# Invalida tutta la cache lookup (obbligatorio dopo un deploy che tocca la cascade)
 redis-cli KEYS "unit:lookup:*" | xargs redis-cli DEL
 ```
 

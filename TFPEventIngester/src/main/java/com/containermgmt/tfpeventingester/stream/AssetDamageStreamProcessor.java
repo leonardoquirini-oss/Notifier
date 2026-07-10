@@ -136,6 +136,7 @@ public class AssetDamageStreamProcessor extends AbstractStreamProcessor {
         if (attachments != null) {
             for (Map<String, Object> att : attachments) {
                 EvtDamageAttachment a = new EvtDamageAttachment();
+                a.set("tfp_attachment_id", getLong(att, "id"));
                 a.set("path",            getString(att, "path"));
                 a.set("asset_id",        getInteger(att, "assetId"));
                 a.set("filename",        getString(att, "fileName"));

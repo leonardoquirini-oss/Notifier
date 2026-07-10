@@ -17,10 +17,11 @@ import java.util.Map;
 
 /**
  * Lookup di un identifier su BERLink. Esegue cascade su tutti gli endpoint
- * (container search, units search con vehicles, by-plate) accumulando i match.
- * Un identifier puo' risolversi simultaneamente come container + trailer + vehicle
- * (es. silos = container montato su semirimorchio). Il parametro unitTypeCode
- * resta nella signature per back-compat ma e' ignorato dalla logica.
+ * (container search, units search con vehicles, trailer by-plate, vehicle by-plate)
+ * accumulando i match. Un identifier puo' risolversi simultaneamente come
+ * container + trailer + vehicle (es. silos = container montato su semirimorchio).
+ * Il parametro unitTypeCode resta nella signature per back-compat ma e' ignorato
+ * dalla logica.
  */
 @Component
 @Slf4j
@@ -60,6 +61,9 @@ public class BerlinkLookupService {
         LookupResult result = LookupResult.empty();
         result = result.merge(safeContainerLookup(unitNumber));
         result = result.merge(safeUnitsSearchLookup(unitNumber));
+        if (result.idTrailer() == null) {
+            result = result.merge(safeTrailerByPlateLookup(unitNumber));
+        }
         if (result.idVehicle() == null) {
             result = result.merge(safeVehicleByPlateLookup(unitNumber));
         }
@@ -88,6 +92,15 @@ public class BerlinkLookupService {
             return lookupViaUnitsSearch(unitNumber);
         } catch (Exception e) {
             log.warn("BERLink units search lookup failed for unitNumber={}: {}", unitNumber, e.getMessage());
+            return LookupResult.empty();
+        }
+    }
+
+    private LookupResult safeTrailerByPlateLookup(String unitNumber) {
+        try {
+            return lookupTrailerByPlate(unitNumber);
+        } catch (Exception e) {
+            log.warn("BERLink trailer by-plate lookup failed for unitNumber={}: {}", unitNumber, e.getMessage());
             return LookupResult.empty();
         }
     }
@@ -201,7 +214,23 @@ public class BerlinkLookupService {
         return response.getBody();
     }
 
-    @SuppressWarnings("unchecked")
+    private LookupResult lookupTrailerByPlate(String plateNumber) {
+        // search-by-plate ritorna 200 con data=null quando la targa non e' di un trailer,
+        // a differenza di by-plate che risponde 404 (il miss e' il caso comune).
+        String url = UriComponentsBuilder
+                .fromHttpUrl(config.getBaseUrl() + "/api/trailers/search-by-plate")
+                .queryParam("plate", plateNumber)
+                .toUriString();
+        log.debug("BERLink trailer by plate: {}", url);
+
+        Integer idTrailer = fetchIdByPlate(url, "id_trailer");
+        if (idTrailer != null) {
+            log.debug("Trailer by plate: plate={} → idTrailer={}", plateNumber, idTrailer);
+            return LookupResult.ofTrailer(idTrailer);
+        }
+        return LookupResult.empty();
+    }
+
     private LookupResult lookupVehicleByPlate(String plateNumber) {
         String url = UriComponentsBuilder
                 .fromHttpUrl(config.getBaseUrl() + "/api/vehicles/by-plate/{plateNumber}")
@@ -209,30 +238,35 @@ public class BerlinkLookupService {
                 .toUriString();
         log.debug("BERLink vehicle by plate: {}", url);
 
+        Integer idVehicle = fetchIdByPlate(url, "id_vehicle");
+        if (idVehicle != null) {
+            log.debug("Vehicle by plate: plate={} → idVehicle={}", plateNumber, idVehicle);
+            return LookupResult.ofVehicle(idVehicle);
+        }
+        return LookupResult.empty();
+    }
+
+    /**
+     * Chiama un endpoint che risponde con l'involucro ApiResponse
+     * ({@code {"success": true, "data": {...}}}) ed estrae {@code data.<idField>}.
+     * Ritorna null se la risposta non e' di successo o {@code data} e' assente.
+     */
+    @SuppressWarnings("unchecked")
+    private Integer fetchIdByPlate(String url, String idField) {
         ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                 url, HttpMethod.GET, null,
                 new ParameterizedTypeReference<>() {});
 
         Map<String, Object> body = response.getBody();
-        if (body == null) {
-            return LookupResult.empty();
-        }
-
-        String status = getStringValue(body, "status");
-        if (!"success".equals(status)) {
-            return LookupResult.empty();
+        if (body == null || !Boolean.TRUE.equals(body.get("success"))) {
+            return null;
         }
 
         Object data = body.get("data");
         if (data instanceof Map) {
-            Integer idVehicle = getIntegerValue((Map<String, Object>) data, "id_vehicle");
-            if (idVehicle != null) {
-                log.debug("Vehicle by plate: plate={} → idVehicle={}", plateNumber, idVehicle);
-                return LookupResult.ofVehicle(idVehicle);
-            }
+            return getIntegerValue((Map<String, Object>) data, idField);
         }
-
-        return LookupResult.empty();
+        return null;
     }
 
     private String buildCacheKey(String unitNumber) {

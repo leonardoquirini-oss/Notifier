@@ -94,6 +94,7 @@ public class UnitEventStreamProcessor extends AbstractStreamProcessor {
         if (attachments != null) {
             for (Map<String, Object> att : attachments) {
                 EvtEventAttachment a = new EvtEventAttachment();
+                a.set("tfp_attachment_id", getLong(att, "id"));
                 a.set("path", getString(att, "fileName"));
                 a.set("filename", getString(att, "fileName"));
                 String fileContent = getString(att, "fileContent");
