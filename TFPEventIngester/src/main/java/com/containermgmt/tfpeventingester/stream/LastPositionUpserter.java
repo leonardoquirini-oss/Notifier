@@ -22,12 +22,14 @@ final class LastPositionUpserter {
             INSERT INTO evt_unit_last_position (
               unit_number, unit_type_code, message_type, id_unit_event,
               event_time, latitude, longitude, container_number,
+              id_trailer, id_vehicle,
               terminal_code, full_empty, operator_code, event_type, eta, message_id, updated_at
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,now())
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,now())
             ON CONFLICT (unit_number) DO UPDATE SET
               message_type=EXCLUDED.message_type, id_unit_event=EXCLUDED.id_unit_event,
               event_time=EXCLUDED.event_time, latitude=EXCLUDED.latitude,
               longitude=EXCLUDED.longitude, container_number=EXCLUDED.container_number,
+              id_trailer=EXCLUDED.id_trailer, id_vehicle=EXCLUDED.id_vehicle,
               terminal_code=EXCLUDED.terminal_code, full_empty=EXCLUDED.full_empty,
               operator_code=EXCLUDED.operator_code, event_type=EXCLUDED.event_type,
               eta=EXCLUDED.eta, message_id=EXCLUDED.message_id, updated_at=now()
@@ -40,14 +42,16 @@ final class LastPositionUpserter {
      */
     static void upsert(Object unitNumber, Object unitTypeCode, Object messageType,
                        Object idUnitEvent, Object eventTime, Object latitude, Object longitude,
-                       Object containerNumber, Object terminalCode, Object fullEmpty,
+                       Object containerNumber, Object idTrailer, Object idVehicle,
+                       Object terminalCode, Object fullEmpty,
                        Object operatorCode, Object eventType, Object eta, Object messageId) {
         if (unitNumber == null) {
             return;
         }
         Base.exec(SQL,
                 unitNumber, unitTypeCode, messageType, idUnitEvent, eventTime,
-                latitude, longitude, containerNumber, terminalCode, fullEmpty,
+                latitude, longitude, containerNumber, idTrailer, idVehicle,
+                terminalCode, fullEmpty,
                 operatorCode, eventType, eta, messageId);
     }
 }

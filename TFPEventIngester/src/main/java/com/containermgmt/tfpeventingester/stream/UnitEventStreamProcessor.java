@@ -186,6 +186,8 @@ public class UnitEventStreamProcessor extends AbstractStreamProcessor {
                 parent.get("latitude"),
                 parent.get("longitude"),
                 parent.get("container_number"),
+                parent.get("id_trailer"),
+                parent.get("id_vehicle"),
                 terminalCode,
                 fullEmpty,
                 operatorCode,

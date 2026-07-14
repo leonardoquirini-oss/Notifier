@@ -10,6 +10,8 @@ CREATE TABLE IF NOT EXISTS evt_unit_last_position (
     latitude         NUMERIC,
     longitude        NUMERIC,
     container_number VARCHAR(50),
+    id_trailer       INTEGER REFERENCES flt_trailers (id_trailer),
+    id_vehicle       INTEGER REFERENCES flt_vehicles (id_vehicle),
     terminal_code    VARCHAR(100),
     full_empty       VARCHAR(10),
     operator_code    VARCHAR(100),

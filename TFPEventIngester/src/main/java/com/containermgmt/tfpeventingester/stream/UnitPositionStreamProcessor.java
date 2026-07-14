@@ -46,7 +46,10 @@ public class UnitPositionStreamProcessor extends AbstractStreamProcessor {
             return List.of();
         }
 
-        String unitNumber = getString(payload, "unitNumber");
+        // Fall back to vehiclePlate when unitNumber is absent (vehicle/trailer positions),
+        // consistent with getUnitNumberFromPayload() used for the BERLink lookup. Without this
+        // the row's unit_number is null and never lands in evt_unit_last_position (PK unit_number).
+        String unitNumber = getUnitNumberFromPayload(payload);
         String unitTypeCode = getString(payload, "unitTypeCode");
         String vehiclePlate = getString(payload, "vehiclePlate");
 
@@ -99,13 +102,15 @@ public class UnitPositionStreamProcessor extends AbstractStreamProcessor {
                         model.get("unit_number"),
                         model.get("unit_type_code"),
                         model.get("message_type"),
-                        null,                          // id_unit_event: positions have no parent event
+                        model.getId(),                 // id_unit_event: use id_unit_position (positions have no parent event)
                         model.get("position_time"),
                         model.get("latitude"),
                         model.get("longitude"),
                         containerNumber,
+                        model.get("id_trailer"),
+                        model.get("id_vehicle"),
                         null, null, null,              // terminal_code, full_empty, operator_code: not in positions
-                        null,                          // event_type: not in positions
+                        "POSITION",                    // event_type: positions have none; column is NOT NULL
                         null,                          // eta: not in positions
                         model.get("message_id"));
             }
