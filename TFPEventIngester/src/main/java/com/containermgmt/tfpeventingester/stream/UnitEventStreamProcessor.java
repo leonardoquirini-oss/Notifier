@@ -172,7 +172,20 @@ public class UnitEventStreamProcessor extends AbstractStreamProcessor {
                 pendingTransportOrderShortCode);
     }
 
+    /**
+     * Event types that must NOT update evt_unit_last_position: non-positional
+     * events (train forecasts/deliveries/pin codes) and damage events.
+     */
+    private static final java.util.Set<String> LAST_POSITION_EXCLUDED_TYPES = java.util.Set.of(
+            "ARRIVAL_FORECAST_TRAIN", "DAMAGE_REPAIRED", "DAMAGE_REPORT",
+            "DELIVERED_TRAIN", "PIN_CODE_TRAIN");
+
     private void upsertLastPosition(EvtUnitEvent parent) {
+        Object type = parent.get("type");
+        if (type != null && LAST_POSITION_EXCLUDED_TYPES.contains(type.toString())) {
+            log.debug("Skipping evt_unit_last_position upsert for excluded event type={}", type);
+            return;
+        }
         String terminalCode = lastPositionExtras != null ? lastPositionExtras.terminalCode() : null;
         String fullEmpty    = lastPositionExtras != null ? lastPositionExtras.fullEmpty()    : null;
         String operatorCode = lastPositionExtras != null ? lastPositionExtras.operatorCode() : null;
