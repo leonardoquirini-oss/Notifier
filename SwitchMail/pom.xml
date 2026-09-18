@@ -127,6 +127,18 @@
                         </exclude>
                     </excludes>
                 </configuration>
+                <executions>
+                    <execution>
+                        <!--
+                          build-info genera META-INF/build-info.properties, da cui Boot ricava il bean
+                          BuildProperties: il campo "version" del contratto di health viene cosi' dal
+                          build e non da una costante che qualcuno dimentichera' di aggiornare.
+                        -->
+                        <goals>
+                            <goal>build-info</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>

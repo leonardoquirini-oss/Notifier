@@ -39,6 +39,14 @@ CDN, nessun npm. Porta host **8105** (nel container 8080).
   `ImapSessionPropertiesTest`; non rimuoverla come "ridondante".
 - **`process()` è final** in `AbstractMailSubProcessor` e `ProcessingOutcome` non ha una costante di
   fallimento: un errore si lancia, non si ritorna. Non aggiungere `Status.FAILED`.
+- **Health check conforme al contratto di piattaforma** (`BERLink/prompt/HEALTH_CONTRACT.md`): è così
+  che FlowCenter interroga la flotta con un solo probe. `/api/health/live` pubblico e sempre 200;
+  `/api/health/ready` con `X-API-Key`, 503 se un check è DOWN, 401 senza chiave; `/api/health` alias
+  deprecato. Payload non wrappato con `status`/`service`/`version`/`timestamp` e `checks` come mappa di
+  **stringhe** `"UP"`/`"DOWN"` — niente oggetti annidati, il monitor legge stringhe. `version` arriva
+  dal goal `build-info` del plugin Boot. Il dettaglio delle regole rotte sta in `details`, fuori dai
+  `checks`. `HEALTH_API_KEY` è l'unico segreto la cui assenza **non** blocca l'avvio: protegge un
+  endpoint diagnostico, e `/ready` risponde 503 dicendo che non è configurata.
 - **Il boot non fallisce** se una regola punta a un processore inesistente: la UI che ripara quel dato
   gira in questo stesso processo. Si logga, si notifica, `/api/health/ready` va DOWN su `checks.rules`
   e a runtime la mail finisce in dead-letter esplicita.

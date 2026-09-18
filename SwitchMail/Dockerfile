@@ -39,8 +39,10 @@ USER switchmail
 
 EXPOSE 8080
 
-HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
-  CMD curl -f http://localhost:8080/api/health/live || exit 1
+# Parametri del contratto di piattaforma (BERLink/prompt/HEALTH_CONTRACT.md): liveness pubblica,
+# nessun check di dipendenze, cosi' il container non risulta unhealthy perche' BERLink e' giu'.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+  CMD curl -fsS http://localhost:8080/api/health/live || exit 1
 
 # exec form: senza, il SIGTERM non arriva al JVM e lo shutdown hook che finisce la mail
 # in volo non gira mai, lasciando una riga IN_PROGRESS da recuperare al riavvio.

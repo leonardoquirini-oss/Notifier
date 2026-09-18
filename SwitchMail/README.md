@@ -33,7 +33,7 @@ il MIME archiviato, ed è da lì che si capisce quali regole scrivere.
 ```bash
 export SWITCHMAIL_CREDS_KEY=$(openssl rand -base64 32)   # cifratura delle password IMAP
 export BERLINK_API_KEY=...                               # scritture verso BERLink
-export HEALTH_API_KEY=...                                # /api/health/ready
+export HEALTH_API_KEY=$(openssl rand -hex 24)            # protegge /api/health/ready (facoltativa)
 
 task sm && task up            # build (con i test) + run
 task logs-sm
@@ -43,6 +43,23 @@ open http://127.0.0.1:8105/   # la UI è pubblicata solo su loopback: non ha aut
 In locale, senza Docker: `mvn spring-boot:run` con le stesse variabili — `task up` serve la
 configurazione in `/opt/berlink/switchmail/data/application.yml`, che esiste solo sulla macchina di
 deploy (in produzione i valori veri stanno lì, e le variabili d'ambiente diventano superflue).
+
+## Health check
+
+Conforme al contratto di piattaforma (`BERLink/prompt/HEALTH_CONTRACT.md`), così FlowCenter lo
+interroga come gli altri servizi:
+
+```bash
+curl http://127.0.0.1:8105/api/health/live                              # pubblico, sempre 200
+curl -H "X-API-Key: $HEALTH_API_KEY" http://127.0.0.1:8105/api/health/ready
+# {"status":"UP","service":"switchmail","version":"1.0.0","timestamp":"...",
+#  "checks":{"database":"UP","rules":"UP","credentials":"UP"}}
+```
+
+`rules` va DOWN quando una regola punta a un processore che non esiste più: il servizio continua a
+funzionare (la UI che ripara quella regola gira lì dentro) ma il monitor lo vede. `HEALTH_API_KEY` è
+una chiave di SwitchMail, non di BERLink: se manca, `/ready` risponde 503 dicendolo e tutto il resto
+funziona lo stesso.
 
 ## Modalità di accesso alla casella
 

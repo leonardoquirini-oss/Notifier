@@ -61,7 +61,12 @@ berlink:
     notification-group-code: ${BERLINK_NOTIFY_GROUP:cd}
 
 health:
-  api-key: ${HEALTH_API_KEY}
+  # Chiave di SwitchMail, non di BERLink: protegge /api/health/ready, che espone lo stato di DB,
+  # regole e cifratura su un servizio senza autenticazione. Generarla con "openssl rand -hex 24".
+  # A differenza delle altre due, qui l'assenza NON blocca l'avvio: e' un endpoint diagnostico, e
+  # farne dipendere il boot del servizio sarebbe sproporzionato. Se manca, /api/health/ready
+  # risponde 503 dicendolo, /api/health/live resta pubblico e tutto il resto funziona.
+  api-key: ${HEALTH_API_KEY:}
 
 management:
   endpoints:
