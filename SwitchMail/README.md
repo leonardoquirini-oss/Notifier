@@ -40,7 +40,9 @@ task logs-sm
 open http://127.0.0.1:8105/   # la UI è pubblicata solo su loopback: non ha autenticazione
 ```
 
-In locale, senza Docker: `mvn spring-boot:run` con le stesse variabili.
+In locale, senza Docker: `mvn spring-boot:run` con le stesse variabili — `task up` serve la
+configurazione in `/opt/berlink/switchmail/data/application.yml`, che esiste solo sulla macchina di
+deploy (in produzione i valori veri stanno lì, e le variabili d'ambiente diventano superflue).
 
 ## Modalità di accesso alla casella
 

@@ -13,16 +13,22 @@ services:
       # password delle caselle. Su 0.0.0.0 sarebbe raggiungibile da tutta la LAN dell'host Docker.
       - "127.0.0.1:8105:8080"
     environment:
-      # Nessun segreto ha un default: se manca, Compose si ferma qui invece di far partire un
-      # servizio che fallira' al primo salvataggio.
-      # I messaggi vanno quotati: contengono ":" e senza apici il file non e' YAML valido.
-      SWITCHMAIL_CREDS_KEY: "${SWITCHMAIL_CREDS_KEY:?generare con openssl rand -base64 32}"
-      BERLINK_API_KEY: "${BERLINK_API_KEY:?serve la API key di BERLink}"
-      HEALTH_API_KEY: "${HEALTH_API_KEY:?serve la API key per /api/health/ready}"
-      BERLINK_BASE_URL: ${BERLINK_BASE_URL:-http://backend:8080}
-      TZ: Europe/Rome
+      # Forma pass-through (nome senza valore): la variabile arriva dall'ambiente dell'host e, se li'
+      # non c'e', NON viene definita nel container. E' la sola forma corretta qui: con "${VAR}" una
+      # variabile non impostata diventerebbe una stringa vuota che sovrascrive il valore
+      # dell'application.yml montato, e con "${VAR:?}" il compose bloccherebbe anche la build.
+      # In deploy i valori veri stanno in /opt/berlink/switchmail/data/application.yml.
+      # Se non li trova da nessuna parte, il servizio non parte: il placeholder senza default in
+      # application.yml fa fallire il context con "Could not resolve placeholder".
+      - SWITCHMAIL_CREDS_KEY
+      - BERLINK_API_KEY
+      - HEALTH_API_KEY
+      - BERLINK_BASE_URL
+      - TZ=Europe/Rome
     volumes:
-      # Configurazione fuori dall'immagine, come gli altri processori
+      # Configurazione fuori dall'immagine, come gli altri processori. ATTENZIONE: se sull'host il
+      # file non esiste, Docker crea al suo posto una DIRECTORY e il servizio parte con un errore
+      # poco leggibile. Crearlo prima del primo up. In locale si usa "mvn spring-boot:run".
       - /opt/berlink/switchmail/data/application.yml:/app/application.yml:ro
       # DB SQLite: sopravvive a restart e rebuild
       - switchmail-data:/app/data
