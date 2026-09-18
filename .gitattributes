@@ -1,0 +1,42 @@
+# Normalizzazione dei fine-riga.
+#
+# Il repo viene editato sia da Windows sia da WSL su /mnt/c: senza queste regole un editor che
+# riscrive i file in CRLF fa apparire modificato l'intero albero (e' successo: 95 file, ~12.000
+# righe, zero differenze di contenuto). "text=auto eol=lf" significa: git decide da solo cosa e'
+# testo, lo conserva con LF nel repository e lo scrive con LF nel working tree.
+* text=auto eol=lf
+
+# --- eccezioni che devono restare byte per byte ------------------------------------------------
+
+# Messaggi MIME: RFC 5322 impone CRLF. Sono le fixture con cui si testano i parser delle mail,
+# e normalizzarle significherebbe testare un formato che nella realta' non esiste.
+*.eml -text
+
+# Script per Windows: senza CRLF cmd.exe non li esegue.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# --- binari: nessuna conversione, mai ----------------------------------------------------------
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.webp binary
+*.pdf  binary
+*.zip  binary
+*.gz   binary
+*.tgz  binary
+*.jar  binary
+*.war  binary
+*.class binary
+*.db   binary
+*.sqlite binary
+*.keystore binary
+*.p12  binary
+*.jks  binary
+*.woff binary
+*.woff2 binary
+*.ttf  binary
+*.eot  binary
