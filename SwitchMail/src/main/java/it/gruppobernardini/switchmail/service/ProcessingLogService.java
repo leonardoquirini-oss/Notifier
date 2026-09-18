@@ -1,18 +1,25 @@
 package it.gruppobernardini.switchmail.service;
 
 import it.gruppobernardini.switchmail.dao.ProcessingAttemptDao;
+import it.gruppobernardini.switchmail.dao.MaintenanceDao;
 import it.gruppobernardini.switchmail.dao.ProcessingLogDao;
+import it.gruppobernardini.switchmail.dao.RawMailDao;
 import it.gruppobernardini.switchmail.dto.FetchedMail;
 import it.gruppobernardini.switchmail.dto.LogFilter;
 import it.gruppobernardini.switchmail.dto.LogPage;
+import it.gruppobernardini.switchmail.dto.StorageStats;
 import it.gruppobernardini.switchmail.model.MailAccount;
 import it.gruppobernardini.switchmail.model.ParsedMail;
 import it.gruppobernardini.switchmail.model.ProcessingLogEntry;
+import it.gruppobernardini.switchmail.model.ProcessingStatus;
 import it.gruppobernardini.switchmail.model.TriggeredBy;
 import it.gruppobernardini.switchmail.util.TimestampUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -29,22 +36,29 @@ public class ProcessingLogService {
 
     private final ProcessingLogDao logDao;
     private final ProcessingAttemptDao attemptDao;
+    private final RawMailDao rawMailDao;
+    private final MaintenanceDao maintenanceDao;
     private final RawMailStore rawMailStore;
     private final MailIngestService ingestService;
     private final RetryScheduler retryScheduler;
     private final AccountService accountService;
     private final ImapMailReader reader;
+    private final Clock clock;
 
-    public ProcessingLogService(ProcessingLogDao logDao, ProcessingAttemptDao attemptDao, RawMailStore rawMailStore,
+    public ProcessingLogService(ProcessingLogDao logDao, ProcessingAttemptDao attemptDao, RawMailDao rawMailDao,
+                                MaintenanceDao maintenanceDao, RawMailStore rawMailStore,
                                 MailIngestService ingestService, RetryScheduler retryScheduler,
-                                AccountService accountService, ImapMailReader reader) {
+                                AccountService accountService, ImapMailReader reader, Clock clock) {
         this.logDao = logDao;
         this.attemptDao = attemptDao;
+        this.rawMailDao = rawMailDao;
+        this.maintenanceDao = maintenanceDao;
         this.rawMailStore = rawMailStore;
         this.ingestService = ingestService;
         this.retryScheduler = retryScheduler;
         this.accountService = accountService;
         this.reader = reader;
+        this.clock = clock;
     }
 
     public LogPage page(LogFilter filter) {
@@ -118,6 +132,63 @@ public class ProcessingLogService {
     /** Cosa ha visto l'extractor: risponde a "il parser ha visto l'allegato?" senza debugger. */
     public Optional<ParsedMail> parsedView(long id) {
         return ingestService.rebuildFromRaw(require(id));
+    }
+
+    // ------------------------------------------------------------------ pulizia dell'archivio
+
+    /**
+     * Elimina il MIME archiviato e lascia il log.
+     *
+     * <p>E' la pulizia senza controindicazioni: la riga resta consultabile, il registro di dedup
+     * intatto, e sparisce il peso vero (i blob). Si perde solo la possibilita' di scaricare l'.eml
+     * e di rielaborare quella mail senza ripescarla dalla casella.
+     */
+    public int purgeRaw(List<Long> ids) {
+        int removed = rawMailDao.deleteByLogIds(ids);
+        log.info("Eliminati {} MIME archiviati", removed);
+        return removed;
+    }
+
+    /**
+     * Elimina le righe di log (e con loro tentativi e MIME).
+     *
+     * <p><b>Toglie anche la memoria di dedup</b> di quelle mail: finche' il high-water mark degli
+     * UID resta, non verranno riscaricate, ma se la cartella cambiasse UIDVALIDITY il controllo di
+     * sicurezza sul Message-ID non le riconoscerebbe piu' e verrebbero rielaborate. Le righe
+     * IN_PROGRESS non vengono toccate.
+     */
+    public int deleteRows(List<Long> ids) {
+        int removed = logDao.deleteByIds(ids);
+        log.warn("Eliminate {} righe di log su {} richieste", removed, ids == null ? 0 : ids.size());
+        return removed;
+    }
+
+    /** Quante righe sparirebbero con questi criteri, senza toccare niente. */
+    public int countPurgeable(List<ProcessingStatus> statuses, Integer olderThanDays, Long accountId) {
+        return logDao.purge(statuses, threshold(olderThanDays), accountId, true);
+    }
+
+    public int purge(List<ProcessingStatus> statuses, Integer olderThanDays, Long accountId) {
+        int removed = logDao.purge(statuses, threshold(olderThanDays), accountId, false);
+        log.warn("Pulizia archivio: eliminate {} righe (stati={}, piu' vecchie di {} giorni, casella={})",
+                removed, statuses, olderThanDays, accountId);
+        return removed;
+    }
+
+    private Instant threshold(Integer olderThanDays) {
+        return olderThanDays == null || olderThanDays <= 0
+                ? null
+                : clock.instant().minus(olderThanDays, ChronoUnit.DAYS);
+    }
+
+    public StorageStats storage() {
+        return maintenanceDao.stats();
+    }
+
+    /** Restituisce al filesystem lo spazio delle righe cancellate. */
+    public StorageStats compact() {
+        maintenanceDao.vacuum();
+        return maintenanceDao.stats();
     }
 
     private Optional<ParsedMail> refetch(ProcessingLogEntry entry) {

@@ -244,6 +244,48 @@ public class ProcessingLogDao {
         return out;
     }
 
+    /**
+     * Elimina le righe indicate. Attempt e MIME se ne vanno con loro via ON DELETE CASCADE.
+     *
+     * <p>Le righe IN_PROGRESS non si toccano: sono mail in elaborazione adesso, e cancellarle
+     * significherebbe far ripartire un claim a vuoto.
+     */
+    public int deleteByIds(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return 0;
+        }
+        String placeholders = "?,".repeat(ids.size() - 1) + "?";
+        return jdbc.update("DELETE FROM mail_processing_log WHERE status <> 'IN_PROGRESS' AND id IN ("
+                + placeholders + ")", ids.toArray());
+    }
+
+    /**
+     * Conta o elimina per stato ed eta'. Con {@code dryRun} non tocca niente: serve a mostrare
+     * quante righe sparirebbero <i>prima</i> di chiedere conferma.
+     */
+    public int purge(List<ProcessingStatus> statuses, Instant olderThan, Long accountId, boolean dryRun) {
+        StringBuilder where = new StringBuilder(" WHERE status <> 'IN_PROGRESS'");
+        List<Object> args = new ArrayList<>();
+        if (statuses != null && !statuses.isEmpty()) {
+            where.append(" AND status IN (").append("?,".repeat(statuses.size() - 1)).append("?)");
+            statuses.forEach(st -> args.add(st.name()));
+        }
+        if (olderThan != null) {
+            where.append(" AND created_at < ?");
+            args.add(TimestampUtil.format(olderThan));
+        }
+        if (accountId != null) {
+            where.append(" AND account_id = ?");
+            args.add(accountId);
+        }
+        if (dryRun) {
+            Integer n = jdbc.queryForObject("SELECT COUNT(*) FROM mail_processing_log" + where,
+                    Integer.class, args.toArray());
+            return n == null ? 0 : n;
+        }
+        return jdbc.update("DELETE FROM mail_processing_log" + where, args.toArray());
+    }
+
     public int deleteResolvedOlderThan(Instant threshold) {
         return jdbc.update("""
                 DELETE FROM mail_processing_log

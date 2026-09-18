@@ -104,11 +104,22 @@
         </div>
     </div>
 
-    <div class="d-flex gap-2 mb-2">
+    <div class="d-flex flex-wrap gap-2 mb-2 align-items-center">
         <button class="btn btn-outline-primary btn-sm" onclick="retrySelected()">
             <i class="bi bi-arrow-clockwise"></i> Riprova selezionate
         </button>
-        <span class="text-muted small align-self-center" id="selInfo"></span>
+        <button class="btn btn-outline-secondary btn-sm" onclick="purgeRawSelected()"
+                title="Elimina l'.eml archiviato: la riga di log resta">
+            <i class="bi bi-file-earmark-x"></i> Elimina .eml
+        </button>
+        <button class="btn btn-outline-danger btn-sm" onclick="deleteSelected()"
+                title="Elimina le righe selezionate dall'archivio di SwitchMail">
+            <i class="bi bi-trash"></i> Elimina righe
+        </button>
+        <span class="text-muted small" id="selInfo"></span>
+        <button class="btn btn-outline-secondary btn-sm ms-auto" onclick="openMaintenance()">
+            <i class="bi bi-hdd"></i> Manutenzione archivio
+        </button>
     </div>
 
     <div class="table-responsive">
@@ -130,6 +141,66 @@
         </table>
     </div>
     <button id="more" class="btn btn-outline-secondary btn-sm d-none" onclick="loadMore()">Carica altre</button>
+</div>
+
+<!-- Modale manutenzione archivio -->
+<div class="modal fade" id="maintenanceModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Manutenzione archivio</h5>
+                <button class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="maintError" class="alert alert-danger d-none"></div>
+
+                <div class="row g-2 mb-3" id="storageStats"></div>
+
+                <div class="alert alert-secondary py-2 small">
+                    Si cancella solo dall'archivio di SwitchMail: <strong>le mail nella casella non
+                    vengono toccate</strong>. Eliminare l'.eml archiviato non ha controindicazioni.
+                    Eliminare le righe toglie anche la memoria di dedup: finché il segnaposto degli UID
+                    resta, quelle mail non vengono riscaricate, ma se la cartella cambiasse UIDVALIDITY
+                    non verrebbero più riconosciute come già viste.
+                </div>
+
+                <div class="card card-body py-2">
+                    <div class="fw-semibold small mb-2">Pulizia per criteri</div>
+                    <div class="mb-2">
+                        <label class="form-label small mb-1">Stati da eliminare</label>
+                        <div id="purgeStatuses" class="d-flex flex-wrap gap-2"></div>
+                        <div class="form-text">Nessuno selezionato = tutti gli stati (tranne quelle in corso).</div>
+                    </div>
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-4">
+                            <label class="form-label small mb-1" for="purgeDays">Più vecchie di (giorni)</label>
+                            <input id="purgeDays" type="number" min="0" value="90"
+                                   class="form-control form-control-sm">
+                            <div class="form-text">0 = nessun limite di età.</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small mb-1" for="purgeAccount">Casella</label>
+                            <select id="purgeAccount" class="form-select form-select-sm">
+                                <option value="">Tutte</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4 d-grid">
+                            <button class="btn btn-outline-primary btn-sm" onclick="countPurge()">
+                                Conta le righe interessate
+                            </button>
+                        </div>
+                    </div>
+                    <div id="purgeResult" class="mt-2"></div>
+                </div>
+            </div>
+            <div class="modal-footer justify-content-between">
+                <button class="btn btn-outline-secondary btn-sm" onclick="compact()">
+                    <i class="bi bi-arrows-collapse"></i> Compatta database
+                </button>
+                <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Chiudi</button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- Modale "vedi parsed" -->
@@ -480,6 +551,133 @@
     function updateSel() {
         const n = document.querySelectorAll('.sel:checked').length;
         document.getElementById('selInfo').textContent = n ? n + ' selezionate' : '';
+    }
+
+    // ---- pulizia dell'archivio ----
+    function selectedIds() {
+        const ids = [...document.querySelectorAll('.sel:checked')].map(c => parseInt(c.value, 10));
+        if (!ids.length) throw new Error('nessuna riga selezionata');
+        return ids;
+    }
+
+    async function purgeRawSelected() {
+        try {
+            const ids = selectedIds();
+            if (!confirm('Eliminare l\'.eml archiviato di ' + ids.length + ' righe?\n' +
+                         'Le righe di log restano; non sara\' piu\' possibile scaricare quelle mail ' +
+                         'ne\' rielaborarle senza ripescarle dalla casella.')) return;
+            const r = await jfetch('/logs/api/purge-raw', { method: 'POST', body: JSON.stringify({ ids }) });
+            await reload();
+            showInfo('Eliminati ' + r.removed + ' .eml archiviati.');
+        } catch (e) { showError(e); }
+    }
+
+    async function deleteSelected() {
+        try {
+            const ids = selectedIds();
+            if (!confirm('Eliminare ' + ids.length + ' righe dall\'archivio di SwitchMail?\n\n' +
+                         'Le mail nella casella NON vengono toccate.\n' +
+                         'Spariscono log, tentativi e .eml, e con loro la memoria di dedup di quelle mail.'))
+                return;
+            const r = await jfetch('/logs/api/delete', { method: 'POST', body: JSON.stringify({ ids }) });
+            await reload();
+            await loadCounts();
+            showInfo('Eliminate ' + r.removed + ' righe su ' + r.requested + '.');
+        } catch (e) { showError(e); }
+    }
+
+    function purgeBody(dryRun) {
+        const statuses = [...document.querySelectorAll('.purge-status:checked')].map(c => c.value);
+        return {
+            status: statuses,
+            olderThanDays: parseInt(document.getElementById('purgeDays').value || '0', 10),
+            accountId: document.getElementById('purgeAccount').value || null,
+            dryRun
+        };
+    }
+
+    async function countPurge() {
+        try {
+            const r = await jfetch('/logs/api/purge', { method: 'POST', body: JSON.stringify(purgeBody(true)) });
+            const n = r.matching;
+            document.getElementById('purgeResult').innerHTML = n
+                ? '<div class="alert alert-warning py-2 mb-0 d-flex justify-content-between align-items-center">' +
+                  '<span><strong>' + n + '</strong> righe verrebbero eliminate.</span>' +
+                  '<button class="btn btn-danger btn-sm" onclick="runPurge(' + n + ')">Elimina</button></div>'
+                : '<div class="alert alert-success py-2 mb-0">Nessuna riga corrisponde a questi criteri.</div>';
+        } catch (e) { showMaintError(e); }
+    }
+
+    async function runPurge(expected) {
+        if (!confirm('Eliminare ' + expected + ' righe dall\'archivio di SwitchMail?\n' +
+                     'Le mail nella casella non vengono toccate.')) return;
+        try {
+            const r = await jfetch('/logs/api/purge', { method: 'POST', body: JSON.stringify(purgeBody(false)) });
+            document.getElementById('purgeResult').innerHTML =
+                '<div class="alert alert-success py-2 mb-0">Eliminate ' + r.removed + ' righe. ' +
+                'Usa "Compatta database" per restituire lo spazio al disco.</div>';
+            await renderStorage();
+            await reload();
+            await loadCounts();
+        } catch (e) { showMaintError(e); }
+    }
+
+    async function compact() {
+        try {
+            const stats = await jfetch('/logs/api/compact', { method: 'POST' });
+            renderStorage(stats);
+            showInfo('Database compattato: ora occupa ' + mb(stats.dbSizeBytes) + '.');
+        } catch (e) { showMaintError(e); }
+    }
+
+    function mb(bytes) {
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+        return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+    }
+
+    async function renderStorage(stats) {
+        const s = stats || await jfetch('/logs/api/storage');
+        const card = (label, value, hint) =>
+            '<div class="col-6 col-md-3"><div class="card card-body py-2">' +
+            '<div class="text-muted small">' + label + '</div>' +
+            '<div class="fs-5 fw-semibold">' + value + '</div>' +
+            (hint ? '<div class="form-text mt-0">' + hint + '</div>' : '') + '</div></div>';
+        document.getElementById('storageStats').innerHTML =
+            card('Righe di log', s.logRows, s.attemptRows + ' tentativi') +
+            card('.eml archiviati', s.rawRows, mb(s.rawBytes) + ' compressi da ' + mb(s.rawOriginalBytes)) +
+            card('Dimensione DB', mb(s.dbSizeBytes)) +
+            card('Recuperabile', mb(s.reclaimableBytes), 'con "Compatta database"');
+    }
+
+    function showMaintError(e) {
+        const box = document.getElementById('maintError');
+        box.textContent = e.message || String(e);
+        box.classList.remove('d-none');
+        setTimeout(() => box.classList.add('d-none'), 8000);
+    }
+
+    function showInfo(msg) {
+        const box = document.getElementById('alert');
+        box.className = 'alert alert-success';
+        box.textContent = msg;
+        setTimeout(() => { box.className = 'alert alert-danger d-none'; }, 6000);
+    }
+
+    async function openMaintenance() {
+        document.getElementById('purgeResult').innerHTML = '';
+        document.getElementById('purgeStatuses').innerHTML = STATUSES.map(st =>
+            '<div class="form-check form-check-inline"><input class="form-check-input purge-status" ' +
+            'type="checkbox" value="' + st.key + '" id="pg_' + st.key + '">' +
+            '<label class="form-check-label small" for="pg_' + st.key + '">' + st.label + '</label></div>').join('');
+
+        const select = document.getElementById('purgeAccount');
+        select.innerHTML = '<option value="">Tutte</option>' +
+            [...document.getElementById('fAccount').options].slice(1)
+                .map(o => '<option value="' + o.value + '">' + escapeHtml(o.text) + '</option>').join('');
+
+        try { await renderStorage(); } catch (e) { showMaintError(e); }
+        new bootstrap.Modal(document.getElementById('maintenanceModal')).show();
     }
 
     async function loadCounts() {

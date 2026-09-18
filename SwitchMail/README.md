@@ -44,6 +44,27 @@ In locale, senza Docker: `mvn spring-boot:run` con le stesse variabili — `task
 configurazione in `/opt/berlink/switchmail/data/application.yml`, che esiste solo sulla macchina di
 deploy (in produzione i valori veri stanno lì, e le variabili d'ambiente diventano superflue).
 
+## Tenere piccolo l'archivio
+
+`/logs` → **Manutenzione archivio** mostra quanto occupa il database (righe, `.eml` archiviati
+compressi e originali, dimensione del file, spazio recuperabile) e offre due operazioni diverse.
+Si cancella **solo dall'archivio di SwitchMail: le mail nella casella non vengono toccate.**
+
+| Operazione | Cosa elimina | Conseguenza |
+|---|---|---|
+| **Elimina .eml** | solo il MIME archiviato | nessuna controindicazione, ed è ciò che libera quasi tutto lo spazio. Si perde il download dell'`.eml` e la possibilità di rielaborare senza ripescare la mail dalla casella |
+| **Elimina righe** | log, tentativi e `.eml` | sparisce anche la **memoria di dedup** di quelle mail: finché il segnaposto degli UID resta non vengono riscaricate, ma dopo un cambio di UIDVALIDITY non sarebbero più riconosciute come già viste |
+
+La pulizia per criteri (stati, età in giorni, casella) **conta prima e cancella dopo**: il numero
+esatto di righe interessate viene mostrato e confermato. Le righe `IN_PROGRESS` non si cancellano
+mai: sono mail in elaborazione in quel momento.
+
+SQLite non rimpicciolisce il file da solo dopo una cancellazione — le pagine liberate restano nel
+file e vengono riusate. **Compatta database** (VACUUM) le restituisce al disco.
+
+Oltre a questo c'è già una pulizia automatica: `.eml` più vecchi di `switchmail.mail.raw-retention-days`
+(30) e righe riuscite o risolte oltre `log-retention-days` (365).
+
 ## Health check
 
 Conforme al contratto di piattaforma (`BERLink/prompt/HEALTH_CONTRACT.md`), così FlowCenter lo

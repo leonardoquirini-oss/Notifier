@@ -39,6 +39,12 @@ CDN, nessun npm. Porta host **8105** (nel container 8080).
   `ImapSessionPropertiesTest`; non rimuoverla come "ridondante".
 - **`process()` è final** in `AbstractMailSubProcessor` e `ProcessingOutcome` non ha una costante di
   fallimento: un errore si lancia, non si ritorna. Non aggiungere `Status.FAILED`.
+- **`mail_processing_log` è il registro di dedup**, non un log accessorio: l'indice unico su
+  `(account_id, folder, uid_validity, uid)` *è* il meccanismo che impedisce la doppia elaborazione.
+  Cancellare una riga toglie quella memoria. Per questo la pulizia dell'archivio offre due operazioni
+  separate — eliminare solo il MIME (innocuo, e libera quasi tutto lo spazio) o eliminare la riga
+  (con il suo prezzo dichiarato) — e le righe `IN_PROGRESS` non si cancellano mai. Dopo una
+  cancellazione serve `VACUUM` per restituire lo spazio al filesystem.
 - **Health check conforme al contratto di piattaforma** (`BERLink/prompt/HEALTH_CONTRACT.md`): è così
   che FlowCenter interroga la flotta con un solo probe. `/api/health/live` pubblico e sempre 200;
   `/api/health/ready` con `X-API-Key`, 503 se un check è DOWN, 401 senza chiave; `/api/health` alias

@@ -6,6 +6,7 @@ import org.springframework.stereotype.Repository;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 /** Il MIME grezzo gzippato. Persistenza pura: comprimere e decomprimere e' compito di RawMailStore. */
@@ -40,6 +41,19 @@ public class RawMailDao {
     public boolean exists(long logId) {
         Integer n = jdbc.queryForObject("SELECT COUNT(*) FROM mail_raw WHERE log_id = ?", Integer.class, logId);
         return n != null && n > 0;
+    }
+
+    /**
+     * Elimina solo il MIME archiviato delle righe indicate: il log resta, con la sua memoria di
+     * dedup e il suo storico. E' la cancellazione senza controindicazioni, ed e' anche quella che
+     * libera quasi tutto lo spazio, perche' il peso sta nei blob.
+     */
+    public int deleteByLogIds(List<Long> logIds) {
+        if (logIds == null || logIds.isEmpty()) {
+            return 0;
+        }
+        String placeholders = "?,".repeat(logIds.size() - 1) + "?";
+        return jdbc.update("DELETE FROM mail_raw WHERE log_id IN (" + placeholders + ")", logIds.toArray());
     }
 
     /** Retention: il log resta consultabile, il blob no. */

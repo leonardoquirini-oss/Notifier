@@ -2,6 +2,7 @@ package it.gruppobernardini.switchmail.controller;
 
 import it.gruppobernardini.switchmail.dto.LogFilter;
 import it.gruppobernardini.switchmail.dto.LogPage;
+import it.gruppobernardini.switchmail.dto.StorageStats;
 import it.gruppobernardini.switchmail.model.ProcessingLogEntry;
 import it.gruppobernardini.switchmail.model.ProcessingStatus;
 import it.gruppobernardini.switchmail.service.ProcessingLogService;
@@ -23,6 +24,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import static it.gruppobernardini.switchmail.controller.Payloads.bool;
+import static it.gruppobernardini.switchmail.controller.Payloads.intg;
 import static it.gruppobernardini.switchmail.controller.Payloads.lng;
 import static it.gruppobernardini.switchmail.controller.Payloads.str;
 
@@ -138,6 +141,84 @@ public class ProcessingLogController {
     public Map<String, Object> parsed(@PathVariable long id) {
         return Payloads.mailView(logService.parsedView(id).orElseThrow(
                 () -> new IllegalArgumentException("MIME non archiviato per la riga #" + id)));
+    }
+
+    // ------------------------------------------------------------------ pulizia dell'archivio
+
+    /** Elimina solo gli .eml archiviati: il log resta, la dedup resta. */
+    @PostMapping("/logs/api/purge-raw")
+    @ResponseBody
+    public Map<String, Object> purgeRaw(@RequestBody Map<String, Object> body) {
+        List<Long> ids = ids(body);
+        return Map.of("removed", logService.purgeRaw(ids), "requested", ids.size());
+    }
+
+    /** Elimina le righe selezionate, con tentativi e MIME. Toglie anche la memoria di dedup. */
+    @PostMapping("/logs/api/delete")
+    @ResponseBody
+    public Map<String, Object> delete(@RequestBody Map<String, Object> body) {
+        List<Long> ids = ids(body);
+        return Map.of("removed", logService.deleteRows(ids), "requested", ids.size());
+    }
+
+    /**
+     * Pulizia per criteri. Con {@code dryRun} (default) conta soltanto: la UI mostra il numero e
+     * chiede conferma, cosi' nessuno cancella mille righe credendo di cancellarne dieci.
+     */
+    @PostMapping("/logs/api/purge")
+    @ResponseBody
+    public Map<String, Object> purge(@RequestBody Map<String, Object> body) {
+        List<ProcessingStatus> statuses = statuses(body.get("status"));
+        Integer olderThanDays = intg(body.get("olderThanDays"));
+        Long accountId = lng(body.get("accountId"));
+        boolean dryRun = bool(body.get("dryRun"), true);
+
+        int n = dryRun
+                ? logService.countPurgeable(statuses, olderThanDays, accountId)
+                : logService.purge(statuses, olderThanDays, accountId);
+        return Map.of("dryRun", dryRun, dryRun ? "matching" : "removed", n);
+    }
+
+    @GetMapping("/logs/api/storage")
+    @ResponseBody
+    public StorageStats storage() {
+        return logService.storage();
+    }
+
+    /** SQLite non rimpicciolisce il file da solo dopo le cancellazioni: questo lo fa. */
+    @PostMapping("/logs/api/compact")
+    @ResponseBody
+    public StorageStats compact() {
+        return logService.compact();
+    }
+
+    private static List<Long> ids(Map<String, Object> body) {
+        List<Long> ids = new ArrayList<>();
+        if (body.get("ids") instanceof List<?> list) {
+            list.forEach(v -> ids.add(lng(v)));
+        }
+        if (ids.isEmpty()) {
+            throw new IllegalArgumentException("nessuna riga selezionata");
+        }
+        return ids;
+    }
+
+    private static List<ProcessingStatus> statuses(Object raw) {
+        List<ProcessingStatus> out = new ArrayList<>();
+        if (raw instanceof List<?> list) {
+            for (Object v : list) {
+                String name = str(v);
+                if (name == null) {
+                    continue;
+                }
+                try {
+                    out.add(ProcessingStatus.valueOf(name.trim().toUpperCase()));
+                } catch (IllegalArgumentException e) {
+                    throw new IllegalArgumentException("stato sconosciuto: " + name);
+                }
+            }
+        }
+        return out;
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
