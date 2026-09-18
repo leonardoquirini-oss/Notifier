@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>SwitchMail &mdash; Test regola</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .8rem; }
+        pre.mono { max-height: 320px; overflow: auto; }
+        .verdict-ok { color: #198754; }
+        .verdict-ko { color: #dc3545; }
+        .rule-card.shadowed { opacity: .6; }
+    </style>
+</head>
+<body class="bg-light">
+<div class="container-fluid py-3">
+
+    <!-- Header + hamburger -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0">SwitchMail &mdash; Test regola</h4>
+        <div class="dropdown">
+            <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="dropdown" title="Menu">
+                <i class="bi bi-list"></i>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+                <li><a class="dropdown-item" href="/logs">Log elaborazioni</a></li>
+                <li><a class="dropdown-item" href="/rules">Regole</a></li>
+                <li><a class="dropdown-item active" href="/ruletest">Test regola</a></li>
+                <li><a class="dropdown-item" href="/accounts">Caselle</a></li>
+            </ul>
+        </div>
+    </div>
+
+    <div id="alert" class="alert alert-danger d-none"></div>
+    <div class="alert alert-secondary py-2 small">
+        Niente viene scritto nel log e nessuna chiamata HTTP esce dal processo: il dry-run usa un client
+        che registra le chiamate senza eseguirle.
+    </div>
+
+    <div class="row g-3">
+        <!-- Input -->
+        <div class="col-lg-4">
+            <div class="card card-body py-2">
+                <ul class="nav nav-tabs nav-fill mb-2" role="tablist">
+                    <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab"
+                        data-bs-target="#tabManual">Dati a mano</button></li>
+                    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab"
+                        data-bs-target="#tabEml">File .eml</button></li>
+                </ul>
+
+                <div class="tab-content">
+                    <div class="tab-pane fade show active" id="tabManual">
+                        <div class="mb-2">
+                            <label class="form-label small mb-1">Mittente</label>
+                            <input id="from" class="form-control form-control-sm"
+                                   placeholder="mario.rossi@ferrovie.it">
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small mb-1">Nome mittente</label>
+                            <input id="fromName" class="form-control form-control-sm" placeholder="Mario Rossi">
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small mb-1">Oggetto</label>
+                            <input id="subject" class="form-control form-control-sm"
+                                   placeholder="AVVISI PARTENZA TRENO 4521 17/09/2026">
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small mb-1">Allegati (uno per riga)</label>
+                            <textarea id="attachments" class="form-control form-control-sm" rows="2"
+                                      placeholder="treno.txt"></textarea>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small mb-1">Corpo</label>
+                            <textarea id="body" class="form-control form-control-sm" rows="4"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="tab-pane fade" id="tabEml">
+                        <div class="mb-2">
+                            <label class="form-label small mb-1">File .eml</label>
+                            <input id="file" type="file" accept=".eml,message/rfc822"
+                                   class="form-control form-control-sm">
+                            <div class="form-text">
+                                Scaricabile da /logs. Passa dal vero estrattore, quindi verifica anche
+                                charset e allegati.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-2">
+                    <label class="form-label small mb-1">Casella (per le regole legate a una sola)</label>
+                    <select id="accountId" class="form-select form-select-sm"><option value="">Tutte</option></select>
+                </div>
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="dryRun">
+                    <label class="form-check-label small" for="dryRun">Esegui in dry-run</label>
+                </div>
+                <button class="btn btn-primary btn-sm" onclick="run()">Valuta</button>
+            </div>
+        </div>
+
+        <!-- Output -->
+        <div class="col-lg-8">
+            <div id="output" class="text-muted">Compila i campi e premi <strong>Valuta</strong>.</div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    // ---- Helpers (copiati da TFPEventIngester/geofencing.html) ----
+    async function jfetch(url, opts) {
+        const res = await fetch(url, Object.assign({
+            headers: { 'Content-Type': 'application/json' }
+        }, opts));
+        if (!res.ok) {
+            let msg = res.statusText;
+            try { const j = await res.json(); if (j.error) msg = j.error; } catch (_) {}
+            throw new Error(msg);
+        }
+        return res.status === 204 ? null : res.json();
+    }
+
+    function escapeHtml(s) {
+        return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    function showError(e) {
+        const box = document.getElementById('alert');
+        box.textContent = e.message || String(e);
+        box.classList.remove('d-none');
+        setTimeout(() => box.classList.add('d-none'), 8000);
+    }
+
+    function localTime(iso) {
+        return iso ? new Date(iso).toLocaleString('it-IT') : '';
+    }
+
+    async function run() {
+        try {
+            const file = document.getElementById('file').files[0];
+            let result;
+            if (file) {
+                const form = new FormData();
+                form.append('file', file);
+                const accountId = document.getElementById('accountId').value;
+                if (accountId) form.append('accountId', accountId);
+                form.append('dryRun', document.getElementById('dryRun').checked);
+                const res = await fetch('/ruletest/api/upload', { method: 'POST', body: form });
+                if (!res.ok) {
+                    let msg = res.statusText;
+                    try { const j = await res.json(); if (j.error) msg = j.error; } catch (_) {}
+                    throw new Error(msg);
+                }
+                result = await res.json();
+            } else {
+                result = await jfetch('/ruletest/api/run', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        accountId: document.getElementById('accountId').value || null,
+                        from: document.getElementById('from').value || null,
+                        fromName: document.getElementById('fromName').value || null,
+                        subject: document.getElementById('subject').value || null,
+                        body: document.getElementById('body').value || null,
+                        attachmentNames: document.getElementById('attachments').value
+                            .split('\n').map(s => s.trim()).filter(Boolean),
+                        dryRun: document.getElementById('dryRun').checked
+                    })
+                });
+            }
+            render(result);
+        } catch (e) { showError(e); }
+    }
+
+    function render(r) {
+        const m = r.mail || {};
+        let html = '';
+
+        // 1. Pannello mail parsata: cosa ha visto l'estrattore.
+        html += '<div class="card mb-3"><div class="card-header py-2 fw-semibold">Mail come la vede il parser</div>' +
+            '<div class="card-body py-2">' +
+            '<dl class="row small mb-2">' +
+            '<dt class="col-sm-3">Da</dt><dd class="col-sm-9">' + escapeHtml(m.fromFull || m.from || '') + '</dd>' +
+            '<dt class="col-sm-3">Oggetto</dt><dd class="col-sm-9">' + escapeHtml(m.subject || '') + '</dd>' +
+            '<dt class="col-sm-3">Ricevuta</dt><dd class="col-sm-9">' + localTime(m.receivedAt) + '</dd>' +
+            '</dl>';
+        if (m.warnings && m.warnings.length) {
+            html += '<div class="alert alert-warning py-2 small mb-2">' +
+                m.warnings.map(escapeHtml).join('<br>') + '</div>';
+        }
+        if (m.attachments && m.attachments.length) {
+            html += '<table class="table table-sm mb-2"><thead><tr><th>Allegato</th><th>Tipo</th>' +
+                '<th>Charset</th><th>Byte</th></tr></thead><tbody>' +
+                m.attachments.map(a => '<tr><td>' + escapeHtml(a.fileName || '(senza nome)') + '</td><td>' +
+                    escapeHtml(a.contentType || '') + '</td><td>' + escapeHtml(a.charset || '') + '</td><td>' +
+                    a.sizeBytes + (a.truncated ? ' <span class="badge text-bg-warning">troncato</span>' : '') +
+                    '</td></tr>').join('') + '</tbody></table>';
+        }
+        html += '<details><summary class="small">Anteprima corpo</summary><pre class="mono">' +
+            escapeHtml(m.bodyText || '') + '</pre></details></div></div>';
+
+        // 2. Traccia completa: il "perche' no" e' tutto il punto.
+        html += '<div class="card mb-3"><div class="card-header py-2 fw-semibold">' +
+            'Valutazione delle regole (in ordine)</div><div class="card-body py-2">';
+        if (!r.trace || !r.trace.length) {
+            html += '<div class="text-muted small">Nessuna regola abilitata per questa casella.</div>';
+        } else {
+            html += r.trace.map(t => {
+                const cls = t.matched ? (t.shadowedBy ? 'rule-card shadowed' : 'rule-card') : 'rule-card';
+                const icon = t.matched
+                    ? (t.shadowedBy ? '<i class="bi bi-eye-slash text-secondary"></i>'
+                                    : '<i class="bi bi-check-circle-fill verdict-ok"></i>')
+                    : '<i class="bi bi-x-circle verdict-ko"></i>';
+                let block = '<div class="' + cls + ' border rounded p-2 mb-2">' +
+                    '<div class="d-flex justify-content-between">' +
+                    '<div>' + icon + ' <strong>#' + t.rule.id + ' ' + escapeHtml(t.rule.name) + '</strong> ' +
+                    '<span class="text-muted small">priorita\' ' + t.rule.priority + '</span></div>' +
+                    (t.shadowedBy ? '<span class="badge text-bg-secondary">oscurata da #' + t.shadowedBy +
+                        '</span>' : '') + '</div>';
+                if (t.warning) {
+                    block += '<div class="alert alert-warning py-1 px-2 my-1 small">' +
+                        escapeHtml(t.warning) + '</div>';
+                }
+                block += '<ul class="list-unstyled small mb-0 mt-1">' + (t.verdicts || []).map(v =>
+                    '<li>' + (v.matched ? '<span class="verdict-ok">&#10003;</span>'
+                                        : '<span class="verdict-ko">&#10007;</span>') + ' ' +
+                    escapeHtml(v.field) + ' ' + escapeHtml(v.check) +
+                    ' <span class="text-muted">(valore: "' + escapeHtml(v.value || '') + '")</span>' +
+                    (v.note ? ' <em class="text-muted">' + escapeHtml(v.note) + '</em>' : '') + '</li>').join('') +
+                    '</ul></div>';
+                return block;
+            }).join('');
+        }
+        html += '</div></div>';
+
+        // 3. Card vincitrice + dry-run.
+        if (r.winner) {
+            html += '<div class="card mb-3 border-primary"><div class="card-header py-2 fw-semibold">' +
+                'Regola vincitrice: #' + r.winner.id + ' ' + escapeHtml(r.winner.name) + '</div>' +
+                '<div class="card-body py-2">' +
+                '<div class="small mb-2">Processore: <span class="mono">' +
+                escapeHtml(r.winner.processorId) + '</span></div>';
+            if (r.paramsError) {
+                html += '<div class="alert alert-danger py-2 small">' + escapeHtml(r.paramsError) + '</div>';
+            } else {
+                html += '<div class="small fw-semibold">Parametri effettivi (default applicati)</div>' +
+                    '<pre class="mono">' + escapeHtml(JSON.stringify(r.effectiveParams, null, 2)) + '</pre>';
+            }
+            if (r.dryRun) {
+                const d = r.dryRun;
+                const badge = d.status === 'ERROR' ? 'danger' : (d.status === 'SUCCESS' ? 'success' : 'secondary');
+                html += '<div class="mt-2"><span class="badge text-bg-' + badge + '">' + d.status + '</span> ' +
+                    escapeHtml(d.message || '') + '</div>';
+                if (d.errorType) {
+                    html += '<div class="small text-danger">errorType: ' + escapeHtml(d.errorType) +
+                        ' &mdash; ' + (d.retryable ? 'ritentabile' : 'terminale') + '</div>';
+                }
+                if (d.extractedJson) {
+                    let pretty = d.extractedJson;
+                    try { pretty = JSON.stringify(JSON.parse(d.extractedJson), null, 2); } catch (_) {}
+                    html += '<div class="small fw-semibold mt-2">Dati estratti</div><pre class="mono">' +
+                        escapeHtml(pretty) + '</pre>';
+                }
+                html += '<div class="small fw-semibold mt-2">Chiamate a BERLink che sarebbero partite (' +
+                    d.calls.length + ')</div>';
+                html += d.calls.length
+                    ? '<pre class="mono">' + escapeHtml(JSON.stringify(d.calls, null, 2)) + '</pre>'
+                    : '<div class="text-muted small">nessuna</div>';
+            }
+            html += '</div></div>';
+        } else {
+            html += '<div class="alert alert-warning py-2 small">Nessuna regola corrisponde: ' +
+                'questa mail finirebbe in /logs come NO_RULE.</div>';
+        }
+
+        document.getElementById('output').innerHTML = html;
+    }
+
+    async function init() {
+        try {
+            const accounts = await jfetch('/accounts/api');
+            const select = document.getElementById('accountId');
+            accounts.forEach(a => {
+                const o = document.createElement('option');
+                o.value = a.id; o.textContent = a.name;
+                select.appendChild(o);
+            });
+            // Arrivo da /rules con "Prova questa regola": precompilo dalla regola indicata.
+            const ruleId = new URLSearchParams(window.location.search).get('ruleId');
+            if (ruleId) {
+                const rule = await jfetch('/rules/api/' + ruleId);
+                if (rule.accountId) select.value = rule.accountId;
+                if (rule.senderPattern && rule.senderMatch !== 'REGEX') {
+                    document.getElementById('from').value = rule.senderPattern;
+                }
+                if (rule.subjectPattern && rule.subjectMatch !== 'REGEX') {
+                    document.getElementById('subject').value = rule.subjectPattern;
+                }
+                if (rule.attachmentPattern && rule.attachmentMatch !== 'REGEX') {
+                    document.getElementById('attachments').value = rule.attachmentPattern;
+                }
+            }
+        } catch (e) { showError(e); }
+    }
+
+    init();
+</script>
+</body>
+</html>

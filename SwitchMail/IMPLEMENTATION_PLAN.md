@@ -679,9 +679,12 @@ o una stringa SQL.
 
 Il seam si verifica meccanicamente, non a fiducia:
 ```bash
-grep -rn "JdbcTemplate" src/main/java | grep -v "/dao/\|SwitchMailDbConfig"   # deve essere vuoto
-grep -rniE "strftime|INSERT OR IGNORE|PRAGMA" src/main/java                    # solo SwitchMailDbConfig
+# SQL solo in dao/; le eccezioni sono il DataSource e le migration, legate al motore per definizione
+grep -rn "JdbcTemplate" src/main/java | grep -v "/dao/\|SwitchMailDbConfig\|SchemaMigrations"
+# jakarta.mail non esce da reader ed extractor
+grep -rn "^import jakarta.mail" src/main/java | grep -v "ImapMailReader\|MailContentExtractor"
 ```
+Entrambi devono restituire zero righe.
 
 ---
 

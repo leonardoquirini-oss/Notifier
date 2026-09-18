@@ -30,13 +30,13 @@ public class ProcessingAttemptDao {
     private static final RowMapper<Map<String, Object>> MAPPER = (rs, n) -> {
         Map<String, Object> m = new java.util.LinkedHashMap<>();
         m.put("attempt", rs.getInt("attempt"));
-        m.put("ruleId", rs.getObject("rule_id"));
+        m.put("ruleId", JdbcReads.longOrNull(rs, "rule_id"));
         m.put("processorId", rs.getString("processor_id"));
         m.put("status", rs.getString("status"));
         m.put("message", rs.getString("message"));
         m.put("errorType", rs.getString("error_type"));
         m.put("errorMessage", rs.getString("error_message"));
-        m.put("durationMs", rs.getObject("duration_ms"));
+        m.put("durationMs", JdbcReads.longOrNull(rs, "duration_ms"));
         m.put("triggeredBy", rs.getString("triggered_by"));
         m.put("startedAt", rs.getString("started_at"));
         m.put("finishedAt", rs.getString("finished_at"));

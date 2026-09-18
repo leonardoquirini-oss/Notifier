@@ -1,0 +1,7 @@
+From: noreply@terminal.it
+Subject: Solo HTML
+Message-ID: <html-1@terminal.it>
+MIME-Version: 1.0
+Content-Type: text/html; charset="utf-8"
+
+<html><head><style>p{color:red}</style></head><body><p>Prima riga</p><p>Seconda &amp; ultima</p><script>var x=1;</script></body></html>

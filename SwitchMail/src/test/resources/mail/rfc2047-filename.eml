@@ -1,0 +1,18 @@
+From: ufficio@ferrovie.it
+Subject: Allegato con nome codificato
+Message-ID: <rfc2047-1@ferrovie.it>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="confine-2047"
+
+--confine-2047
+Content-Type: text/plain; charset="utf-8"
+
+Vedi allegato.
+
+--confine-2047
+Content-Type: text/plain; charset="utf-8"
+Content-Disposition: attachment; filename="=?utf-8?Q?relazione_perch=C3=A9_s=C3=AC.txt?="
+
+contenuto
+
+--confine-2047--

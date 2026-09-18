@@ -100,6 +100,22 @@
 
     <build>
         <plugins>
+            <!--
+              Gli *IT girano insieme agli unit test: sono in-process (GreenMail), durano pochi secondi
+              e sono esattamente quelli che verificano la garanzia di non distruttivita'. Tenerli
+              dietro a un profilo separato significherebbe non eseguirli mai.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <includes>
+                        <include>**/*Test.java</include>
+                        <include>**/*IT.java</include>
+                    </includes>
+                </configuration>
+            </plugin>
+
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>

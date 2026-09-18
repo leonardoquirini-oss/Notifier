@@ -48,6 +48,24 @@ public class MailContentExtractor {
         this.props = props;
     }
 
+    /**
+     * Ricostruisce una mail dal MIME grezzo archiviato.
+     *
+     * <p>Sta qui e non nei service perche' jakarta.mail non deve uscire da questo file e dal reader:
+     * chi ricostruisce una mail per un retry o per /ruletest non deve sapere cosa sia una
+     * MimeMessage.
+     */
+    public ParsedMail extract(byte[] raw, long accountId, String accountName, String folder,
+                              long uidValidity, long uid) {
+        try {
+            MimeMessage message = new MimeMessage(jakarta.mail.Session.getInstance(new java.util.Properties()),
+                    new java.io.ByteArrayInputStream(raw));
+            return extract(message, accountId, accountName, folder, uidValidity, uid, raw.length);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("MIME non leggibile: " + e.getMessage(), e);
+        }
+    }
+
     public ParsedMail extract(MimeMessage message, long accountId, String accountName, String folder,
                               long uidValidity, long uid, int rawSizeBytes) {
         List<String> warnings = new ArrayList<>();

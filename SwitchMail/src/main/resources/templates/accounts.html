@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>SwitchMail &mdash; Caselle</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .8rem; }
+        table.accounts td { vertical-align: middle; font-size: .875rem; }
+    </style>
+</head>
+<body class="bg-light">
+<div class="container-fluid py-3">
+
+    <!-- Header + hamburger -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0">SwitchMail &mdash; Caselle</h4>
+        <div class="dropdown">
+            <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="dropdown" title="Menu">
+                <i class="bi bi-list"></i>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+                <li><a class="dropdown-item" href="/logs">Log elaborazioni</a></li>
+                <li><a class="dropdown-item" href="/rules">Regole</a></li>
+                <li><a class="dropdown-item" href="/ruletest">Test regola</a></li>
+                <li><a class="dropdown-item active" href="/accounts">Caselle</a></li>
+            </ul>
+        </div>
+    </div>
+
+    <div id="cryptoBanner" class="alert alert-danger d-none">
+        <strong>SWITCHMAIL_CREDS_KEY non configurata:</strong> impossibile salvare o usare credenziali.
+        <span class="mono" id="cryptoHint"></span>
+    </div>
+    <div id="alert" class="alert alert-danger d-none"></div>
+    <div id="ok" class="alert alert-success d-none"></div>
+
+    <div class="mb-2">
+        <button class="btn btn-primary btn-sm" onclick="openModal(null)">
+            <i class="bi bi-plus-lg"></i> Nuova casella
+        </button>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-sm table-hover bg-white accounts">
+            <thead class="table-light">
+            <tr>
+                <th>Nome</th>
+                <th>Server</th>
+                <th>Utente</th>
+                <th>Cartella</th>
+                <th>Modalita'</th>
+                <th>Attiva</th>
+                <th>Ultimo poll</th>
+                <th>Regole</th>
+                <th style="width:16rem">Azioni</th>
+            </tr>
+            </thead>
+            <tbody id="rows"></tbody>
+        </table>
+    </div>
+
+    <div id="testOutput"></div>
+</div>
+
+<!-- Modale casella -->
+<div class="modal fade" id="accountModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalTitle">Nuova casella</h5>
+                <button class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="modalError" class="alert alert-danger d-none"></div>
+
+                <div class="row g-2 mb-2">
+                    <div class="col-md-6">
+                        <label class="form-label small mb-1">Nome <span class="text-danger">*</span></label>
+                        <input id="aName" class="form-control form-control-sm">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small mb-1">Host <span class="text-danger">*</span></label>
+                        <input id="aHost" class="form-control form-control-sm" placeholder="exchange.azienda.it">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small mb-1">Porta</label>
+                        <input id="aPort" type="number" class="form-control form-control-sm" value="993">
+                    </div>
+                </div>
+
+                <div class="row g-2 mb-2">
+                    <div class="col-md-6">
+                        <label class="form-label small mb-1">Utente <span class="text-danger">*</span></label>
+                        <input id="aUsername" class="form-control form-control-sm">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small mb-1">Password</label>
+                        <input id="aPassword" type="password" class="form-control form-control-sm">
+                        <div class="form-text" id="passwordHint">Obbligatoria alla creazione.</div>
+                    </div>
+                </div>
+
+                <div class="row g-2 mb-2">
+                    <div class="col-md-3">
+                        <label class="form-label small mb-1">Cartella</label>
+                        <input id="aFolder" class="form-control form-control-sm" value="INBOX">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small mb-1">Modalita' di accesso</label>
+                        <select id="aAccessMode" class="form-select form-select-sm" onchange="syncPostAction()">
+                            <option value="READ_ONLY">READ_ONLY (casella altrui)</option>
+                            <option value="OWNED">OWNED (casella dedicata)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small mb-1">Dopo l'elaborazione</label>
+                        <select id="aPostAction" class="form-select form-select-sm" onchange="syncPostAction()">
+                            <option value="NONE">NONE</option>
+                            <option value="MARK_SEEN">MARK_SEEN</option>
+                            <option value="MOVE">MOVE</option>
+                            <option value="DELETE">DELETE</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small mb-1">Cartella di destinazione</label>
+                        <input id="aPostActionFolder" class="form-control form-control-sm" placeholder="Elaborate">
+                    </div>
+                </div>
+                <div id="readOnlyNote" class="alert alert-secondary py-2 small">
+                    In READ_ONLY il servizio apre la cartella con EXAMINE e usa BODY.PEEK: non marca come
+                    letto, non sposta, non cancella. Le azioni post-elaborazione sono disponibili solo su
+                    una casella dedicata (OWNED).
+                </div>
+
+                <div class="row g-2 mb-2">
+                    <div class="col-md-3">
+                        <label class="form-label small mb-1">Cron del poll</label>
+                        <input id="aPollCron" class="form-control form-control-sm" value="0 */2 * * * *">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small mb-1">Mail per poll</label>
+                        <input id="aMaxMessages" type="number" class="form-control form-control-sm" value="50">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small mb-1">Lookback iniziale (giorni)</label>
+                        <input id="aLookback" type="number" class="form-control form-control-sm" value="1">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small mb-1">Timeout lettura (ms)</label>
+                        <input id="aReadTimeout" type="number" class="form-control form-control-sm" value="30000">
+                    </div>
+                </div>
+
+                <div class="row g-2">
+                    <div class="col-md-3 form-check ms-2">
+                        <input class="form-check-input" type="checkbox" id="aUseSsl" checked>
+                        <label class="form-check-label small" for="aUseSsl">IMAPS (SSL)</label>
+                    </div>
+                    <div class="col-md-3 form-check">
+                        <input class="form-check-input" type="checkbox" id="aStartTls">
+                        <label class="form-check-label small" for="aStartTls">STARTTLS</label>
+                    </div>
+                    <div class="col-md-3 form-check">
+                        <input class="form-check-input" type="checkbox" id="aEnabled" checked>
+                        <label class="form-check-label small" for="aEnabled">Attiva</label>
+                    </div>
+                    <div class="col-md-3 form-check">
+                        <input class="form-check-input" type="checkbox" id="aTrustAll" onchange="syncTrust()">
+                        <label class="form-check-label small text-danger" for="aTrustAll">
+                            Non verificare il certificato
+                        </label>
+                    </div>
+                </div>
+                <div id="trustWarning" class="alert alert-danger py-2 small mt-2 d-none">
+                    Disattivando la verifica del certificato la connessione resta cifrata ma diventa
+                    intercettabile: usarlo solo su un server di prova.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline-secondary btn-sm" onclick="testDraft()">Testa connessione</button>
+                <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Annulla</button>
+                <button class="btn btn-primary btn-sm" onclick="save()">Salva</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    // ---- Helpers (copiati da TFPEventIngester/geofencing.html) ----
+    async function jfetch(url, opts) {
+        const res = await fetch(url, Object.assign({
+            headers: { 'Content-Type': 'application/json' }
+        }, opts));
+        if (!res.ok) {
+            let msg = res.statusText;
+            try { const j = await res.json(); if (j.error) msg = j.error; } catch (_) {}
+            throw new Error(msg);
+        }
+        return res.status === 204 ? null : res.json();
+    }
+
+    function escapeHtml(s) {
+        return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    function showError(e, inModal) {
+        const box = document.getElementById(inModal ? 'modalError' : 'alert');
+        box.textContent = e.message || String(e);
+        box.classList.remove('d-none');
+        if (!inModal) setTimeout(() => box.classList.add('d-none'), 8000);
+    }
+
+    function showOk(msg) {
+        const box = document.getElementById('ok');
+        box.textContent = msg;
+        box.classList.remove('d-none');
+        setTimeout(() => box.classList.add('d-none'), 6000);
+    }
+
+    function localTime(iso) {
+        return iso ? new Date(iso).toLocaleString('it-IT') : 'mai';
+    }
+
+    let accounts = [];
+    let editing = null;
+
+    async function load() {
+        try {
+            const crypto = await jfetch('/accounts/api/crypto');
+            if (!crypto.configured) {
+                document.getElementById('cryptoHint').textContent = crypto.hint;
+                document.getElementById('cryptoBanner').classList.remove('d-none');
+            }
+            accounts = await jfetch('/accounts/api');
+            render();
+        } catch (e) { showError(e); }
+    }
+
+    function render() {
+        const tbody = document.getElementById('rows');
+        if (!accounts.length) {
+            tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">' +
+                'Nessuna casella configurata.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = accounts.map(a => {
+            const pollBadge = !a.lastPollStatus ? ''
+                : (a.lastPollStatus === 'OK'
+                    ? ' <span class="badge text-bg-success">OK</span>'
+                    : ' <span class="badge text-bg-danger" title="' + escapeHtml(a.lastPollError || '') +
+                      '">ERROR</span>');
+            return '<tr>' +
+                '<td>' + escapeHtml(a.name) + '</td>' +
+                '<td class="mono">' + escapeHtml(a.host) + ':' + a.port + (a.useSsl ? ' ssl' : '') + '</td>' +
+                '<td>' + escapeHtml(a.username) +
+                    (a.passwordSet ? '' : ' <span class="badge text-bg-warning">senza password</span>') + '</td>' +
+                '<td>' + escapeHtml(a.folder) + '</td>' +
+                '<td>' + (a.accessMode === 'READ_ONLY'
+                    ? '<span class="badge text-bg-success" title="non distruttivo">READ_ONLY</span>'
+                    : '<span class="badge text-bg-primary">OWNED &middot; ' + a.postAction + '</span>') + '</td>' +
+                '<td>' + (a.enabled ? '<i class="bi bi-check-circle-fill text-success"></i>'
+                                    : '<i class="bi bi-slash-circle text-muted"></i>') + '</td>' +
+                '<td>' + localTime(a.lastPollAt) + pollBadge +
+                    (a.consecutiveFailures ? ' <span class="text-danger small">(' + a.consecutiveFailures +
+                        ' falliti)</span>' : '') + '</td>' +
+                '<td>' + a.ruleCount + '</td>' +
+                '<td class="text-nowrap">' +
+                '<button class="btn btn-outline-primary btn-sm" onclick="openModal(' + a.id +
+                ')" title="Modifica"><i class="bi bi-pencil"></i></button> ' +
+                '<button class="btn btn-outline-secondary btn-sm" onclick="testStored(' + a.id +
+                ')" title="Testa connessione"><i class="bi bi-plug"></i></button> ' +
+                '<button class="btn btn-outline-secondary btn-sm" onclick="preview(' + a.id +
+                ')" title="Anteprima ultime 10"><i class="bi bi-envelope"></i></button> ' +
+                '<button class="btn btn-outline-secondary btn-sm" onclick="poll(' + a.id +
+                ')" title="Poll adesso"><i class="bi bi-arrow-repeat"></i></button> ' +
+                '<button class="btn btn-outline-danger btn-sm" onclick="remove(' + a.id +
+                ')" title="Elimina"><i class="bi bi-trash"></i></button>' +
+                '</td></tr>';
+        }).join('');
+    }
+
+    function syncPostAction() {
+        const readOnly = document.getElementById('aAccessMode').value === 'READ_ONLY';
+        const postAction = document.getElementById('aPostAction');
+        // Specchia il CHECK dello schema: su READ_ONLY nessuna azione e' possibile.
+        postAction.disabled = readOnly;
+        if (readOnly) postAction.value = 'NONE';
+        document.getElementById('aPostActionFolder').disabled = postAction.value !== 'MOVE';
+        document.getElementById('readOnlyNote').classList.toggle('d-none', !readOnly);
+    }
+
+    function syncTrust() {
+        document.getElementById('trustWarning')
+            .classList.toggle('d-none', !document.getElementById('aTrustAll').checked);
+    }
+
+    function openModal(id) {
+        editing = id ? accounts.find(a => a.id === id) : null;
+        document.getElementById('modalError').classList.add('d-none');
+        document.getElementById('modalTitle').textContent = editing ? 'Modifica casella' : 'Nuova casella';
+        const v = (field, def) => editing ? editing[field] : def;
+        document.getElementById('aName').value = v('name', '');
+        document.getElementById('aHost').value = v('host', '');
+        document.getElementById('aPort').value = v('port', 993);
+        document.getElementById('aUsername').value = v('username', '');
+        document.getElementById('aPassword').value = '';
+        document.getElementById('aPassword').placeholder =
+            editing && editing.passwordSet ? '•••••• (impostata)' : '';
+        document.getElementById('passwordHint').textContent = editing
+            ? 'Lasciare vuoto per non modificarla.'
+            : 'Obbligatoria alla creazione.';
+        document.getElementById('aFolder').value = v('folder', 'INBOX');
+        document.getElementById('aAccessMode').value = v('accessMode', 'READ_ONLY');
+        document.getElementById('aPostAction').value = v('postAction', 'NONE');
+        document.getElementById('aPostActionFolder').value = v('postActionFolder', '') || '';
+        document.getElementById('aPollCron').value = v('pollCron', '0 */2 * * * *');
+        document.getElementById('aMaxMessages').value = v('maxMessagesPerPoll', 50);
+        document.getElementById('aLookback').value = v('initialLookbackDays', 1);
+        document.getElementById('aReadTimeout').value = v('readTimeoutMs', 30000);
+        document.getElementById('aUseSsl').checked = editing ? editing.useSsl : true;
+        document.getElementById('aStartTls').checked = editing ? editing.startTls : false;
+        document.getElementById('aEnabled').checked = editing ? editing.enabled : true;
+        document.getElementById('aTrustAll').checked = editing ? editing.trustAllCerts : false;
+        syncPostAction();
+        syncTrust();
+        new bootstrap.Modal(document.getElementById('accountModal')).show();
+    }
+
+    function body() {
+        return {
+            id: editing ? editing.id : null,
+            name: document.getElementById('aName').value,
+            host: document.getElementById('aHost').value,
+            port: parseInt(document.getElementById('aPort').value, 10),
+            username: document.getElementById('aUsername').value,
+            password: document.getElementById('aPassword').value || null,
+            folder: document.getElementById('aFolder').value,
+            accessMode: document.getElementById('aAccessMode').value,
+            postAction: document.getElementById('aPostAction').value,
+            postActionFolder: document.getElementById('aPostActionFolder').value || null,
+            pollCron: document.getElementById('aPollCron').value,
+            maxMessagesPerPoll: parseInt(document.getElementById('aMaxMessages').value, 10),
+            initialLookbackDays: parseInt(document.getElementById('aLookback').value, 10),
+            readTimeoutMs: parseInt(document.getElementById('aReadTimeout').value, 10),
+            useSsl: document.getElementById('aUseSsl').checked,
+            startTls: document.getElementById('aStartTls').checked,
+            enabled: document.getElementById('aEnabled').checked,
+            trustAllCerts: document.getElementById('aTrustAll').checked
+        };
+    }
+
+    async function save() {
+        try {
+            const b = body();
+            if (editing) {
+                await jfetch('/accounts/api/' + editing.id, { method: 'PUT', body: JSON.stringify(b) });
+                if (b.password) {
+                    await jfetch('/accounts/api/' + editing.id + '/password',
+                        { method: 'PUT', body: JSON.stringify({ password: b.password }) });
+                }
+            } else {
+                await jfetch('/accounts/api', { method: 'POST', body: JSON.stringify(b) });
+            }
+            bootstrap.Modal.getInstance(document.getElementById('accountModal')).hide();
+            await load();
+        } catch (e) { showError(e, true); }
+    }
+
+    async function testDraft() {
+        try {
+            const r = await jfetch('/accounts/api/test', { method: 'POST', body: JSON.stringify(body()) });
+            renderTest(r);
+            bootstrap.Modal.getInstance(document.getElementById('accountModal')).hide();
+        } catch (e) { showError(e, true); }
+    }
+
+    async function testStored(id) {
+        try { renderTest(await jfetch('/accounts/api/' + id + '/test', { method: 'POST' })); }
+        catch (e) { showError(e); }
+    }
+
+    function renderTest(r) {
+        let html = '<div class="card mt-3"><div class="card-header py-2 fw-semibold">Test connessione</div>' +
+            '<div class="card-body py-2">';
+        if (!r.ok) {
+            html += '<div class="alert alert-danger py-2 mb-0">' + escapeHtml(r.error || 'connessione fallita') +
+                '</div>';
+        } else {
+            // Il campo che conta: trasforma la promessa architetturale in un fatto osservabile.
+            html += '<div class="alert ' + (r.openedMode === 'READ_ONLY' ? 'alert-success' : 'alert-primary') +
+                ' py-2"><strong>Cartella aperta in ' + r.openedMode + '</strong>' +
+                (r.openedMode === 'READ_ONLY' ? ' &mdash; nessun flag modificato' : '') + '</div>' +
+                '<dl class="row small mb-0">' +
+                '<dt class="col-sm-3">Cartella</dt><dd class="col-sm-9">' + escapeHtml(r.folder) + '</dd>' +
+                '<dt class="col-sm-3">UIDVALIDITY</dt><dd class="col-sm-9 mono">' + r.uidValidity + '</dd>' +
+                '<dt class="col-sm-3">Messaggi</dt><dd class="col-sm-9">' + r.messageCount +
+                ' (' + r.unreadCount + ' non letti)</dd>' +
+                '<dt class="col-sm-3">Durata</dt><dd class="col-sm-9">' + r.durationMs + ' ms</dd></dl>';
+            if (r.lastMessages && r.lastMessages.length) {
+                html += renderPreviewTable(r.lastMessages);
+            }
+        }
+        html += '</div></div>';
+        document.getElementById('testOutput').innerHTML = html;
+    }
+
+    async function preview(id) {
+        try {
+            const messages = await jfetch('/accounts/api/' + id + '/preview?n=10');
+            document.getElementById('testOutput').innerHTML =
+                '<div class="card mt-3"><div class="card-header py-2 fw-semibold">Ultime 10 mail ' +
+                '(solo intestazioni: nessun contenuto scaricato)</div><div class="card-body py-2">' +
+                renderPreviewTable(messages) + '</div></div>';
+        } catch (e) { showError(e); }
+    }
+
+    function renderPreviewTable(messages) {
+        return '<table class="table table-sm mt-2"><thead><tr><th>UID</th><th>Da</th><th>Oggetto</th>' +
+            '<th>Ricevuta</th><th>Letta</th><th></th></tr></thead><tbody>' +
+            messages.map(m => '<tr><td class="mono">' + m.uid + '</td><td>' +
+                escapeHtml(m.fromName || m.from || '') + '</td><td>' + escapeHtml(m.subject || '') + '</td><td>' +
+                localTime(m.receivedAt) + '</td><td>' + (m.seen ? 'si' : 'no') + '</td>' +
+                '<td><a class="btn btn-outline-primary btn-sm" href="/rules?from=' +
+                encodeURIComponent(m.from || '') + '&subject=' + encodeURIComponent(m.subject || '') +
+                '">Crea regola da questa mail</a></td></tr>').join('') +
+            '</tbody></table>';
+    }
+
+    async function poll(id) {
+        try {
+            const r = await jfetch('/accounts/api/' + id + '/poll', { method: 'POST' });
+            showOk(r.started ? 'Poll avviato.' : 'Un poll era gia\' in corso su questa casella.');
+            setTimeout(load, 3000);
+        } catch (e) { showError(e); }
+    }
+
+    async function remove(id) {
+        if (!confirm('Eliminare la casella? Spariscono anche le sue regole e il suo storico.')) return;
+        try { await jfetch('/accounts/api/' + id, { method: 'DELETE' }); await load(); }
+        catch (e) { showError(e); }
+    }
+
+    load();
+</script>
+</body>
+</html>

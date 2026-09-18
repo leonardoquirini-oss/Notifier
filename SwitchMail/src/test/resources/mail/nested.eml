@@ -1,0 +1,29 @@
+From: forecast@terminal.it
+Subject: FORECAST annidato
+Message-ID: <nested-1@terminal.it>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="confine-out"
+
+--confine-out
+Content-Type: multipart/alternative; boundary="confine-in"
+
+--confine-in
+Content-Type: text/plain; charset="utf-8"
+
+TESTO ANNIDATO
+
+--confine-in
+Content-Type: text/html; charset="utf-8"
+
+<p>TESTO ANNIDATO</p>
+
+--confine-in--
+
+--confine-out
+Content-Type: application/pdf; name="listato.pdf"
+Content-Disposition: attachment; filename="listato.pdf"
+Content-Transfer-Encoding: base64
+
+JVBERi0xLjQK
+
+--confine-out--

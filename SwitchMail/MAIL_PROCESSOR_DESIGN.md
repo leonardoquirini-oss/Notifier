@@ -2,8 +2,14 @@
 
 > Microservizio separato che processa in automatico le email di aggiornamento
 > inviate da sistemi esterni, oggi lette a mano da un dipendente.
-> Stato: **design approvato**, implementazione da avviare. Alcuni dettagli
-> (mailbox, formati) in attesa di verifica con l'IT / definizione formati.
+>
+> **Stato implementazione (2026-09-18): il servizio è costruito e testato.**
+> Fase 1 del §5 completata (scaffold, pipeline, UI, deploy); restano aperte la fase 2 (credenziali e
+> casella reale, in attesa dell'IT) e la fase 3 (formati del `.txt` treno e del body forecast, con i
+> relativi endpoint BERLink). I due sub-processori girano in modalità COLLECT: acquisiscono e
+> archiviano il MIME senza agire, così la raccolta produce le fixture con cui scrivere i parser.
+> Il punto aperto §8 "regole in YAML statico vs tabella DB" è chiuso: regole in SQLite con UI.
+> Il come è in `IMPLEMENTATION_PLAN.md`, lo stato di dettaglio in `IMPLEMENTATION_STATUS.md`.
 
 ---
 

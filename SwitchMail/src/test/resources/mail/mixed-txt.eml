@@ -1,0 +1,19 @@
+From: "Mario Rossi" <mario.rossi@ferrovie.it>
+Subject: AVVISI PARTENZA TRENO 4521 17/09/2026
+Message-ID: <mix-1@ferrovie.it>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="confine-mix"
+
+--confine-mix
+Content-Type: text/plain; charset="utf-8"
+
+In allegato il dettaglio.
+
+--confine-mix
+Content-Type: text/plain; charset="utf-8"; name="treno.txt"
+Content-Disposition: attachment; filename="treno.txt"
+
+TRENO;4521
+DATA;17/09/2026
+
+--confine-mix--

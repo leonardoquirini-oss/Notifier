@@ -38,7 +38,7 @@ public class RuleDao {
             rs.getLong("id"),
             rs.getString("name"),
             rs.getString("description"),
-            (Long) rs.getObject("account_id"),
+            JdbcReads.longOrNull(rs, "account_id"),
             rs.getBoolean("enabled"),
             rs.getInt("priority"),
             rs.getBoolean("stop_on_match"),

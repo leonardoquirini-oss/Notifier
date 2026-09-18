@@ -1,0 +1,18 @@
+From: forecast@terminal.it
+Subject: FORECAST OF TERMINAL / INFO: GE88 12345
+Message-ID: <alt-1@terminal.it>
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="confine-alt"
+
+--confine-alt
+Content-Type: text/plain; charset="utf-8"
+
+TERMINAL: GE88
+SLOT: 12345
+
+--confine-alt
+Content-Type: text/html; charset="utf-8"
+
+<html><body><p>TERMINAL: GE88</p><p>SLOT: 12345</p></body></html>
+
+--confine-alt--

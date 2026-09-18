@@ -67,6 +67,28 @@ public final class JsonUtil {
         }
     }
 
+    /**
+     * Lista di id.
+     *
+     * <p>Jackson deserializza i numeri JSON come Integer quando ci stanno, quindi una
+     * {@code List<Long>} ottenuta per cast esploderebbe al primo accesso: la conversione va fatta
+     * elemento per elemento.
+     */
+    public static List<Long> readLongList(String json) {
+        if (json == null || json.isBlank()) {
+            return List.of();
+        }
+        try {
+            List<?> raw = MAPPER.readValue(json, List.class);
+            return raw.stream()
+                    .filter(java.util.Objects::nonNull)
+                    .map(v -> v instanceof Number n ? n.longValue() : Long.valueOf(String.valueOf(v)))
+                    .toList();
+        } catch (JsonProcessingException e) {
+            throw new IllegalArgumentException("JSON non valido: " + e.getOriginalMessage(), e);
+        }
+    }
+
     /** Valida senza interpretare: serve ai parametri di tipo JSON, che il processore legge da se'. */
     public static void requireValidJson(String json, String what) {
         try {

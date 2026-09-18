@@ -1,0 +1,51 @@
+version: '3'
+
+tasks:
+
+  stop-sm:
+    cmds:
+      - docker compose -f docker-compose.yml stop switchmail
+    silent: true
+
+  build-sm:
+    desc: Build con i test (il default: la suite deve restare viva)
+    cmds:
+      - docker compose -f docker-compose.yml build switchmail
+    silent: true
+
+  build-sm-fast:
+    desc: Build senza test, solo per emergenze
+    cmds:
+      - docker compose -f docker-compose.yml build --build-arg SKIP_TESTS=true switchmail
+    silent: true
+
+  sm:
+    desc: Stop + build
+    cmds:
+      - task stop-sm
+      - task build-sm
+    silent: true
+
+  logs-sm:
+    cmds:
+      - docker compose logs -f switchmail
+
+  up:
+    cmds:
+      - docker compose -f docker-compose.yml up -d
+    silent: true
+
+  restart:
+    cmds:
+      - docker compose down && docker compose -f docker-compose.yml up -d
+    silent: true
+
+  test:
+    desc: Suite completa in locale (unit + GreenMail)
+    cmds:
+      - mvn -B test
+
+  db:
+    desc: Apre il DB SQLite del container
+    cmds:
+      - docker exec -it switchmail sh -c 'sqlite3 /app/data/switchmail.db' || echo "sqlite3 non presente nell'immagine: usare 'docker cp switchmail:/app/data/switchmail.db .'"

@@ -62,7 +62,7 @@ public class MailAccountDao {
             TimestampUtil.parse(rs.getString("last_poll_at")),
             rs.getString("last_poll_status"),
             rs.getString("last_poll_error"),
-            (Integer) rs.getObject("last_poll_fetched"),
+            JdbcReads.intOrNull(rs, "last_poll_fetched"),
             rs.getInt("consecutive_failures"),
             TimestampUtil.parse(rs.getString("created_at")),
             TimestampUtil.parse(rs.getString("updated_at")));

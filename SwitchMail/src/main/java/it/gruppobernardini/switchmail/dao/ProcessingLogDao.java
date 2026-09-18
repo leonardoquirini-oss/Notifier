@@ -52,10 +52,10 @@ public class ProcessingLogDao {
             TimestampUtil.parse(rs.getString("mail_sent_at")),
             TimestampUtil.parse(rs.getString("mail_received_at")),
             JsonUtil.readStringList(rs.getString("attachment_names")),
-            (Integer) rs.getObject("mail_size_bytes"),
-            (Long) rs.getObject("rule_id"),
+            JdbcReads.intOrNull(rs, "mail_size_bytes"),
+            JdbcReads.longOrNull(rs, "rule_id"),
             rs.getString("rule_name"),
-            readIds(rs.getString("matched_rule_ids")),
+            JsonUtil.readLongList(rs.getString("matched_rule_ids")),
             rs.getString("processor_id"),
             ProcessingStatus.of(rs.getString("status")),
             rs.getInt("attempt"),
@@ -67,7 +67,7 @@ public class ProcessingLogDao {
             rs.getString("error_type"),
             rs.getString("error_message"),
             rs.getString("error_stack"),
-            (Long) rs.getObject("duration_ms"),
+            JdbcReads.longOrNull(rs, "duration_ms"),
             TimestampUtil.parse(rs.getString("claimed_at")),
             TimestampUtil.parse(rs.getString("processed_at")),
             TimestampUtil.parse(rs.getString("next_retry_at")),
@@ -75,10 +75,6 @@ public class ProcessingLogDao {
             rs.getString("resolved_note"),
             TimestampUtil.parse(rs.getString("created_at")),
             rs.getObject("raw_present") != null);
-
-    private static List<Long> readIds(String json) {
-        return JsonUtil.readStringList(json).stream().map(s -> Long.valueOf(String.valueOf(s))).toList();
-    }
 
     /**
      * Il claim atomico. <b>E' la decisione di dedup</b>, in una sola statement.
@@ -117,14 +113,14 @@ public class ProcessingLogDao {
      * Chiave secondaria, usata solo dopo un reset di UIDVALIDITY: Exchange non garantisce la
      * presenza del Message-ID sui messaggi generati internamente, ed e' falsificabile dal client.
      */
-    public boolean existsByInternetMessageId(long accountId, String internetMessageId) {
+    public boolean existsByInternetMessageId(long accountId, String internetMessageId, long excludeLogId) {
         if (internetMessageId == null || internetMessageId.isBlank()) {
             return false;
         }
         Integer n = jdbc.queryForObject("""
                 SELECT COUNT(*) FROM mail_processing_log
-                WHERE account_id = ? AND internet_message_id = ?
-                """, Integer.class, accountId, internetMessageId);
+                WHERE account_id = ? AND internet_message_id = ? AND id <> ?
+                """, Integer.class, accountId, internetMessageId, excludeLogId);
         return n != null && n > 0;
     }
 

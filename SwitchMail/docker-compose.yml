@@ -1,0 +1,39 @@
+# Niente chiave "version": obsoleta in Compose v2, genera un warning a ogni comando.
+services:
+  switchmail:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SKIP_TESTS: ${SKIP_TESTS:-false}
+    container_name: switchmail
+    hostname: switchmail
+    ports:
+      # Publish su loopback, NON su 0.0.0.0: la UI non ha autenticazione e permette di editare le
+      # password delle caselle. Su 0.0.0.0 sarebbe raggiungibile da tutta la LAN dell'host Docker.
+      - "127.0.0.1:8105:8080"
+    environment:
+      # Nessun segreto ha un default: se manca, Compose si ferma qui invece di far partire un
+      # servizio che fallira' al primo salvataggio.
+      # I messaggi vanno quotati: contengono ":" e senza apici il file non e' YAML valido.
+      SWITCHMAIL_CREDS_KEY: "${SWITCHMAIL_CREDS_KEY:?generare con openssl rand -base64 32}"
+      BERLINK_API_KEY: "${BERLINK_API_KEY:?serve la API key di BERLink}"
+      HEALTH_API_KEY: "${HEALTH_API_KEY:?serve la API key per /api/health/ready}"
+      BERLINK_BASE_URL: ${BERLINK_BASE_URL:-http://backend:8080}
+      TZ: Europe/Rome
+    volumes:
+      # Configurazione fuori dall'immagine, come gli altri processori
+      - /opt/berlink/switchmail/data/application.yml:/app/application.yml:ro
+      # DB SQLite: sopravvive a restart e rebuild
+      - switchmail-data:/app/data
+    networks:
+      - berlink-network
+    restart: unless-stopped
+
+volumes:
+  switchmail-data:
+
+networks:
+  berlink-network:
+    external: true
+    name: berlink-dev_berlink-network

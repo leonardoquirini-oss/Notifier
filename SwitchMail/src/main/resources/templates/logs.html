@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>SwitchMail &mdash; Log elaborazioni</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .8rem; }
+        .row-detail { background: #f8f9fa; }
+        .row-detail pre { max-height: 320px; overflow: auto; margin-bottom: .5rem; }
+        table.logs td { vertical-align: middle; font-size: .875rem; }
+        .subject { max-width: 34rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .clickable { cursor: pointer; }
+    </style>
+</head>
+<body class="bg-light">
+<div class="container-fluid py-3">
+
+    <!-- Header + hamburger -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0">SwitchMail &mdash; Log elaborazioni</h4>
+        <div class="dropdown">
+            <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="dropdown" title="Menu">
+                <i class="bi bi-list"></i>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+                <li><a class="dropdown-item active" href="/logs">Log elaborazioni</a></li>
+                <li><a class="dropdown-item" href="/rules">Regole</a></li>
+                <li><a class="dropdown-item" href="/ruletest">Test regola</a></li>
+                <li><a class="dropdown-item" href="/accounts">Caselle</a></li>
+            </ul>
+        </div>
+    </div>
+
+    <div id="cryptoBanner" class="alert alert-danger d-none">
+        <strong>SWITCHMAIL_CREDS_KEY non configurata:</strong> impossibile salvare o usare credenziali.
+        <span class="mono" id="cryptoHint"></span>
+    </div>
+    <div id="alert" class="alert alert-danger d-none"></div>
+
+    <!-- Contatori -->
+    <div class="row g-2 mb-3">
+        <div class="col-6 col-md-3">
+            <div class="card card-body py-2 clickable" onclick="preset(['DEAD_LETTER'])">
+                <div class="text-muted small">Dead letter</div>
+                <div class="fs-4 fw-semibold text-danger" id="cDead">&mdash;</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card card-body py-2 clickable" onclick="preset(['NO_RULE'])">
+                <div class="text-muted small">Senza regola</div>
+                <div class="fs-4 fw-semibold text-warning" id="cNoRule">&mdash;</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card card-body py-2 clickable" onclick="preset(['RETRY_SCHEDULED'])">
+                <div class="text-muted small">In attesa di retry</div>
+                <div class="fs-4 fw-semibold text-info" id="cRetry">&mdash;</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="card card-body py-2 clickable" onclick="preset(['SUCCESS'])">
+                <div class="text-muted small">Riuscite</div>
+                <div class="fs-4 fw-semibold text-success" id="cOk">&mdash;</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtri -->
+    <div class="card card-body py-2 mb-3">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-2">
+                <label class="form-label small mb-1">Casella</label>
+                <select id="fAccount" class="form-select form-select-sm"><option value="">Tutte</option></select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small mb-1">Stato</label>
+                <select id="fStatus" class="form-select form-select-sm" multiple size="3">
+                    <option value="DEAD_LETTER" selected>DEAD_LETTER</option>
+                    <option value="NO_RULE" selected>NO_RULE</option>
+                    <option value="RETRY_SCHEDULED">RETRY_SCHEDULED</option>
+                    <option value="IN_PROGRESS">IN_PROGRESS</option>
+                    <option value="SUCCESS">SUCCESS</option>
+                    <option value="SKIPPED">SKIPPED</option>
+                    <option value="RESOLVED">RESOLVED</option>
+                </select>
+                <div class="form-text">Preset iniziale: &laquo;Da gestire&raquo;.</div>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small mb-1">Regola</label>
+                <select id="fRule" class="form-select form-select-sm"><option value="">Tutte</option></select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small mb-1">Testo (oggetto o mittente)</label>
+                <input id="fText" class="form-control form-control-sm" placeholder="AVVISI PARTENZA">
+            </div>
+            <div class="col-md-2 d-grid gap-1">
+                <button class="btn btn-primary btn-sm" onclick="reload()">Filtra</button>
+                <button class="btn btn-outline-secondary btn-sm" onclick="preset(['DEAD_LETTER','NO_RULE'])">
+                    Da gestire
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="d-flex gap-2 mb-2">
+        <button class="btn btn-outline-primary btn-sm" onclick="retrySelected()">
+            <i class="bi bi-arrow-clockwise"></i> Riprova selezionate
+        </button>
+        <span class="text-muted small align-self-center" id="selInfo"></span>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-sm table-hover bg-white logs">
+            <thead class="table-light">
+            <tr>
+                <th style="width:2rem"><input type="checkbox" id="selAll" onclick="toggleAll(this)"></th>
+                <th>Quando</th>
+                <th>Casella</th>
+                <th>Mittente</th>
+                <th>Oggetto</th>
+                <th>Stato</th>
+                <th>Regola</th>
+                <th>Tent.</th>
+                <th style="width:12rem">Azioni</th>
+            </tr>
+            </thead>
+            <tbody id="rows"></tbody>
+        </table>
+    </div>
+    <button id="more" class="btn btn-outline-secondary btn-sm d-none" onclick="loadMore()">Carica altre</button>
+</div>
+
+<!-- Modale "vedi parsed" -->
+<div class="modal fade" id="parsedModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Mail come l'ha vista il parser</h5>
+                <button class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body mono" id="parsedBody"></div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    // ---- Helpers (copiati da TFPEventIngester/geofencing.html) ----
+    async function jfetch(url, opts) {
+        const res = await fetch(url, Object.assign({
+            headers: { 'Content-Type': 'application/json' }
+        }, opts));
+        if (!res.ok) {
+            let msg = res.statusText;
+            try { const j = await res.json(); if (j.error) msg = j.error; } catch (_) {}
+            throw new Error(msg);
+        }
+        return res.status === 204 ? null : res.json();
+    }
+
+    function escapeHtml(s) {
+        return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    function showError(e) {
+        const box = document.getElementById('alert');
+        box.textContent = e.message || String(e);
+        box.classList.remove('d-none');
+        setTimeout(() => box.classList.add('d-none'), 8000);
+    }
+
+    // Lo storage e' in UTC: la formattazione in orario locale avviene qui, mai in Java.
+    function localTime(iso) {
+        return iso ? new Date(iso).toLocaleString('it-IT') : '';
+    }
+
+    const BADGE = {
+        SUCCESS: 'success', SKIPPED: 'secondary', NO_RULE: 'warning text-dark',
+        RETRY_SCHEDULED: 'info text-dark', DEAD_LETTER: 'danger', IN_PROGRESS: 'primary', RESOLVED: 'dark'
+    };
+
+    let cursor = null;
+
+    function filters() {
+        const p = new URLSearchParams();
+        const account = document.getElementById('fAccount').value;
+        if (account) p.append('accountId', account);
+        [...document.getElementById('fStatus').selectedOptions].forEach(o => p.append('status', o.value));
+        const rule = document.getElementById('fRule').value;
+        if (rule) p.append('ruleId', rule);
+        const text = document.getElementById('fText').value.trim();
+        if (text) p.append('text', text);
+        return p;
+    }
+
+    function preset(statuses) {
+        [...document.getElementById('fStatus').options].forEach(o => o.selected = statuses.includes(o.value));
+        reload();
+    }
+
+    async function reload() {
+        cursor = null;
+        document.getElementById('rows').innerHTML = '';
+        await loadMore();
+    }
+
+    async function loadMore() {
+        try {
+            const p = filters();
+            if (cursor) { p.append('cursorCreatedAt', cursor.createdAt); p.append('cursorId', cursor.id); }
+            const page = await jfetch('/logs/api?' + p.toString());
+            page.rows.forEach(renderRow);
+            cursor = page.nextCursorId ? { createdAt: page.nextCursorCreatedAt, id: page.nextCursorId } : null;
+            document.getElementById('more').classList.toggle('d-none', !cursor);
+            if (!page.rows.length && !document.getElementById('rows').children.length) {
+                document.getElementById('rows').innerHTML =
+                    '<tr><td colspan="9" class="text-center text-muted py-4">Nessuna riga con questi filtri</td></tr>';
+            }
+        } catch (e) { showError(e); }
+    }
+
+    function renderRow(r) {
+        const tr = document.createElement('tr');
+        tr.innerHTML =
+            '<td><input type="checkbox" class="sel" value="' + r.id + '" onchange="updateSel()"></td>' +
+            '<td class="text-nowrap">' + localTime(r.createdAt) + '</td>' +
+            '<td>' + escapeHtml(r.accountName || '') + '</td>' +
+            '<td>' + escapeHtml(r.mailFrom || '') + '</td>' +
+            '<td class="subject clickable" onclick="toggleDetail(' + r.id + ')" title="' +
+                escapeHtml(r.mailSubject || '') + '">' + escapeHtml(r.mailSubject || '(senza oggetto)') + '</td>' +
+            '<td><span class="badge text-bg-' + (BADGE[r.status] || 'secondary') + '">' + r.status + '</span></td>' +
+            '<td>' + escapeHtml(r.ruleName || '') + '</td>' +
+            '<td>' + r.attempt + '/' + r.maxAttempts + '</td>' +
+            '<td class="text-nowrap">' +
+                '<button class="btn btn-outline-primary btn-sm" title="Riprova" onclick="retryOne(' + r.id + ')">' +
+                    '<i class="bi bi-arrow-clockwise"></i></button> ' +
+                '<button class="btn btn-outline-success btn-sm" title="Segna risolta" onclick="resolve(' + r.id + ')">' +
+                    '<i class="bi bi-check2"></i></button> ' +
+                (r.rawAvailable
+                    ? '<a class="btn btn-outline-secondary btn-sm" title="Scarica .eml" href="/logs/api/' + r.id +
+                      '/eml"><i class="bi bi-download"></i></a> ' +
+                      '<button class="btn btn-outline-secondary btn-sm" title="Vedi parsed" onclick="parsed(' +
+                      r.id + ')"><i class="bi bi-eye"></i></button>'
+                    : '<span class="text-muted small">no MIME</span>') +
+            '</td>';
+        document.getElementById('rows').appendChild(tr);
+
+        const detail = document.createElement('tr');
+        detail.className = 'row-detail d-none';
+        detail.id = 'detail-' + r.id;
+        detail.innerHTML = '<td colspan="9"><div class="small">Caricamento&hellip;</div></td>';
+        document.getElementById('rows').appendChild(detail);
+    }
+
+    async function toggleDetail(id) {
+        const row = document.getElementById('detail-' + id);
+        if (!row.classList.contains('d-none')) { row.classList.add('d-none'); return; }
+        row.classList.remove('d-none');
+        try {
+            const d = await jfetch('/logs/api/' + id);
+            const e = d.entry;
+            let html = '<dl class="row small mb-2">';
+            html += '<dt class="col-sm-2">Messaggio</dt><dd class="col-sm-10">' + escapeHtml(e.message || '') + '</dd>';
+            if (e.actionRef) html += '<dt class="col-sm-2">Azione</dt><dd class="col-sm-10 mono">' +
+                escapeHtml(e.actionRef) + '</dd>';
+            html += '<dt class="col-sm-2">Identita&#39;</dt><dd class="col-sm-10 mono">' +
+                escapeHtml(e.folder) + ' uidvalidity=' + e.uidValidity + ' uid=' + e.uid + '</dd>';
+            if (e.nextRetryAt) html += '<dt class="col-sm-2">Prossimo retry</dt><dd class="col-sm-10">' +
+                localTime(e.nextRetryAt) + '</dd>';
+            if (e.resolvedNote) html += '<dt class="col-sm-2">Nota</dt><dd class="col-sm-10">' +
+                escapeHtml(e.resolvedNote) + '</dd>';
+            html += '</dl>';
+
+            if (e.warnings && e.warnings.length) {
+                html += '<div class="alert alert-warning py-2 small">' +
+                    e.warnings.map(escapeHtml).join('<br>') + '</div>';
+            }
+            if (e.extractedJson) {
+                let pretty = e.extractedJson;
+                try { pretty = JSON.stringify(JSON.parse(e.extractedJson), null, 2); } catch (_) {}
+                html += '<div class="small fw-semibold">Dati estratti</div><pre class="mono">' +
+                    escapeHtml(pretty) + '</pre>';
+            }
+            if (e.errorType) {
+                html += '<div class="small fw-semibold text-danger">Errore: ' + escapeHtml(e.errorType) + '</div>' +
+                    '<div class="small">' + escapeHtml(e.errorMessage || '') + '</div>';
+                if (e.errorStack) {
+                    html += '<details class="mt-1"><summary class="small">stack trace</summary><pre class="mono">' +
+                        escapeHtml(e.errorStack) + '</pre></details>';
+                }
+            }
+            if (d.attempts && d.attempts.length) {
+                html += '<div class="small fw-semibold mt-2">Tentativi</div><ul class="small mb-0">';
+                d.attempts.forEach(a => {
+                    html += '<li>#' + a.attempt + ' ' + a.status + ' (' + a.triggeredBy + ') ' +
+                        (a.errorType ? '<span class="text-danger">' + escapeHtml(a.errorType) + '</span> ' : '') +
+                        escapeHtml(a.message || a.errorMessage || '') +
+                        (a.durationMs != null ? ' &mdash; ' + a.durationMs + ' ms' : '') + '</li>';
+                });
+                html += '</ul>';
+            }
+            row.innerHTML = '<td colspan="9">' + html + '</td>';
+        } catch (e) { showError(e); }
+    }
+
+    async function retryOne(id) {
+        try { await jfetch('/logs/api/' + id + '/retry', { method: 'POST' }); await reload(); }
+        catch (e) { showError(e); }
+    }
+
+    async function retrySelected() {
+        const ids = [...document.querySelectorAll('.sel:checked')].map(c => parseInt(c.value, 10));
+        if (!ids.length) { showError(new Error('nessuna riga selezionata')); return; }
+        try {
+            const r = await jfetch('/logs/api/retry', { method: 'POST', body: JSON.stringify({ ids }) });
+            await reload();
+            alert('Riprovate ' + r.retried + ' righe su ' + r.requested);
+        } catch (e) { showError(e); }
+    }
+
+    async function resolve(id) {
+        const note = prompt('Nota (perche\' e\' risolta?)');
+        if (note === null) return;
+        try {
+            await jfetch('/logs/api/' + id + '/resolve', { method: 'POST', body: JSON.stringify({ note }) });
+            await reload();
+        } catch (e) { showError(e); }
+    }
+
+    async function parsed(id) {
+        try {
+            const m = await jfetch('/logs/api/' + id + '/parsed');
+            let html = '<dl class="row small">' +
+                '<dt class="col-sm-3">Da</dt><dd class="col-sm-9">' + escapeHtml(m.fromFull || '') + '</dd>' +
+                '<dt class="col-sm-3">Oggetto</dt><dd class="col-sm-9">' + escapeHtml(m.subject || '') + '</dd>' +
+                '<dt class="col-sm-3">Ricevuta</dt><dd class="col-sm-9">' + localTime(m.receivedAt) + '</dd>' +
+                '</dl>';
+            if (m.warnings && m.warnings.length) {
+                html += '<div class="alert alert-warning py-2 small">' +
+                    m.warnings.map(escapeHtml).join('<br>') + '</div>';
+            }
+            html += '<div class="fw-semibold small">Allegati (' + m.attachments.length + ')</div>';
+            if (m.attachments.length) {
+                html += '<table class="table table-sm"><thead><tr><th>Nome</th><th>Tipo</th><th>Charset</th>' +
+                    '<th>Byte</th></tr></thead><tbody>';
+                m.attachments.forEach(a => {
+                    html += '<tr><td>' + escapeHtml(a.fileName || '(senza nome)') + '</td><td>' +
+                        escapeHtml(a.contentType || '') + '</td><td>' + escapeHtml(a.charset || '') + '</td><td>' +
+                        a.sizeBytes + (a.truncated ? ' <span class="badge text-bg-warning">troncato</span>' : '') +
+                        '</td></tr>';
+                });
+                html += '</tbody></table>';
+            }
+            html += '<div class="fw-semibold small">Corpo</div><pre class="mono">' +
+                escapeHtml(m.bodyText || '') + '</pre>';
+            document.getElementById('parsedBody').innerHTML = html;
+            new bootstrap.Modal(document.getElementById('parsedModal')).show();
+        } catch (e) { showError(e); }
+    }
+
+    function toggleAll(box) {
+        document.querySelectorAll('.sel').forEach(c => c.checked = box.checked);
+        updateSel();
+    }
+
+    function updateSel() {
+        const n = document.querySelectorAll('.sel:checked').length;
+        document.getElementById('selInfo').textContent = n ? n + ' selezionate' : '';
+    }
+
+    async function loadCounts() {
+        try {
+            const c = await jfetch('/logs/api/counts');
+            document.getElementById('cDead').textContent = c.DEAD_LETTER || 0;
+            document.getElementById('cNoRule').textContent = c.NO_RULE || 0;
+            document.getElementById('cRetry').textContent = c.RETRY_SCHEDULED || 0;
+            document.getElementById('cOk').textContent = c.SUCCESS || 0;
+        } catch (_) { /* i contatori non devono rompere la pagina */ }
+    }
+
+    async function init() {
+        try {
+            const crypto = await jfetch('/accounts/api/crypto');
+            if (!crypto.configured) {
+                document.getElementById('cryptoHint').textContent = crypto.hint;
+                document.getElementById('cryptoBanner').classList.remove('d-none');
+            }
+            const accounts = await jfetch('/accounts/api');
+            accounts.forEach(a => {
+                const o = document.createElement('option');
+                o.value = a.id; o.textContent = a.name;
+                document.getElementById('fAccount').appendChild(o);
+            });
+            const rules = await jfetch('/rules/api');
+            rules.forEach(r => {
+                const o = document.createElement('option');
+                o.value = r.id; o.textContent = r.name;
+                document.getElementById('fRule').appendChild(o);
+            });
+        } catch (e) { showError(e); }
+        await loadCounts();
+        await reload();
+        setInterval(loadCounts, 30000);
+    }
+
+    init();
+</script>
+</body>
+</html>
