@@ -1,6 +1,7 @@
 package it.gruppobernardini.switchmail.service;
 
 import it.gruppobernardini.switchmail.dao.MailAccountDao;
+import it.gruppobernardini.switchmail.dto.FolderInfo;
 import it.gruppobernardini.switchmail.dto.MailPreview;
 import it.gruppobernardini.switchmail.dto.TestConnectionResult;
 import it.gruppobernardini.switchmail.model.AccessMode;
@@ -112,6 +113,28 @@ public class AccountService {
             throw new IllegalArgumentException("serve una password per testare la connessione");
         }
         return reader.testConnection(draft, password, previewCount);
+    }
+
+    /** Cartelle visibili con le credenziali salvate. */
+    public List<FolderInfo> folders(long id) {
+        MailAccount account = require(id);
+        return reader.listFolders(account, passwordOf(account));
+    }
+
+    /**
+     * Cartelle visibili con credenziali ad hoc, prima di salvare: e' il momento in cui serve, perche'
+     * il nome della cartella condivisa lo si scopre proprio mentre si configura la casella.
+     */
+    public List<FolderInfo> folders(MailAccount draft, String plainPassword) {
+        validate(draft);
+        String password = plainPassword;
+        if ((password == null || password.isBlank()) && draft.id() != null) {
+            password = passwordOf(require(draft.id()));
+        }
+        if (password == null || password.isBlank()) {
+            throw new IllegalArgumentException("serve una password per elencare le cartelle");
+        }
+        return reader.listFolders(draft, password);
     }
 
     public List<MailPreview> preview(long id, int n) {

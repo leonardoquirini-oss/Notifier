@@ -248,6 +248,22 @@ class ImapPollGreenMailIT {
         assertThat(pollService.pollAccount(accountId).fetched()).isZero();
     }
 
+    @Test
+    @DisplayName("elenco cartelle: e' il modo per scoprire il nome di una casella condivisa")
+    void elencaCartelle() throws Exception {
+        seedTrainMail("AVVISI PARTENZA TRENO 4521 17/09/2026");
+
+        var folders = accountService.folders(accountId);
+
+        assertThat(folders).isNotEmpty();
+        assertThat(folders).anySatisfy(f -> {
+            assertThat(f.fullName()).isEqualTo("INBOX");
+            assertThat(f.namespace()).isEqualTo("personale");
+            assertThat(f.selectable()).isTrue();
+            assertThat(f.messageCount()).isEqualTo(1);
+        });
+    }
+
     // ---------------------------------------------------------------- 8. crash-safety
 
     @Test

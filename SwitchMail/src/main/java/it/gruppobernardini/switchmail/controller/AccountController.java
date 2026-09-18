@@ -1,5 +1,6 @@
 package it.gruppobernardini.switchmail.controller;
 
+import it.gruppobernardini.switchmail.dto.FolderInfo;
 import it.gruppobernardini.switchmail.dto.MailPreview;
 import it.gruppobernardini.switchmail.dto.TestConnectionResult;
 import it.gruppobernardini.switchmail.model.AccessMode;
@@ -104,6 +105,24 @@ public class AccountController {
     public TestConnectionResult testStored(@PathVariable long id,
                                            @RequestParam(defaultValue = "5") int preview) {
         return accountService.test(id, preview);
+    }
+
+    /**
+     * Elenco delle cartelle visibili, namespace altrui e condivisi inclusi. E' il modo per scoprire
+     * come si chiama davvero una casella condivisa in sola lettura (Cyrus, Dovecot, WebTop...):
+     * il nome cambia da installazione a installazione e va copiato, non indovinato.
+     */
+    @PostMapping("/accounts/api/folders")
+    @ResponseBody
+    public List<FolderInfo> folders(@RequestBody Map<String, Object> body) {
+        Long id = lng(body.get("id"));
+        return accountService.folders(fromBody(id, body), str(body.get("password")));
+    }
+
+    @GetMapping("/accounts/api/{id}/folders")
+    @ResponseBody
+    public List<FolderInfo> folders(@PathVariable long id) {
+        return accountService.folders(id);
     }
 
     @GetMapping("/accounts/api/{id}/preview")

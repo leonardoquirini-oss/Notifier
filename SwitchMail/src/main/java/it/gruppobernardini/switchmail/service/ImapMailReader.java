@@ -2,6 +2,7 @@ package it.gruppobernardini.switchmail.service;
 
 import it.gruppobernardini.switchmail.config.SwitchMailProperties;
 import it.gruppobernardini.switchmail.dto.FetchedMail;
+import it.gruppobernardini.switchmail.dto.FolderInfo;
 import it.gruppobernardini.switchmail.dto.ImapFetchResult;
 import it.gruppobernardini.switchmail.dto.MailPreview;
 import it.gruppobernardini.switchmail.dto.TestConnectionResult;
@@ -294,6 +295,71 @@ public class ImapMailReader {
         }
         out.sort(Comparator.comparingLong(MailPreview::uid).reversed());
         return out;
+    }
+
+    /**
+     * Tutte le cartelle visibili all'account, namespace altrui e condivisi inclusi.
+     *
+     * <p>Serve perche' su Cyrus/Dovecot (WebTop, ad esempio) una casella condivisa in sola lettura
+     * non si raggiunge con una login di delega alla Exchange: si entra con le proprie credenziali e
+     * la casella altrui compare come cartella sotto un namespace dedicato, con un nome che cambia da
+     * installazione a installazione ("Other Users/mario", "user/mario", "Altri utenti/mario",
+     * "shared/mario@dominio"...). Invece di farlo indovinare all'operatore, glielo si mostra.
+     */
+    public List<FolderInfo> listFolders(MailAccount account, String password) {
+        Store store = null;
+        try {
+            Session session = session(account);
+            store = connect(session, account, password);
+
+            List<FolderInfo> out = new ArrayList<>();
+            collect(store.getDefaultFolder(), "personale", out);
+            for (Folder root : safeNamespaces(store, "utenti")) {
+                collect(root, "altri utenti", out);
+            }
+            for (Folder root : safeNamespaces(store, "condivisi")) {
+                collect(root, "condivise", out);
+            }
+            out.sort(Comparator.comparing(FolderInfo::namespace).thenComparing(FolderInfo::fullName));
+            return out;
+        } catch (Exception e) {
+            throw new IllegalStateException("elenco cartelle fallito su " + account.describe()
+                    + ": " + e.getMessage(), e);
+        } finally {
+            closeQuietly(null, store);
+        }
+    }
+
+    private Folder[] safeNamespaces(Store store, String which) {
+        try {
+            Folder[] namespaces = "utenti".equals(which) ? store.getUserNamespaces(null)
+                                                         : store.getSharedNamespaces();
+            return namespaces == null ? new Folder[0] : namespaces;
+        } catch (Exception e) {
+            // Un server che non espone NAMESPACE non e' un errore: semplicemente non ha nulla da dire.
+            log.debug("Namespace {} non disponibili: {}", which, e.getMessage());
+            return new Folder[0];
+        }
+    }
+
+    private void collect(Folder root, String namespace, List<FolderInfo> out) {
+        try {
+            for (Folder folder : root.list("*")) {
+                boolean selectable = (folder.getType() & Folder.HOLDS_MESSAGES) != 0;
+                Integer count = null;
+                if (selectable) {
+                    try {
+                        count = folder.getMessageCount();
+                    } catch (Exception e) {
+                        // Una cartella condivisa puo' negare la SELECT: la si elenca comunque, senza conteggio.
+                        count = null;
+                    }
+                }
+                out.add(new FolderInfo(folder.getFullName(), namespace, selectable, count));
+            }
+        } catch (Exception e) {
+            log.warn("Elenco cartelle sotto {} interrotto: {}", root.getFullName(), e.getMessage());
+        }
     }
 
     // ------------------------------------------------------------------ post-action (solo OWNED)

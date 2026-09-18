@@ -106,7 +106,15 @@
                 <div class="row g-2 mb-2">
                     <div class="col-md-3">
                         <label class="form-label small mb-1">Cartella</label>
-                        <input id="aFolder" class="form-control form-control-sm" value="INBOX">
+                        <div class="input-group input-group-sm">
+                            <input id="aFolder" class="form-control form-control-sm" value="INBOX"
+                                   list="folderOptions">
+                            <button class="btn btn-outline-secondary" type="button" onclick="listFolders()"
+                                    title="Elenca le cartelle visibili con queste credenziali">
+                                <i class="bi bi-folder2-open"></i>
+                            </button>
+                        </div>
+                        <datalist id="folderOptions"></datalist>
                     </div>
                     <div class="col-md-3">
                         <label class="form-label small mb-1">Modalita' di accesso</label>
@@ -174,6 +182,17 @@
                         </label>
                     </div>
                 </div>
+                <div id="folderList" class="mt-2 d-none">
+                    <div class="fw-semibold small mb-1">Cartelle visibili</div>
+                    <div class="form-text mb-1">
+                        Una casella condivisa in sola lettura (WebTop, Cyrus, Dovecot) non richiede una
+                        login speciale: si entra con le proprie credenziali e la si trova qui sotto, in un
+                        namespace diverso dal proprio. Clicca la riga per usarla.
+                    </div>
+                    <div id="folderRows" class="list-group list-group-flush border rounded"
+                         style="max-height: 14rem; overflow-y: auto;"></div>
+                </div>
+
                 <div id="trustWarning" class="alert alert-danger py-2 small mt-2 d-none">
                     Disattivando la verifica del certificato la connessione resta cifrata ma diventa
                     intercettabile: usarlo solo su un server di prova.
@@ -327,6 +346,8 @@
         document.getElementById('aTrustAll').checked = editing ? editing.trustAllCerts : false;
         syncPostAction();
         syncTrust();
+        document.getElementById('folderList').classList.add('d-none');
+        document.getElementById('folderOptions').innerHTML = '';
         new bootstrap.Modal(document.getElementById('accountModal')).show();
     }
 
@@ -368,6 +389,32 @@
             bootstrap.Modal.getInstance(document.getElementById('accountModal')).hide();
             await load();
         } catch (e) { showError(e, true); }
+    }
+
+    async function listFolders() {
+        try {
+            const folders = await jfetch('/accounts/api/folders', { method: 'POST', body: JSON.stringify(body()) });
+            const datalist = document.getElementById('folderOptions');
+            datalist.innerHTML = folders.map(f => '<option value="' + escapeHtml(f.fullName) + '">').join('');
+
+            document.getElementById('folderRows').innerHTML = folders.length
+                ? folders.map(f =>
+                    '<button type="button" class="list-group-item list-group-item-action py-1' +
+                    (f.selectable ? '' : ' disabled text-muted') + '" onclick="pickFolder(this)" ' +
+                    'data-folder="' + escapeHtml(f.fullName) + '">' +
+                    '<span class="mono">' + escapeHtml(f.fullName) + '</span> ' +
+                    '<span class="badge text-bg-light border">' + escapeHtml(f.namespace) + '</span>' +
+                    (f.messageCount !== null && f.messageCount !== undefined
+                        ? ' <span class="text-muted small">' + f.messageCount + ' messaggi</span>' : '') +
+                    (f.selectable ? '' : ' <span class="text-muted small">(solo contenitore)</span>') +
+                    '</button>').join('')
+                : '<div class="list-group-item py-1 text-muted small">Nessuna cartella restituita dal server</div>';
+            document.getElementById('folderList').classList.remove('d-none');
+        } catch (e) { showError(e, true); }
+    }
+
+    function pickFolder(el) {
+        document.getElementById('aFolder').value = el.getAttribute('data-folder');
     }
 
     async function testDraft() {

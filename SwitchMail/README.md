@@ -61,6 +61,23 @@ funzionare (la UI che ripara quella regola gira lì dentro) ma il monitor lo ved
 una chiave di SwitchMail, non di BERLink: se manca, `/ready` risponde 503 dicendolo e tutto il resto
 funziona lo stesso.
 
+## Casella condivisa (WebTop, Cyrus, Dovecot)
+
+Se la casella da leggere è stata **condivisa in sola lettura** con il tuo account, non serve nessuna
+login speciale: ti autentichi con le **tue** credenziali e la casella altrui compare come *cartella*
+in un namespace separato. Il nome esatto cambia da installazione a installazione — `Other Users/mario`,
+`Altri utenti/mario`, `user/mario`, `shared/mario@dominio.it` — quindi non va indovinato: nella
+schermata **Caselle**, accanto al campo *Cartella*, il bottone 📂 elenca tutte le cartelle visibili
+con quelle credenziali, raggruppate per namespace (personale / altri utenti / condivise), con il
+conteggio dei messaggi. Si clicca quella giusta e il nome finisce nel campo.
+
+Modalità di accesso: **READ_ONLY**. È la casella di qualcun altro, e in quella modalità un `CHECK` del
+database rende impossibile qualsiasi azione che la modifichi.
+
+> Su Exchange la condivisione funziona diversamente: lì si usa una login di delega
+> (`dominio/servizio/dipendente` nel campo *Utente*, con `FullAccess` concesso dall'IT) e la cartella
+> resta `INBOX`.
+
 ## Modalità di accesso alla casella
 
 - **READ_ONLY** (casella del dipendente): la cartella si apre con `EXAMINE` e i fetch usano
