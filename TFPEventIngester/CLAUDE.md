@@ -137,7 +137,7 @@ Tabella "stato corrente": **una riga per `unit_number`** (PK) con l'ultima posiz
 - `tfp-unit-events-stream` → `UnitEventStreamProcessor` (event_type `BERNARDINI_UNIT_EVENTS`): `event_time` = `eventTime`, popola anche `terminal_code`, `full_empty`, `operator_code`, `eta`, `event_type` (= `type`), `id_unit_event` (= id del record `evt_unit_events`).
 - `tfp-unit-positions-stream` → `UnitPositionStreamProcessor` (event_type `BERNARDINI_UNIT_POSITIONS_MESSAGE` / `BERNARDINI_PROD_UNIT_POSITION_MESSAGE`): `event_time` = `position_time`; gli extra (`terminal_code`, `full_empty`, `operator_code`, `eta`, `event_type`, `id_unit_event`) sono null.
 
-**`LastPositionUpserter`** (classe condivisa, package `stream/`): incapsula l'UPSERT raw SQL via `Base.exec()` (no model ActiveJDBC). Va invocato dentro una transazione ActiveJDBC aperta. No-op se `unit_number` e' null (e' la PK).
+**`LastPositionUpserter`** (classe condivisa, package `stream/`): incapsula l'UPSERT raw SQL via `Base.exec()` (no model ActiveJDBC). Va invocato dentro una transazione ActiveJDBC aperta. No-op se `unit_number` e' null (e' la PK) oppure se `latitude` o `longitude` sono null: un evento senza coordinate non e' una posizione e non tocca la tabella.
 
 **Logica UPSERT** (identica per entrambi gli stream):
 ```sql

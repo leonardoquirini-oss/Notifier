@@ -38,14 +38,15 @@ final class LastPositionUpserter {
 
     /**
      * Upsert the last known position of a unit. No-op when unitNumber is null
-     * (unit_number is the PK and cannot be null).
+     * (unit_number is the PK and cannot be null) or when latitude/longitude
+     * are missing: an event without coordinates is not a position.
      */
     static void upsert(Object unitNumber, Object unitTypeCode, Object messageType,
                        Object idUnitEvent, Object eventTime, Object latitude, Object longitude,
                        Object containerNumber, Object idTrailer, Object idVehicle,
                        Object terminalCode, Object fullEmpty,
                        Object operatorCode, Object eventType, Object eta, Object messageId) {
-        if (unitNumber == null) {
+        if (unitNumber == null || latitude == null || longitude == null) {
             return;
         }
         Base.exec(SQL,

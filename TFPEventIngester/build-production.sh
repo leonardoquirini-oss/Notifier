@@ -144,7 +144,7 @@ if [[ ! $REPLY =~ ^[Yy]$ ]]; then
 fi
 
 # Build Image
-log_info "Building TFPGateway service image..."
+log_info "Building TFP Event Ingester service image..."
 
 if [ "$SKIP_TESTS" = true ]; then
     log_warning "Skipping tests during build (--skip-tests attivo)"
